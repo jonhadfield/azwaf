@@ -1,0 +1,95 @@
+{
+  "id": "/subscriptions/291bba3f-e0a5-47bc-a099-3bdcb2a50a05/resourcegroups/waf-resource-group/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/wafpolicy",
+  "location": "Global",
+  "name": "wafpolicy",
+  "properties": {
+    "customRules": {},
+    "frontendEndpointLinks": [],
+    "managedRules": {
+      "managedRuleSets": [
+        {
+          "exclusions": [
+            {
+              "matchVariable": "RequestHeaderNames",
+              "selector": "edam",
+              "selectorMatchOperator": "Equals"
+            }
+          ],
+          "ruleGroupOverrides": [
+            {
+              "exclusions": [],
+              "ruleGroupName": "PHP",
+              "rules": [
+                {
+                  "action": "Log",
+                  "enabledState": "Disabled",
+                  "exclusions": [],
+                  "ruleId": "933100"
+                }
+              ]
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "RequestBodyJsonArgNames",
+                  "selector": "bean",
+                  "selectorMatchOperator": "Contains"
+                }
+              ],
+              "ruleGroupName": "RCE",
+              "rules": [
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "lime",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "melon",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "lemon",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "932100"
+                }
+              ]
+            },
+            {
+              "exclusions": [],
+              "ruleGroupName": "LFI",
+              "rules": []
+            }
+          ],
+          "ruleSetType": "Microsoft_DefaultRuleSet",
+          "ruleSetVersion": "1.1"
+        }
+      ]
+    },
+    "policySettings": {
+      "customBlockResponseStatusCode": 403,
+      "enabledState": "Enabled",
+      "mode": "Detection",
+      "redirectUrl": "https://example.com",
+      "requestBodyCheck": "Enabled"
+    },
+    "provisioningState": "Succeeded",
+    "resourceState": "Enabled",
+    "routingRuleLinks": [],
+    "securityPolicyLinks": []
+  },
+  "sku": {
+    "name": "Classic_AzureFrontDoor"
+  },
+  "tags": {
+    "Hello": "mum"
+  },
+  "type": "Microsoft.Network/frontdoorwebapplicationfirewallpolicies"
+}
