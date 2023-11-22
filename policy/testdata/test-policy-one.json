@@ -1,0 +1,769 @@
+{
+  "id": "/subscriptions/291bba3f-e0a5-47bc-a099-3bdcb2a50a05/resourcegroups/waf-resource-group/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/wafpolicy",
+  "location": "Global",
+  "name": "wafpolicy",
+  "properties": {
+    "customRules": {
+      "rules": [
+        {
+          "action": "Log",
+          "enabledState": "Enabled",
+          "matchConditions": [
+            {
+              "matchValue": [
+                "ES",
+                "FI",
+                "FR"
+              ],
+              "matchVariable": "RemoteAddr",
+              "negateCondition": true,
+              "operator": "GeoMatch",
+              "transforms": []
+            }
+          ],
+          "name": "LogCountries",
+          "priority": 100,
+          "rateLimitDurationInMinutes": 1,
+          "rateLimitThreshold": 100,
+          "ruleType": "MatchRule"
+        },
+        {
+          "action": "Block",
+          "enabledState": "Enabled",
+          "matchConditions": [
+            {
+              "matchVariable": "RemoteAddr",
+              "selector": null,
+              "operator": "IPMatch",
+              "negateCondition": true,
+              "matchValue": [
+                "0.6.6.6",
+                "6.6.6.0"
+              ],
+              "transforms": []
+            }
+          ],
+          "name": "RateLimitIPs",
+          "priority": 150,
+          "rateLimitDurationInMinutes": 1,
+          "rateLimitThreshold": 300,
+          "ruleType": "RateLimitRule"
+        }
+      ]
+    },
+    "frontendEndpointLinks": [],
+    "managedRules": {
+      "managedRuleSets": [
+        {
+          "exclusions": [
+            {
+              "matchVariable": "RequestCookieNames",
+              "selector": "brie",
+              "selectorMatchOperator": "Equals"
+            },
+            {
+              "matchVariable": "RequestCookieNames",
+              "selector": "camembert",
+              "selectorMatchOperator": "StartsWith"
+            },
+            {
+              "matchVariable": "RequestCookieNames",
+              "selector": "stinkingbishop",
+              "selectorMatchOperator": "StartsWith"
+            },
+            {
+              "matchVariable": "RequestHeaderNames",
+              "selector": "stilton",
+              "selectorMatchOperator": "StartsWith"
+            }
+          ],
+          "ruleGroupOverrides": [
+            {
+              "exclusions": [],
+              "ruleGroupName": "PHP",
+              "rules": [
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "933100"
+                }
+              ]
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "RequestCookieNames",
+                  "selector": "roquefort",
+                  "selectorMatchOperator": "Equals"
+                },
+                {
+                  "matchVariable": "RequestHeaderNames",
+                  "selector": "lemon",
+                  "selectorMatchOperator": "EndsWith"
+                }
+              ],
+              "ruleGroupName": "SQLI",
+              "rules": [
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942200"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "cheddar",
+                      "selectorMatchOperator": "StartsWith"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "beaufort",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "manchego",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "halloumi",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942260"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "mascarpone",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942210"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "emmentaler",
+                      "selectorMatchOperator": "StartsWith"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "gruyere",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "burrata",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942430"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "kasseri",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942340"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942330"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942110"
+                },
+                {
+                  "action": "Redirect",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942370"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "asiago",
+                      "selectorMatchOperator": "StartsWith"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "comte",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "fontina",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942450"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "roquefort",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "carrot",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "potato",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "pea",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "sweetcorn",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selector": "tomato",
+                      "selectorMatchOperator": "EndsWith"
+                    },
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selector": "beetroot",
+                      "selectorMatchOperator": "EndsWith"
+                    }
+                  ],
+                  "ruleId": "942440"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942300"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942410"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942400"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942390"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942380"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942361"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942360"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942350"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942320"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942280"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942270"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942250"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "roquefort",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "942240"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942230"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942220"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942190"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942180"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942170"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942160"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942150"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "942140"
+                }
+              ]
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "RequestBodyJsonArgNames",
+                  "selector": "bean",
+                  "selectorMatchOperator": "Contains"
+                }
+              ],
+              "ruleGroupName": "RCE",
+              "rules": [
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "roquefort",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "932130"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "banana",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "roquefort",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "apple",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "peach",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "932115"
+                },
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "nectarine",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "satsuma",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "932105"
+                },
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "lime",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "melon",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "lemon",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "932100"
+                }
+              ]
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "RequestHeaderNames",
+                  "selector": "melon",
+                  "selectorMatchOperator": "EndsWith"
+                }
+              ],
+              "ruleGroupName": "XSS",
+              "rules": [
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "941340"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "lime",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "roquefort",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "941100"
+                },
+                {
+                  "action": "Block",
+                  "enabledState": "Disabled",
+                  "exclusions": [],
+                  "ruleId": "941130"
+                }
+              ]
+            },
+            {
+              "exclusions": [],
+              "ruleGroupName": "RFI",
+              "rules": [
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "lentil",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "931130"
+                }
+              ]
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "RequestCookieNames",
+                  "selector": "roquefort",
+                  "selectorMatchOperator": "Equals"
+                },
+                {
+                  "matchVariable": "RequestBodyPostArgNames",
+                  "selector": "jsonData",
+                  "selectorMatchOperator": "Equals"
+                },
+                {
+                  "matchVariable": "RequestCookieNames",
+                  "selector": "raspberry",
+                  "selectorMatchOperator": "Equals"
+                },
+                {
+                  "matchVariable": "RequestHeaderNames",
+                  "selector": "pear",
+                  "selectorMatchOperator": "EndsWith"
+                }
+              ],
+              "ruleGroupName": "MS-ThreatIntel-SQLI",
+              "rules": [
+                {
+                  "action": "Allow",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyPostArgNames",
+                      "selector": "jsonData",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selector": "grape",
+                      "selectorMatchOperator": "EndsWith"
+                    },
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selector": "blackcurrant",
+                      "selectorMatchOperator": "EndsWith"
+                    }
+                  ],
+                  "ruleId": "99031001"
+                },
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestCookieNames",
+                      "selector": "redcurrant",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "loganberry",
+                      "selectorMatchOperator": "Equals"
+                    },
+                    {
+                      "matchVariable": "QueryStringArgNames",
+                      "selector": "blackberry",
+                      "selectorMatchOperator": "Equals"
+                    }
+                  ],
+                  "ruleId": "99031002"
+                }
+              ]
+            },
+            {
+              "exclusions": [],
+              "ruleGroupName": "LFI",
+              "rules": []
+            },
+            {
+              "exclusions": [
+                {
+                  "matchVariable": "QueryStringArgNames",
+                  "selector": "chips",
+                  "selectorMatchOperator": "Equals"
+                },
+                {
+                  "matchVariable": "RequestHeaderNames",
+                  "selector": "burger",
+                  "selectorMatchOperator": "Equals"
+                }
+              ],
+              "ruleGroupName": "JAVA",
+              "rules": [
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestBodyJsonArgNames",
+                      "selector": "pizza",
+                      "selectorMatchOperator": "EqualsAny"
+                    }
+                  ],
+                  "ruleId": "944210"
+                }
+              ]
+            }
+          ],
+          "ruleSetType": "Microsoft_DefaultRuleSet",
+          "ruleSetVersion": "1.1"
+        },
+        {
+          "exclusions": [],
+          "ruleGroupOverrides": [
+            {
+              "exclusions": [],
+              "ruleGroupName": "UnknownBots",
+              "rules": [
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "Bot300600"
+                },
+                {
+                  "action": "Block",
+                  "enabledState": "Enabled",
+                  "exclusions": [],
+                  "ruleId": "Bot300200"
+                },
+                {
+                  "action": "Log",
+                  "enabledState": "Disabled",
+                  "exclusions": [],
+                  "ruleId": "Bot300100"
+                }
+              ]
+            }
+          ],
+          "ruleSetType": "Microsoft_BotManagerRuleSet",
+          "ruleSetVersion": "1.0"
+        }
+      ]
+    },
+    "policySettings": {
+      "customBlockResponseStatusCode": 403,
+      "enabledState": "Enabled",
+      "mode": "Detection",
+      "redirectUrl": "https://ischeeseavegetable.com",
+      "requestBodyCheck": "Enabled"
+    },
+    "provisioningState": "Succeeded",
+    "resourceState": "Enabled",
+    "routingRuleLinks": [],
+    "securityPolicyLinks": []
+  },
+  "sku": {
+    "name": "Classic_AzureFrontDoor"
+  },
+  "tags": {
+    "Hello": "world"
+  },
+  "type": "Microsoft.Network/frontdoorwebapplicationfirewallpolicies"
+}

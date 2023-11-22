@@ -1,0 +1,120 @@
+{
+    "Date": "2021-09-11T19:35:09.810715Z",
+    "SubscriptionID": "0a914e76-4921-4c19-b460-a2d36003525a",
+    "ResourceGroup": "flying",
+    "Name": "mypolicyone",
+    "Policy": {
+        "location": "Global",
+        "properties": {
+            "customRules": {
+                "rules": [
+                    {
+                        "name": "RuleOne",
+                        "priority": 1,
+                        "enabledState": "Enabled",
+                        "ruleType": "MatchRule",
+                        "rateLimitDurationInMinutes": 1,
+                        "rateLimitThreshold": 100,
+                        "matchConditions": [
+                            {
+                                "matchVariable": "RemoteAddr",
+                                "operator": "IPMatch",
+                                "negateCondition": false,
+                                "matchValue": [
+                                    "1.1.0.0/22",
+                                    "2.2.0.0/22"
+                                ],
+                                "transforms": []
+                            }
+                        ],
+                        "action": "Block"
+                    },
+                    {
+                        "name": "BlockList1",
+                        "priority": 1,
+                        "enabledState": "Enabled",
+                        "ruleType": "MatchRule",
+                        "matchConditions": [
+                            {
+                                "matchVariable": "RemoteAddr",
+                                "operator": "IPMatch",
+                                "negateCondition": false,
+                                "matchValue": [
+                                    "1.1.0.0/22",
+                                    "5.5.0.0/22",
+                                    "3.3.0.0/22",
+                                    "4.4.0.0/24"
+                                ],
+                                "transforms": []
+                            }
+                        ],
+                        "action": "Block"
+                    }
+                ]
+            },
+            "managedRules": {
+                "managedRuleSets": [
+                    {
+                        "ruleSetType": "Microsoft_DefaultRuleSet",
+                        "ruleSetVersion": "1.1",
+                        "exclusions": [],
+                        "ruleGroupOverrides": [
+                            {
+                                "ruleGroupName": "SQLI",
+                                "exclusions": [
+                                    {
+                                        "matchVariable": "RequestCookieNames",
+                                        "selectorMatchOperator": "Equals",
+                                        "selector": "lemon"
+                                    },
+                                    {
+                                        "matchVariable": "RequestCookieNames",
+                                        "selectorMatchOperator": "StartsWith",
+                                        "selector": "apple"
+                                    }
+                                ],
+                                "rules": [
+                                    {
+                                        "ruleId": "942200",
+                                        "enabledState": "Enabled",
+                                        "action": "Log",
+                                        "exclusions": []
+                                    },
+                                    {
+                                        "ruleId": "942340",
+                                        "enabledState": "Enabled",
+                                        "action": "Block",
+                                        "exclusions": [
+                                            {
+                                                "matchVariable": "RequestBodyPostArgNames",
+                                                "selectorMatchOperator": "Equals",
+                                                "selector": "jsonData"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "ruleSetType": "Microsoft_BotManagerRuleSet",
+                        "ruleSetVersion": "1.0",
+                        "exclusions": [],
+                        "ruleGroupOverrides": []
+                    }
+                ]
+            },
+            "policySettings": {
+                "enabledState": "Enabled",
+                "mode": "Prevention",
+                "customBlockResponseStatusCode": 403,
+                "customBlockResponseBody": "PGh0bWw+CjxoZWFkZXI+PHRpdGxlPldlbGNvbWUgVG8gQ2hlZXNlIEZhY3RzPC90aXRsZT48L2hlYWRlcj4KPGJvZHk+CkNoZWVzZSBJcyBOb3QgQSBWZWdldGFibGUhCjwvYm9keT4KPC9odG1sPg=="
+            }
+        },
+        "tags": {
+            "EnvironmentType": "dev"
+        }
+    },
+    "PolicyID": "/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone",
+    "AppVersion": "[0.0.1-0866506] 2021/09/11:19:35:06 UTC"
+}
