@@ -461,7 +461,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	// add the New Custom rules to the existing
 	in.Policy.Properties.CustomRules.Rules = ecrs
 	in.Policy.Properties.CustomRules.Rules = append(in.Policy.Properties.CustomRules.Rules, crs...)
-	o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
+	// o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
 
 	// check we don't exceed Azure rules limit
 	if len(in.Policy.Properties.CustomRules.Rules) > MaxCustomRules {
@@ -478,8 +478,8 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return modified, patch, err
 	}
 
-	o, _ = json.Marshal(patch)
-	fmt.Println(string(o))
+	// o, _ = json.Marshal(patch)
+	// fmt.Println(string(o))
 
 	if patch.TotalDifferences == 0 {
 		logrus.Debug("nothing to do")
