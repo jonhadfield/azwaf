@@ -31,7 +31,7 @@ func GetFrontDoorByID(s *session.Session, frontDoorID string) (frontDoor FrontDo
 
 	rawFrontDoor, merr := c.Get(ctx, rID.ResourceGroup, rID.Name, nil)
 	if merr != nil {
-		return frontDoor, fmt.Errorf(merr.Error(), funcName)
+		return frontDoor, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	policies := make(map[string]armfrontdoor.WebApplicationFirewallPolicy)
@@ -103,7 +103,7 @@ func PushPolicy(s *session.Session, i *PushPolicyInput) (err error) {
 
 	poller, merr := s.FrontDoorPoliciesClients[i.Subscription].BeginCreateOrUpdate(ctx, i.ResourceGroup, i.Name, i.Policy, nil)
 	if merr != nil {
-		return fmt.Errorf(merr.Error(), funcName)
+		return fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	if i.Async {
