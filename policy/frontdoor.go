@@ -16,7 +16,7 @@ func ListFrontDoors(subID string) error {
 	}
 
 	if len(frontDoors) == 0 {
-		fmt.Println("no front doors found")
+		logrus.Info("no front doors found")
 
 		return nil
 	}

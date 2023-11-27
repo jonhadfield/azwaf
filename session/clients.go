@@ -84,7 +84,7 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 
 	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.Credential, nil)
 	if merr != nil {
-		return fmt.Errorf(merr.Error(), funcName)
+		return fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	s.FrontDoorPoliciesClients[subID] = frontDoorPoliciesClient

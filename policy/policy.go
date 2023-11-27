@@ -324,7 +324,7 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 
 	pcg, merr := s.FrontDoorPoliciesClients[subscription].Get(ctx, resourceGroup, name, &options)
 	if merr != nil {
-		return nil, fmt.Errorf(merr.Error(), funcName)
+		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	return &pcg.WebApplicationFirewallPolicy, nil
@@ -410,7 +410,7 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) (gres []resou
 
 	it, merr := s.ResourcesClients[i.SubscriptionID].ListComplete(ctx, "resourceType eq 'Microsoft.Network/frontdoorWebApplicationFirewallPolicies'", "", &top)
 	if merr != nil {
-		return nil, fmt.Errorf(merr.Error(), funcName)
+		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	var total int
