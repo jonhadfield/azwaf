@@ -20,10 +20,6 @@ type BlockAddrsInput struct {
 	MaxRules       int
 }
 
-func (i *IPNets) Normalise() {
-	*i = normalisePrefixes(*i)
-}
-
 func Block(in BlockAddrsInput) error {
 	s := session.New()
 

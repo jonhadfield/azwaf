@@ -9,6 +9,7 @@ import (
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 	"golang.org/x/exp/slices"
 	"log"
 	"net/netip"
@@ -429,13 +430,16 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	prefixes = append(prefixes, existingAddrs...)
+	// appending existingAddrs to new set may result in overlap so normalise
+	prefixes, err = Normalise(prefixes)
+	if err != nil {
+		return false, patch, err
+	}
 
 	crs, err := GenCustomRulesFromIPNets(prefixes, in.MaxRules, in.Action, in.RuleNamePrefix, in.PriorityStart)
 	if err != nil {
 		return
 	}
-
-	// newPrioritiesEnd := in.PriorityStart + len(crs)
 
 	// remove existing net rules from Policy before adding New
 	var ecrs []*armfrontdoor.CustomRule
@@ -443,15 +447,6 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	for _, existingCustomRule := range in.Policy.Properties.CustomRules.Rules {
 		// if New Custom rule name doesn't have the prefix in the Action, then add it
 		if !strings.HasPrefix(*existingCustomRule.Name, string(in.RuleNamePrefix)) {
-			// check new rule priority is not already in use
-			// START TEST
-			// if *existingCustomRule.Priority >= int32(in.PriorityStart) {
-			// 	fmt.Println("DDD")
-			// }
-			// if *existingCustomRule.Priority <= int32(newPrioritiesEnd) {
-			// 	fmt.Println(*existingCustomRule.Priority, int32(newPrioritiesEnd))
-			// }
-
 			ecrs = append(ecrs, existingCustomRule)
 
 			continue
@@ -473,12 +468,24 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
 	})
 
+	sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
+		return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
+	})
+
 	patch, err = GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
 		return modified, patch, err
 	}
 
-	// o, _ = json.Marshal(patch)
+	// o, _ := json.MarshalIndent(patch, "", "  ")
+	// fmt.Println(string(o))
+	//
+	// fmt.Println("ORIG")
+	// o, _ = json.MarshalIndent(originalPolicy, "", "  ")
+	// fmt.Println(string(o))
+	//
+	// fmt.Println("NEW")
+	// o, _ = json.MarshalIndent(*in.Policy, "", "  ")
 	// fmt.Println(string(o))
 
 	if patch.TotalDifferences == 0 {
@@ -539,6 +546,10 @@ func createCustomRule(name string, action armfrontdoor.ActionType, priority int3
 
 	nameWithPriority := fmt.Sprintf("%s%d", name, priority)
 
+	sort.Slice(items, func(i, j int) bool {
+		return *items[i] < *items[j]
+	})
+
 	return armfrontdoor.CustomRule{
 		Name:         &nameWithPriority,
 		Priority:     &priority,
@@ -564,6 +575,34 @@ func strsTostrPtrs(in []string) (out []*string) {
 	return
 }
 
+// Normalise accepts a slice of netip.Prefix and returns a unique slice of their string representations
+func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
+	ipsetBuilder := netipx.IPSetBuilder{}
+
+	for x := range iPrefixes {
+		if !iPrefixes[x].IsValid() {
+			logrus.Errorf("invalid prefix: %s\n", iPrefixes[x].String())
+
+			continue
+		}
+
+		ipsetBuilder.AddPrefix(iPrefixes[x])
+	}
+
+	ipSet, err := ipsetBuilder.IPSet()
+	if err != nil {
+		return nil, err
+	}
+
+	for x := range ipSet.Prefixes() {
+		fmt.Println("res:", ipSet.Prefixes()[x].String())
+	}
+
+	logrus.Debugf("normalised %d to %d prefixes", len(iPrefixes), len(ipSet.Prefixes()))
+
+	return ipSet.Prefixes(), nil
+}
+
 // GenCustomRulesFromIPNets accepts a list of IPs, plus the action to be taken with them, and the maximum
 // number of rules to create and then returns a slice of CustomRules
 func GenCustomRulesFromIPNets(ipns IPNets, maxRules int, action armfrontdoor.ActionType, customNamePrefix RuleNamePrefix, customPriorityStart int) (crs []*armfrontdoor.CustomRule, err error) {
@@ -578,6 +617,7 @@ func GenCustomRulesFromIPNets(ipns IPNets, maxRules int, action armfrontdoor.Act
 	}
 
 	deDupedNets := deDupeIPNets(ipns)
+	sort.Strings(deDupedNets)
 
 	logrus.Tracef("total networks after deduplication: %d", len(deDupedNets))
 
@@ -615,6 +655,10 @@ func GenCustomRulesFromIPNets(ipns IPNets, maxRules int, action armfrontdoor.Act
 			matchValues = nil
 		}
 	}
+
+	sort.Slice(crs, func(i, j int) bool {
+		return *crs[i].Priority < *crs[j].Priority
+	})
 
 	return
 }
