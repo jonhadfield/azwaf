@@ -594,7 +594,7 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 		return nil, err
 	}
 
-	logrus.Debugf("normalised %d to %d prefixes", len(iPrefixes), len(ipSet.Prefixes()))
+	logrus.Tracef("normalised %d to %d prefixes", len(iPrefixes), len(ipSet.Prefixes()))
 
 	return ipSet.Prefixes(), nil
 }
