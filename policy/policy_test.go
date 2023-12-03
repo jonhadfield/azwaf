@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -198,6 +199,10 @@ func generateIPNets(cidr string) (ipns IPNets) {
 		ipns = ipns[1 : len(ipns)-1]
 	}
 
+	sort.Slice(ipns, func(i, j int) bool {
+		return ipns[i].String() < ipns[j].String()
+	})
+
 	return
 }
 
@@ -218,6 +223,59 @@ func TestGenerateCustomRulesFromIPNets(t *testing.T) {
 			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
 		}
 	}
+}
+
+func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
+	var ipns []netip.Prefix
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.18/32"))
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.20/31"))
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.22/32"))
+
+	crs, err := GenCustomRulesFromIPNets(ipns, 90, "Block", "", 0)
+	require.NoError(t, err)
+	require.Len(t, crs, 1)
+
+	for x := range crs {
+		matchConditions := crs[x].MatchConditions
+
+		mc := matchConditions[0]
+		for y, mv := range mc.MatchValue {
+			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
+		}
+	}
+}
+
+func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
+	var ipns []netip.Prefix
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.18/32"))
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.20/31"))
+	ipns = append(ipns, netip.MustParsePrefix("67.43.236.22/32"))
+
+	crs, err := GenCustomRulesFromIPNets(ipns, 90, "Block", "", 0)
+	require.NoError(t, err)
+	require.Len(t, crs, 1)
+
+	for x := range crs {
+		matchConditions := crs[x].MatchConditions
+
+		mc := matchConditions[0]
+		for y, mv := range mc.MatchValue {
+			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
+		}
+	}
+
+	var ipns2 []netip.Prefix
+	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.18/32"))
+	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.22/32"))
+	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.20/31"))
+
+	crs2, err := GenCustomRulesFromIPNets(ipns2, 90, "Block", "", 0)
+	require.NoError(t, err)
+	require.Len(t, crs2, 1)
+
+	require.Equal(t, crs[0].MatchConditions[0].MatchValue[0], crs2[0].MatchConditions[0].MatchValue[0])
+	require.Equal(t, crs[0].MatchConditions[0].MatchValue[1], crs2[0].MatchConditions[0].MatchValue[1])
+	require.Equal(t, crs[0].MatchConditions[0].MatchValue[2], crs2[0].MatchConditions[0].MatchValue[2])
 }
 
 // Require that setting a positive value for max rules limits the number of rules generated

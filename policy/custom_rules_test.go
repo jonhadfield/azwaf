@@ -22,7 +22,8 @@ func TestNormalisePrefixes(t *testing.T) {
 	p1 := netip.MustParsePrefix("10.0.0.0/24")
 	p2 := netip.MustParsePrefix("10.0.0.0/25")
 	netPrefixes := IPNets{p1, p2}
-	netPrefixes.Normalise()
+	netPrefixes, err := Normalise(netPrefixes)
+	require.NoError(t, err)
 	require.Equal(t, 1, len(netPrefixes))
 	require.Equal(t, netPrefixes[0], p1)
 
@@ -30,16 +31,16 @@ func TestNormalisePrefixes(t *testing.T) {
 	p1 = netip.MustParsePrefix("10.1.0.0/24")
 	p2 = netip.MustParsePrefix("10.1.0.0/16")
 	p3 := netip.MustParsePrefix("10.1.1.0/25")
-	netPrefixes = IPNets{p1, p2, p3}
-	netPrefixes.Normalise()
+	netPrefixes, err = Normalise(IPNets{p1, p2, p3})
+	require.NoError(t, err)
 	require.Equal(t, 1, len(netPrefixes))
 	require.Equal(t, netPrefixes[0], p2)
 
 	// test multiple non-overlapping prefixes are returned
 	p1 = netip.MustParsePrefix("10.2.0.0/16")
 	p2 = netip.MustParsePrefix("10.1.0.0/16")
-	netPrefixes = IPNets{p1, p2}
-	netPrefixes.Normalise()
+	netPrefixes, err = Normalise(IPNets{p1, p2})
+	require.NoError(t, err)
 	require.Equal(t, 2, len(netPrefixes))
 	require.Equal(t, netPrefixes[1], p1)
 	require.Equal(t, netPrefixes[0], p2)
