@@ -1,8 +1,9 @@
 package policy
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasRuleSets(t *testing.T) {

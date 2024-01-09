@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"fmt"
+
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
 )

@@ -1,9 +1,10 @@
 package policy
 
 import (
+	"testing"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestDeRefStrs(t *testing.T) {

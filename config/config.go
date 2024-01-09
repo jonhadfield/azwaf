@@ -2,11 +2,12 @@ package config
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 // ParseResourceID accepts an azure resource ID as a string and returns a struct instance containing the components.
@@ -61,7 +62,6 @@ func NewResourceID(subID, rg, provider, name string) (rid ResourceID) {
 
 func (rid *ResourceID) SetSubscriptionID(subID string) {
 	rid.SubscriptionID = subID
-
 }
 
 type FileConfig struct {

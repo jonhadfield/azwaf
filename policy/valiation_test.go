@@ -1,8 +1,9 @@
 package policy
 
 import (
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"testing"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/stretchr/testify/require"
 )

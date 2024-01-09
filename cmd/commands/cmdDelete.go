@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+
 	. "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
 )

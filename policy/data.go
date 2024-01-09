@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 

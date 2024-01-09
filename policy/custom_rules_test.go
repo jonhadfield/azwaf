@@ -1,12 +1,13 @@
 package policy
 
 import (
+	"net/netip"
+	"testing"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/stretchr/testify/require"
-	"net/netip"
-	"testing"
 )
 
 func TestIsRulePrefixNameValid(t *testing.T) {

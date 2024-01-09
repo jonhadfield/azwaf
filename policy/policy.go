@@ -4,22 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/jonhadfield/azwaf/cache"
 
 	// H "github.com/jonhadfield/azwaf/helpers"
+
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
 	"github.com/wI2L/jsondiff"
-	"golang.org/x/exp/slices"
 )
 
 const (

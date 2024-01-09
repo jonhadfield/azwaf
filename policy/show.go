@@ -2,6 +2,7 @@ package policy
 
 import (
 	"fmt"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/jonhadfield/azwaf/session"
 )

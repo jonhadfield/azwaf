@@ -2,8 +2,9 @@ package policy
 
 import (
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"strings"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
@@ -412,9 +413,11 @@ func addManagedRuleGroupOverrideRuleExclusions(input *addManagedRuleGroupOverrid
 				Action:       ruleDefinition.DefaultAction,
 				EnabledState: ruleDefinition.DefaultState,
 				Exclusions: []*armfrontdoor.ManagedRuleExclusion{
-					{MatchVariable: &input.exclusionRuleVariable,
+					{
+						MatchVariable:         &input.exclusionRuleVariable,
 						Selector:              &input.exclusionRuleSelector,
-						SelectorMatchOperator: &input.exclusionRuleOperator},
+						SelectorMatchOperator: &input.exclusionRuleOperator,
+					},
 				},
 			},
 		},

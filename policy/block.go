@@ -2,6 +2,7 @@ package policy
 
 import (
 	"fmt"
+
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/session"
 	"go4.org/netipx"

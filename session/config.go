@@ -2,9 +2,10 @@ package session
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
-	"os"
 )
 
 func ReadFileBytes(path string) (content []byte, err error) {

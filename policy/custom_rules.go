@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
-	"go4.org/netipx"
-	"golang.org/x/exp/slices"
 	"log"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/session"
+	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 )
 
 func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (nets []netip.Prefix, err error) {
@@ -366,8 +367,10 @@ func loadLocalPrefixes(filepath string, prefixes IPNets) (res IPNets, err error)
 
 type RuleNamePrefix string
 
-var ruleNamePrefixTestStartNumber = regexp.MustCompile(`^[0-9].*`)
-var ruleNamePrefixTestEndNumber = regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
+var (
+	ruleNamePrefixTestStartNumber = regexp.MustCompile(`^[0-9].*`)
+	ruleNamePrefixTestEndNumber   = regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
+)
 
 func (r RuleNamePrefix) Check() error {
 	rs := string(r)

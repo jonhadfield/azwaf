@@ -3,12 +3,13 @@ package policy
 import (
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/sirupsen/logrus"
 )
 
 func commonCLIInputValidation(subscriptionID, policyID string) error {
