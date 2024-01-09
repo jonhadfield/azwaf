@@ -216,5 +216,4 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 		DryRun:           cliInput.DryRun,
 		Debug:            dcri.Debug,
 	})
-
 }

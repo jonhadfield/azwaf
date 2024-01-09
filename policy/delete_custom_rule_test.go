@@ -2,10 +2,11 @@ package policy
 
 import (
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/stretchr/testify/require"
 	"regexp"
 	"testing"
+
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeleteCustomRuleNoCustomRules(t *testing.T) {

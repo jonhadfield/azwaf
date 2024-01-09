@@ -2,8 +2,9 @@ package policy
 
 import (
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"testing"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/stretchr/testify/require"
 )

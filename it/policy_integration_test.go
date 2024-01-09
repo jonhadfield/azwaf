@@ -4,29 +4,32 @@ package it_test
 
 import (
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"math/rand"
 	"net/netip"
+	"os"
 	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/policy"
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"os"
-	"strings"
-	"testing"
 
 	_ "github.com/Azure/azure-sdk-for-go/profiles/latest/frontdoor/mgmt/frontdoor"
 )
 
 const integrationTestRulePrefix = "intTest"
 
-var testSinglePolicyId config.ResourceID
-var testIdentifier string
-var subscriptionId string
+var (
+	testSinglePolicyId config.ResourceID
+	testIdentifier     string
+	subscriptionId     string
+)
 
 func TestMain(m *testing.M) {
 	logrus.SetLevel(logrus.DebugLevel)
@@ -127,7 +130,8 @@ func TestUpdateCustomRulesPrefixes(t *testing.T) {
 		Action:     armfrontdoor.ActionType("Block"),
 		Addrs: []netip.Prefix{
 			netip.MustParsePrefix("12.12.12.0/23"),
-			netip.MustParsePrefix("13.13.13.13/32")},
+			netip.MustParsePrefix("13.13.13.13/32"),
+		},
 		MaxRules:       2,
 		RuleNamePrefix: ruleNamePrefix,
 		PriorityStart:  priorityStart,

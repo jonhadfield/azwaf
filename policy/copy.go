@@ -3,9 +3,10 @@ package policy
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"strings"
 	"time"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 

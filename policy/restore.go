@@ -2,9 +2,10 @@ package policy
 
 import (
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"strings"
 	"time"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"

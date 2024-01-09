@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	errors2 "errors"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"hash/adler32"
 	"os"
 	"os/exec"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/alexeyco/simpletable"
@@ -20,7 +22,6 @@ import (
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/jonhadfield/findexec"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 )
 
 // splitExtendedID accepts an extended id <resource id>|<resource item name>, which it parses and then returns

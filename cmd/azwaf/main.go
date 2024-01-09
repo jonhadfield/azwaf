@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/urfave/cli/v2"
 
 	"github.com/jonhadfield/azwaf/cmd/commands"
 
@@ -79,8 +80,10 @@ func main() {
 			Aliases:  []string{"s", "subscription"},
 			Required: false,
 		},
-		&cli.StringFlag{Name: "config", Usage: "path to configuration file",
-			Value: filepath.Join(home, ".config", appName, configFile)},
+		&cli.StringFlag{
+			Name: "config", Usage: "path to configuration file",
+			Value: filepath.Join(home, ".config", appName, configFile),
+		},
 		&cli.BoolFlag{Name: "quiet", Usage: "suppress output"},
 		&cli.BoolFlag{Name: "auto-backup", Usage: "backup policy before applying any changes", Value: autoBackup},
 	}

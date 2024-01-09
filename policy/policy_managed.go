@@ -3,8 +3,9 @@ package policy
 import (
 	"context"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"strings"
+
+	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 

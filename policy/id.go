@@ -2,8 +2,9 @@ package policy
 
 import (
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"regexp"
+
+	"github.com/jonhadfield/azwaf/config"
 )
 
 func IsRIDHash(s string) bool {
