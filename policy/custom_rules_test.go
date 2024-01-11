@@ -1,6 +1,8 @@
 package policy
 
 import (
+	to2 "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/stretchr/testify/assert"
 	"net/netip"
 	"testing"
 
@@ -369,3 +371,36 @@ func TestGetLowestPriority(t *testing.T) {
 //		Action:          "Block",
 //	}
 // }
+
+func TestMatchConditionValidForUnblockNegatedCondition(t *testing.T) {
+	mc := &armfrontdoor.MatchCondition{
+		NegateCondition: to.BoolPtr(true),
+	}
+	assert.False(t, matchConditionValidForUnblock(mc))
+}
+
+func TestMatchConditionValidForUnblockInvalidMatchVariable(t *testing.T) {
+	mc := &armfrontdoor.MatchCondition{
+		NegateCondition: to.BoolPtr(false),
+		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRequestMethod),
+	}
+	assert.False(t, matchConditionValidForUnblock(mc))
+}
+
+func TestMatchConditionValidForUnblockInvalidOperator(t *testing.T) {
+	mc := &armfrontdoor.MatchCondition{
+		NegateCondition: to.BoolPtr(false),
+		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRemoteAddr),
+		Operator:        to2.Ptr(armfrontdoor.OperatorContains),
+	}
+	assert.False(t, matchConditionValidForUnblock(mc))
+}
+
+func TestMatchConditionValidForUnblockValidCondition(t *testing.T) {
+	mc := &armfrontdoor.MatchCondition{
+		NegateCondition: to.BoolPtr(false),
+		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRemoteAddr),
+		Operator:        to2.Ptr(armfrontdoor.OperatorIPMatch),
+	}
+	assert.True(t, matchConditionValidForUnblock(mc))
+}
