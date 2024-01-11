@@ -5,7 +5,6 @@ import (
 
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/session"
-	"go4.org/netipx"
 )
 
 type BlockAddrsInput struct {
@@ -36,6 +35,9 @@ func Block(in BlockAddrsInput) error {
 	policyResourceId := config.ParseResourceID(in.ResourceID)
 
 	policy, err := GetRawPolicy(s, policyResourceId.SubscriptionID, policyResourceId.ResourceGroup, policyResourceId.Name)
+	if err != nil {
+		return err
+	}
 
 	if in.Filepath != "" {
 		in.Addrs, err = readIPsFromFile(in.Filepath)
@@ -70,19 +72,4 @@ func Block(in BlockAddrsInput) error {
 	}
 
 	return nil
-}
-
-func normalisePrefixes(in IPNets) IPNets {
-	builder := netipx.IPSetBuilder{}
-
-	for x := range in {
-		builder.AddPrefix(in[x])
-	}
-
-	ipset, err := builder.IPSet()
-	if err != nil {
-		panic(err)
-	}
-
-	return ipset.Prefixes()
 }

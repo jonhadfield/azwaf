@@ -640,6 +640,9 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 
 	// get existing policy before change to allow for diff and backups
 	preChange, err := GetRawPolicy(input.Session, input.SubscriptionID, input.ResourceGroup, input.PolicyName)
+	if err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
+	}
 
 	if input.ShowDiff {
 		if err = DisplayPolicyDiff(preChange, input.PolicyPostChange); err != nil {
