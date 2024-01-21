@@ -231,7 +231,7 @@ func addTestCustomRuleOneToPolicy(p *armfrontdoor.WebApplicationFirewallPolicy) 
 		Action: to.Ptr(armfrontdoor.ActionTypeBlock),
 		MatchConditions: []*armfrontdoor.MatchCondition{{
 			MatchValue:      []*string{to.Ptr("12.13.13.0/24")},
-			MatchVariable:   to.Ptr(armfrontdoor.MatchVariableRemoteAddr),
+			MatchVariable:   to.Ptr(armfrontdoor.MatchVariableSocketAddr),
 			Operator:        to.Ptr(armfrontdoor.OperatorIPMatch),
 			NegateCondition: to.Ptr(false),
 			Transforms:      nil,

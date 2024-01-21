@@ -542,7 +542,7 @@ func createCustomRule(name string, action armfrontdoor.ActionType, priority int3
 	f := false
 	rt := armfrontdoor.RuleTypeMatchRule
 	es := armfrontdoor.CustomRuleEnabledStateEnabled
-	mv := armfrontdoor.MatchVariableRemoteAddr
+	mv := armfrontdoor.MatchVariableSocketAddr
 	op := armfrontdoor.OperatorIPMatch
 	// at := armfrontdoor.ActionType(action)
 	tt := []*armfrontdoor.TransformType{}
