@@ -17,7 +17,7 @@
                         "rateLimitThreshold": 100,
                         "matchConditions": [
                             {
-                                "matchVariable": "RemoteAddr",
+                                "matchVariable": "SocketAddr",
                                 "operator": "IPMatch",
                                 "negateCondition": false,
                                 "matchValue": [
@@ -36,7 +36,7 @@
                         "ruleType": "MatchRule",
                         "matchConditions": [
                             {
-                                "matchVariable": "RemoteAddr",
+                                "matchVariable": "SocketAddr",
                                 "operator": "IPMatch",
                                 "negateCondition": false,
                                 "matchValue": [
