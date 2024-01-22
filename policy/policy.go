@@ -600,6 +600,8 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (output GeneratePolicyPatc
 	output.TotalDifferences = len(patch)
 
 	for _, op := range patch {
+		logrus.Trace(op.String())
+
 		switch op.Type {
 		case "add":
 			if strings.HasPrefix(string(op.Path), "/properties/customRules/") {

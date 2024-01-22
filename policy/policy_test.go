@@ -211,7 +211,15 @@ func TestGenerateCustomRulesFromIPNets(t *testing.T) {
 
 	require.Len(t, ipns, 16382)
 
-	crs, err := GenCustomRulesFromIPNets(ipns, 90, "Block", "", 0)
+	// crs, err := GenCustomRulesFromIPNets(ipns, nil, 90, "Block", "", 0)
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            90,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 	require.NoError(t, err)
 	require.Len(t, crs, 28)
 
@@ -231,7 +239,14 @@ func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
 	ipns = append(ipns, netip.MustParsePrefix("67.43.236.20/31"))
 	ipns = append(ipns, netip.MustParsePrefix("67.43.236.22/32"))
 
-	crs, err := GenCustomRulesFromIPNets(ipns, 90, "Block", "", 0)
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            90,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 	require.NoError(t, err)
 	require.Len(t, crs, 1)
 
@@ -251,7 +266,14 @@ func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
 	ipns = append(ipns, netip.MustParsePrefix("67.43.236.20/31"))
 	ipns = append(ipns, netip.MustParsePrefix("67.43.236.22/32"))
 
-	crs, err := GenCustomRulesFromIPNets(ipns, 90, "Block", "", 0)
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            90,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 	require.NoError(t, err)
 	require.Len(t, crs, 1)
 
@@ -269,7 +291,14 @@ func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
 	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.22/32"))
 	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.20/31"))
 
-	crs2, err := GenCustomRulesFromIPNets(ipns2, 90, "Block", "", 0)
+	crs2, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns2,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            90,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 	require.NoError(t, err)
 	require.Len(t, crs2, 1)
 
@@ -283,7 +312,15 @@ func TestGenerateCustomRulesFromIPNetsLimitsToMaxRules(t *testing.T) {
 	ipns := generateIPNets("10.0.0.0/21")
 	require.Len(t, ipns, 2046)
 
-	crs, err := GenCustomRulesFromIPNets(ipns, 3, "Block", "", 0)
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            3,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
+	// crs, err := GenCustomRulesFromIPNets(ipns, nil, 3, "Block", "", 0)
 	require.NoError(t, err)
 
 	require.Len(t, crs, 3)
@@ -294,7 +331,14 @@ func TestGenerateCustomRulesFromIPNetsLimitsNotLimitedWhenMaxRulesZero(t *testin
 	ipns := generateIPNets("10.0.0.0/21")
 	require.Len(t, ipns, 2046)
 
-	crs, err := GenCustomRulesFromIPNets(ipns, 0, "Block", "", 0)
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Block",
+		MaxRules:            0,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 
 	require.NoError(t, err)
 	require.Len(t, crs, 4)
@@ -305,6 +349,13 @@ func TestGenerateCustomRulesFromIPNetsWithInvalidAction(t *testing.T) {
 	ipns := generateIPNets("10.0.0.0/21")
 
 	require.Len(t, ipns, 2046)
-	_, err := GenCustomRulesFromIPNets(ipns, 0, "Blocker", "", 0)
+	_, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   nil,
+		Action:              "Blocker",
+		MaxRules:            0,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
 	require.Error(t, err)
 }

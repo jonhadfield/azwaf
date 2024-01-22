@@ -21,13 +21,13 @@ import (
 	"go4.org/netipx"
 )
 
-func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (nets []netip.Prefix, err error) {
+func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (positive, negative []netip.Prefix, err error) {
 	if policy.Properties.CustomRules == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	if action == nil {
-		return nil, errors.New("action cannot be nil")
+		return nil, nil, errors.New("action cannot be nil")
 	}
 
 	for x := range policy.Properties.CustomRules.Rules {
@@ -43,20 +43,24 @@ func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefi
 			for y := range mc {
 				// ensure match condition is IP
 				if !matchConditionValidForUnblock(mc[y]) {
-					return nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
+					return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
 				}
 
 				for z := range mc[y].MatchValue {
 					n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
 					if tErr != nil {
-						return nets, tErr
+						return nil, nil, tErr
 					}
 
 					if err != nil {
-						return nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
+						return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
 					}
 
-					nets = append(nets, n)
+					if *mc[y].NegateCondition {
+						negative = append(negative, n)
+					} else {
+						positive = append(positive, n)
+					}
 				}
 			}
 		}
@@ -217,18 +221,18 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 	}
 
 	// get a copy of the existing ipnets for the specified action and remove the specified list of nets
-	existingNets, err := getIPNetsForPrefix(p, input.MatchPrefix, &input.Action)
+	existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(p, input.MatchPrefix, &input.Action)
 	if err != nil {
 		return
 	}
 
-	logrus.Tracef("existing %s nets: %d", input.MatchPrefix, len(existingNets))
+	logrus.Tracef("existing %s positive nets: %d negative nets: %d", input.MatchPrefix, len(existingPositiveNets), len(existingNegativeNets))
 
 	var trimmed []netip.Prefix
 
 	// get networks being removed or not
 	for _, inNet := range inNets {
-		if slices.Contains(existingNets, inNet) {
+		if slices.Contains(existingPositiveNets, inNet) {
 			results = append(results, ApplyRemoveNetsResult{
 				Addr:     inNet,
 				PolicyID: input.RID.Raw,
@@ -243,7 +247,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 		}
 	}
 
-	for _, n := range existingNets {
+	for _, n := range existingPositiveNets {
 		// check net to remove in existing nets
 		if !slices.Contains(inNets, n) {
 			// no match, so retain
@@ -251,12 +255,15 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 		}
 	}
 
-	proposedRules, err := GenCustomRulesFromIPNets(
-		trimmed,
-		input.MaxRules,
-		input.Action,
-		input.MatchPrefix,
-		int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)))
+	// proposedRules, err := GenCustomRulesFromIPNets(trimmed, nil, input.MaxRules, input.Action, input.MatchPrefix, int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)))
+	proposedRules, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   trimmed,
+		NegativeMatchNets:   nil,
+		Action:              input.Action,
+		MaxRules:            input.MaxRules,
+		CustomNamePrefix:    input.MatchPrefix,
+		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)),
+	})
 	if err != nil {
 		return
 	}
@@ -340,6 +347,7 @@ type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	Output         bool
 	Filepath       string
 	Addrs          IPNets
+	ExcludedAddrs  IPNets
 	RuleNamePrefix RuleNamePrefix
 	PriorityStart  int
 	// StartRuleNumber int
@@ -415,7 +423,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return modified, patch, fmt.Errorf("policy missing properties")
 	}
 
-	prefixes, err := loadLocalPrefixes(in.Filepath, in.Addrs)
+	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.Addrs)
 	if err != nil {
 		return false, patch, err
 	}
@@ -427,22 +435,48 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	// get a copy of the existing ipnets for the specified action and append to the list of new nets
-	existingAddrs, err := getIPNetsForPrefix(in.Policy, in.RuleNamePrefix, &in.Action)
+	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(in.Policy, in.RuleNamePrefix, &in.Action)
 	if err != nil {
 		return modified, patch, err
 	}
 
-	prefixes = append(prefixes, existingAddrs...)
+	positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
+
+	// for x := range positivePrefixes {
+	// 	fmt.Println(positivePrefixes[x].String())
+	// }
 	// appending existingAddrs to new set may result in overlap so normalise
-	prefixes, err = Normalise(prefixes)
+	positivePrefixes, err = Normalise(positivePrefixes)
 	if err != nil {
 		return false, patch, err
 	}
 
-	crs, err := GenCustomRulesFromIPNets(prefixes, in.MaxRules, in.Action, in.RuleNamePrefix, in.PriorityStart)
+	negativePrefixes := append(in.ExcludedAddrs, existingNegativeAddrs...)
+	// appending existingAddrs to new set may result in overlap so normalise
+	negativePrefixes, err = Normalise(negativePrefixes)
+	if err != nil {
+		return false, patch, err
+	}
+
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   positivePrefixes,
+		NegativeMatchNets:   negativePrefixes,
+		Action:              in.Action,
+		MaxRules:            in.MaxRules,
+		CustomNamePrefix:    in.RuleNamePrefix,
+		CustomPriorityStart: in.PriorityStart,
+	})
 	if err != nil {
 		return
 	}
+
+	// for x := range crs {
+	// 	for y := range crs[x].MatchConditions {
+	// 		for z := range crs[x].MatchConditions[y].MatchValue {
+	// 			fmt.Println("x=", x, "y=", y, "z=", z, "-", *crs[x].MatchConditions[y].MatchValue[z])
+	// 		}
+	// 	}
+	// }
 
 	// remove existing net rules from Policy before adding New
 	var ecrs []*armfrontdoor.CustomRule
@@ -482,7 +516,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 
 	// o, _ := json.MarshalIndent(patch, "", "  ")
 	// fmt.Println(string(o))
-	//
+
 	// fmt.Println("ORIG")
 	// o, _ = json.MarshalIndent(originalPolicy, "", "  ")
 	// fmt.Println(string(o))
@@ -538,7 +572,8 @@ func deDupeIPNets(ipns IPNets) (res []string) {
 // TODO: need to support more than just IP
 // TODO: add support for transforms
 // createCustomRule will return a frontdoor CustomRule constructed from the provided input
-func createCustomRule(name string, action armfrontdoor.ActionType, priority int32, items []*string) armfrontdoor.CustomRule {
+func createCustomRule(name string, action armfrontdoor.ActionType, priority int32, items, negatedItems []*string) armfrontdoor.CustomRule {
+	t := true
 	f := false
 	rt := armfrontdoor.RuleTypeMatchRule
 	es := armfrontdoor.CustomRuleEnabledStateEnabled
@@ -553,29 +588,45 @@ func createCustomRule(name string, action armfrontdoor.ActionType, priority int3
 		return *items[i] < *items[j]
 	})
 
-	return armfrontdoor.CustomRule{
-		Name:         &nameWithPriority,
-		Priority:     &priority,
-		EnabledState: &es,
-		RuleType:     &rt,
-		MatchConditions: []*armfrontdoor.MatchCondition{{
-			MatchVariable:   &mv,
-			NegateCondition: &f,
-			Operator:        &op,
-			MatchValue:      items,
-			Transforms:      tt,
-		}},
+	var newMatchConditions []*armfrontdoor.MatchCondition
+	newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
+		MatchVariable:   &mv,
+		NegateCondition: &f,
+		Operator:        &op,
+		MatchValue:      items,
+		Transforms:      tt,
+	})
 
-		Action: &action,
+	if len(negatedItems) > 0 {
+		// fmt.Println("ADDING NEW MATCH CONDITION WITH ITEMS:", len(negatedItems))
+		newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
+			MatchVariable:   &mv,
+			NegateCondition: &t,
+			Operator:        &op,
+			MatchValue:      negatedItems,
+			Transforms:      tt,
+		})
 	}
+
+	return armfrontdoor.CustomRule{
+		Name:            &nameWithPriority,
+		Priority:        &priority,
+		EnabledState:    &es,
+		RuleType:        &rt,
+		MatchConditions: newMatchConditions,
+		Action:          &action,
+	}
+
 }
 
-func strsTostrPtrs(in []string) (out []*string) {
+func strsTostrPtrs(in []string) []*string {
+	var out []*string
+
 	for i := range in {
 		out = append(out, &in[i])
 	}
 
-	return
+	return out
 }
 
 // Normalise accepts a slice of netip.Prefix and returns a unique slice of their string representations
@@ -602,20 +653,39 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 	return ipSet.Prefixes(), nil
 }
 
-// GenCustomRulesFromIPNets accepts a list of IPs, plus the action to be taken with them, and the maximum
+type GenCustomRulesFromIPNetsInput struct {
+	PositiveMatchNets   IPNets
+	NegativeMatchNets   IPNets
+	Action              armfrontdoor.ActionType
+	MaxRules            int
+	CustomNamePrefix    RuleNamePrefix
+	CustomPriorityStart int
+}
+
+// GenCustomRulesFromIPNets accepts two lists of IPs (positive and negative), plus the action to be taken with them, and the maximum
 // number of rules to create and then returns a slice of CustomRules
-func GenCustomRulesFromIPNets(ipns IPNets, maxRules int, action armfrontdoor.ActionType, customNamePrefix RuleNamePrefix, customPriorityStart int) (crs []*armfrontdoor.CustomRule, err error) {
-	if !slices.Contains(armfrontdoor.PossibleActionTypeValues(), action) {
-		return nil, fmt.Errorf("invalid action: %s", action)
+func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfrontdoor.CustomRule, err error) {
+	// func GenCustomRulesFromIPNets(ipns, negatedIpns IPNets, maxRules int, action armfrontdoor.ActionType, customNamePrefix RuleNamePrefix, customPriorityStart int) (crs []*armfrontdoor.CustomRule, err error) {
+	if !slices.Contains(armfrontdoor.PossibleActionTypeValues(), in.Action) {
+		return nil, fmt.Errorf("invalid action: %s", in.Action)
 	}
 
 	var priorityStart int
 
-	if customPriorityStart != 0 {
-		priorityStart = customPriorityStart
+	if in.CustomPriorityStart != 0 {
+		priorityStart = in.CustomPriorityStart
 	}
 
-	deDupedNets := deDupeIPNets(ipns)
+	// get number of those to negate that must appear in each rule
+	// this will be deducted from max values per rule
+	deDupedNegatedNets := deDupeIPNets(in.NegativeMatchNets)
+	sort.Strings(deDupedNegatedNets)
+
+	negatedCount := len(in.NegativeMatchNets)
+
+	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
+
+	deDupedNets := deDupeIPNets(in.PositiveMatchNets)
 	sort.Strings(deDupedNets)
 
 	logrus.Tracef("total networks after deduplication: %d", len(deDupedNets))
@@ -631,22 +701,23 @@ func GenCustomRulesFromIPNets(ipns IPNets, maxRules int, action armfrontdoor.Act
 	var customRulesGenerated int32
 
 	for x := range strDeDupedNets {
-		if x > 0 && x%MaxIPMatchValues == 0 {
-			matchValues = strDeDupedNets[x-MaxIPMatchValues : x]
+		if x > 0 && x%(MaxIPMatchValues-negatedCount) == 0 {
+			// fmt.Printf("x=%d, max=%d, negated=%d\n", x, MaxIPMatchValues, negatedCount)
+			matchValues = strDeDupedNets[x-MaxIPMatchValues-negatedCount : x]
 			lastChunkEnd = x
 		} else if x+1 == len(strDeDupedNets) {
 			matchValues = strDeDupedNets[lastChunkEnd:]
 		}
 
 		if len(matchValues) > 0 {
-			bic := createCustomRule(string(customNamePrefix), action, priorityCount, strsTostrPtrs(matchValues))
+			bic := createCustomRule(string(in.CustomNamePrefix), in.Action, priorityCount, strsTostrPtrs(matchValues), strsTostrPtrs(deDupedNegatedNets))
 
 			priorityCount++
 
 			crs = append(crs, &bic)
 
 			customRulesGenerated++
-			if customRulesGenerated > 0 && customRulesGenerated == int32(maxRules) {
+			if customRulesGenerated > 0 && customRulesGenerated == int32(in.MaxRules) {
 				return
 			}
 
