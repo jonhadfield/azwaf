@@ -8,7 +8,7 @@ import (
 )
 
 func TestDeRefStrs(t *testing.T) {
-	strs := deRefStrs([]*string{StrToPointer("hello"), StrToPointer("world")})
+	strs := deRefStrs([]*string{toPtr("hello"), toPtr("world")})
 	require.Equal(t, []string{"hello", "world"}, strs)
 }
 

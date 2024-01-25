@@ -71,12 +71,12 @@ func TestCustomRuleHasDefaultDenyFive(t *testing.T) {
 	mcSet := []*armfrontdoor.MatchCondition{{
 		MatchVariable:   &mvra,
 		Operator:        &oipm,
-		NegateCondition: BoolToPointer(true),
+		NegateCondition: toPtr(true),
 		MatchValue:      ipnpi,
 	}}
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
-		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+		Name:            toPtr("CustomRuleWithDefaultDeny"),
 		Priority:        Int32ToPointer(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
@@ -94,7 +94,7 @@ func TestCustomRuleHasDefaultDenyOne(t *testing.T) {
 	mcSet1 := []*armfrontdoor.MatchCondition{{
 		MatchVariable:   &mvrara,
 		Operator:        &mvra,
-		NegateCondition: BoolToPointer(false),
+		NegateCondition: toPtr(false),
 		MatchValue:      ipMatchValuesWithPublicInternet(),
 	}}
 
@@ -102,7 +102,7 @@ func TestCustomRuleHasDefaultDenyOne(t *testing.T) {
 	crrtmr := armfrontdoor.RuleTypeMatchRule
 	atb := armfrontdoor.ActionTypeBlock
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
-		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+		Name:            toPtr("CustomRuleWithDefaultDeny"),
 		Priority:        Int32ToPointer(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
@@ -129,7 +129,7 @@ func TestCustomRuleHasDefaultDenyTwo(t *testing.T) {
 	mc1 := armfrontdoor.MatchCondition{
 		MatchVariable:   &mvra,
 		Operator:        &oipm,
-		NegateCondition: BoolToPointer(false),
+		NegateCondition: toPtr(false),
 		MatchValue:      ipwpi,
 		Transforms:      nil,
 	}
@@ -137,14 +137,14 @@ func TestCustomRuleHasDefaultDenyTwo(t *testing.T) {
 	mc2 := armfrontdoor.MatchCondition{
 		MatchVariable:   &mvra,
 		Operator:        &oipm,
-		NegateCondition: BoolToPointer(true),
+		NegateCondition: toPtr(true),
 		MatchValue:      ipnpi,
 	}
 
 	mcSet := []*armfrontdoor.MatchCondition{&mc1, &mc2}
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
-		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+		Name:            toPtr("CustomRuleWithDefaultDeny"),
 		Priority:        Int32ToPointer(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
@@ -169,13 +169,13 @@ func TestCustomRuleHasDefaultDenyThree(t *testing.T) {
 		MatchVariable:   &mvra,
 		Selector:        nil,
 		Operator:        &oipm,
-		NegateCondition: BoolToPointer(false),
+		NegateCondition: toPtr(false),
 		MatchValue:      ipnpi,
 		Transforms:      nil,
 	}}
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
-		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+		Name:            toPtr("CustomRuleWithDefaultDeny"),
 		Priority:        Int32ToPointer(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
@@ -197,12 +197,12 @@ func TestCustomRuleHasDefaultDenyFour(t *testing.T) {
 	mcSet := []*armfrontdoor.MatchCondition{{
 		MatchVariable:   &mvra,
 		Operator:        &oipm,
-		NegateCondition: BoolToPointer(true),
+		NegateCondition: toPtr(true),
 		MatchValue:      ipwpi,
 	}}
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
-		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+		Name:            toPtr("CustomRuleWithDefaultDeny"),
 		Priority:        Int32ToPointer(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,

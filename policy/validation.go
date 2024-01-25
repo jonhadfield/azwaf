@@ -199,21 +199,17 @@ func ValidateResourceIDs(ids []string) error {
 
 func ipMatchValuesWithPublicInternet() []*string {
 	return []*string{
-		StrToPointer("1.1.1.1/32"),
-		StrToPointer("2.2.2.2/32"),
-		StrToPointer("0.0.0.0/0"),
-		StrToPointer("4.4.4.4/32"),
+		toPtr("1.1.1.1/32"),
+		toPtr("2.2.2.2/32"),
+		toPtr("0.0.0.0/0"),
+		toPtr("4.4.4.4/32"),
 	}
 }
 
 func ipMatchValuesNoPublicInternet() []*string {
 	return []*string{
-		StrToPointer("5.5.5.5/32"),
-		StrToPointer("52.0.0.0/24"),
-		StrToPointer("34.0.0.0/8"),
+		toPtr("5.5.5.5/32"),
+		toPtr("52.0.0.0/24"),
+		toPtr("34.0.0.0/8"),
 	}
-}
-
-func BoolToPointer(b bool) (p *bool) {
-	return &b
 }

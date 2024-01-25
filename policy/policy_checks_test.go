@@ -1,7 +1,6 @@
 package policy
 
 import (
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"testing"
 
@@ -52,12 +51,12 @@ func TestEqualRuleSetsHappyPath(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 				},
 			},
@@ -69,12 +68,12 @@ func TestEqualRuleSetsHappyPath(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 				},
 			},
@@ -90,12 +89,12 @@ func TestEqualRuleSetsDifferentOrder(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 				},
 			},
@@ -107,12 +106,12 @@ func TestEqualRuleSetsDifferentOrder(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 				},
 			},
@@ -128,12 +127,12 @@ func TestEqualRuleSetsDifferentTypes(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 				},
 			},
@@ -145,12 +144,12 @@ func TestEqualRuleSetsDifferentTypes(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type3"),
-						RuleSetVersion: to.Ptr("version3"),
+						RuleSetType:    toPtr("type3"),
+						RuleSetVersion: toPtr("version3"),
 					},
 					{
-						RuleSetType:    to.Ptr("type4"),
-						RuleSetVersion: to.Ptr("version4"),
+						RuleSetType:    toPtr("type4"),
+						RuleSetVersion: toPtr("version4"),
 					},
 				},
 			},
@@ -166,12 +165,12 @@ func TestEqualRuleSetsDifferentLengths(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 					{
-						RuleSetType:    to.Ptr("type2"),
-						RuleSetVersion: to.Ptr("version2"),
+						RuleSetType:    toPtr("type2"),
+						RuleSetVersion: toPtr("version2"),
 					},
 				},
 			},
@@ -183,8 +182,8 @@ func TestEqualRuleSetsDifferentLengths(t *testing.T) {
 			ManagedRules: &armfrontdoor.ManagedRuleSetList{
 				ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{
 					{
-						RuleSetType:    to.Ptr("type1"),
-						RuleSetVersion: to.Ptr("version1"),
+						RuleSetType:    toPtr("type1"),
+						RuleSetVersion: toPtr("version1"),
 					},
 				},
 			},

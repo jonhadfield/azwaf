@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/config"
@@ -228,18 +227,18 @@ func addTestCustomRuleOneToPolicy(p *armfrontdoor.WebApplicationFirewallPolicy) 
 	}
 
 	cr := armfrontdoor.CustomRule{
-		Action: to.Ptr(armfrontdoor.ActionTypeBlock),
+		Action: toPtr(armfrontdoor.ActionTypeBlock),
 		MatchConditions: []*armfrontdoor.MatchCondition{{
-			MatchValue:      []*string{to.Ptr("12.13.13.0/24")},
-			MatchVariable:   to.Ptr(armfrontdoor.MatchVariableSocketAddr),
-			Operator:        to.Ptr(armfrontdoor.OperatorIPMatch),
-			NegateCondition: to.Ptr(false),
+			MatchValue:      []*string{toPtr("12.13.13.0/24")},
+			MatchVariable:   toPtr(armfrontdoor.MatchVariableSocketAddr),
+			Operator:        toPtr(armfrontdoor.OperatorIPMatch),
+			NegateCondition: toPtr(false),
 			Transforms:      nil,
 		}},
-		Priority:                   to.Ptr(newRulePriority),
-		RuleType:                   to.Ptr(armfrontdoor.RuleTypeMatchRule),
-		EnabledState:               to.Ptr(armfrontdoor.CustomRuleEnabledStateEnabled),
-		Name:                       to.Ptr(fmt.Sprintf("%s%s", integrationTestRulePrefix, testIdentifier)),
+		Priority:                   toPtr(newRulePriority),
+		RuleType:                   toPtr(armfrontdoor.RuleTypeMatchRule),
+		EnabledState:               toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
+		Name:                       toPtr(fmt.Sprintf("%s%s", integrationTestRulePrefix, testIdentifier)),
 		RateLimitDurationInMinutes: nil,
 		RateLimitThreshold:         nil,
 	}
@@ -286,4 +285,8 @@ func pushPolicy(s *session.Session, r config.ResourceID, p *armfrontdoor.WebAppl
 		Timeout:       30,
 		Async:         false,
 	})
+}
+
+func toPtr[T any](v T) *T {
+	return &v
 }

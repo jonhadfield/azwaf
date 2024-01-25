@@ -276,8 +276,8 @@ func TestAddRuleSetExclusion(t *testing.T) {
 	dcri := &AddManagedRuleExclusionInput{
 		DryRun:                false,
 		RuleSets:              []*armfrontdoor.ManagedRuleSet{&mrs},
-		RuleSetType:           StrToPointer("Microsoft_DefaultRuleSet"),
-		RuleSetVersion:        StrToPointer("1.1"),
+		RuleSetType:           toPtr("Microsoft_DefaultRuleSet"),
+		RuleSetVersion:        toPtr("1.1"),
 		ExclusionRuleVariable: "RequestCookieNames",
 		ExclusionRuleOperator: "Contains",
 		ExclusionRuleSelector: "Potato",

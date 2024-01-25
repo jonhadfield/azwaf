@@ -22,17 +22,17 @@ func getTestCRsSetOne() []*armfrontdoor.CustomRule {
 		{
 			Action:   &aBlock,
 			Priority: int32ptr(0),
-			Name:     StrToPointer("crZero"),
+			Name:     toPtr("crZero"),
 		},
 		{
 			Action:   &aBlock,
 			Priority: int32ptr(1),
-			Name:     StrToPointer("crOne"),
+			Name:     toPtr("crOne"),
 		},
 		{
 			Action:   &aBlock,
 			Priority: int32ptr(2),
-			Name:     StrToPointer("crTwo"),
+			Name:     toPtr("crTwo"),
 		},
 	}
 }
@@ -72,10 +72,10 @@ func TestStripCRsMatchingNameAndPriority(t *testing.T) {
 //	// - exclusion
 //	matchVariable := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestBodyPostArgNames")
 //	matchOperator := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Contains")
-//	matchSelector := StrToPointer("Cheese")
+//	matchSelector := toPtr("Cheese")
 //
 //	return &armfrontdoor.ManagedRuleOverride{
-//		RuleID:       StrToPointer("265220"),
+//		RuleID:       toPtr("265220"),
 //		Action:       &action,
 //		EnabledState: &state,
 //		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
@@ -101,14 +101,14 @@ func TestStripCRsMatchingNameAndPriority(t *testing.T) {
 //	// - exclusion one
 //	matchVariable1 := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestHeaderNames")
 //	matchOperator1 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("EndsWith")
-//	matchSelector1 := StrToPointer("Toast")
+//	matchSelector1 := toPtr("Toast")
 //	// - exclusion two
 //	matchVariable2 := armfrontdoor.ManagedRuleExclusionMatchVariable("QueryStringArgNames")
 //	matchOperator2 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Equals")
-//	matchSelector2 := StrToPointer("Vegetable")
+//	matchSelector2 := toPtr("Vegetable")
 //
 //	return &armfrontdoor.ManagedRuleOverride{
-//		RuleID:       StrToPointer("265221"),
+//		RuleID:       toPtr("265221"),
 //		Action:       &action,
 //		EnabledState: &state,
 //		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
@@ -212,7 +212,7 @@ func TestMatchManagedRuleGroupOverrideExclusionEmptyInput(t *testing.T) {
 //		RuleID: "cheese",
 //	}
 //	mro := stripManagedRuleOverride(dcri, &armfrontdoor.ManagedRuleOverride{
-//		RuleID: StrToPointer("vegetable"),
+//		RuleID: toPtr("vegetable"),
 //	})
 //
 //	require.Equal(t, "vegetable", *mro.RuleID)
@@ -228,16 +228,16 @@ func TestStripManagedRuleOverridePositiveMatch(t *testing.T) {
 	mv2 := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestHeaderNames")
 	mo2 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Contains")
 	mro := stripManagedRuleOverride(dcri, &armfrontdoor.ManagedRuleOverride{
-		RuleID: StrToPointer("cheese"),
+		RuleID: toPtr("cheese"),
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
 			{
 				MatchVariable:         &mv1,
-				Selector:              StrToPointer("sel1"),
+				Selector:              toPtr("sel1"),
 				SelectorMatchOperator: &mo1,
 			},
 			{
 				MatchVariable:         &mv2,
-				Selector:              StrToPointer("sel2"),
+				Selector:              toPtr("sel2"),
 				SelectorMatchOperator: &mo2,
 			},
 		},
@@ -261,16 +261,16 @@ func TestStripManagedRuleOverrideExclusionsPositiveMatch(t *testing.T) {
 	mo2 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("StartsWith")
 
 	mro := stripManagedRuleOverride(dcri, &armfrontdoor.ManagedRuleOverride{
-		RuleID: StrToPointer("cheese"),
+		RuleID: toPtr("cheese"),
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
 			{
 				MatchVariable:         &mv1,
-				Selector:              StrToPointer("fromage"),
+				Selector:              toPtr("fromage"),
 				SelectorMatchOperator: &mo1,
 			},
 			{
 				MatchVariable:         &mv2,
-				Selector:              StrToPointer("vegetable"),
+				Selector:              toPtr("vegetable"),
 				SelectorMatchOperator: &mo2,
 			},
 		},
@@ -331,14 +331,14 @@ func TestStripManagedRuleGroupOverrideExclusions(t *testing.T) {
 
 func TestGetDeleteManagedRuleExclusionProcessScope(t *testing.T) {
 	scope, err := GetDeleteManagedRuleExclusionProcessScope(&DeleteManagedRuleExclusionInput{
-		RuleSetType:    StrToPointer("test"),
-		RuleSetVersion: StrToPointer("set"),
+		RuleSetType:    toPtr("test"),
+		RuleSetVersion: toPtr("set"),
 	})
 	require.NoError(t, err)
 	require.Equal(t, ScopeRuleSet, scope)
 	scope, err = GetDeleteManagedRuleExclusionProcessScope(&DeleteManagedRuleExclusionInput{
-		RuleSetType:    StrToPointer("test"),
-		RuleSetVersion: StrToPointer("set"),
+		RuleSetType:    toPtr("test"),
+		RuleSetVersion: toPtr("set"),
 		RuleGroup:      "test group",
 	})
 	require.NoError(t, err)
@@ -381,16 +381,16 @@ func TestStripManagedRuleOverrideExckusionsPositiveMatch(t *testing.T) {
 	mo2 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("EndsWith")
 
 	mro := stripManagedRuleOverride(dcri, &armfrontdoor.ManagedRuleOverride{
-		RuleID: StrToPointer("cheese"),
+		RuleID: toPtr("cheese"),
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
 			{
 				MatchVariable:         &mv1,
-				Selector:              StrToPointer("sel1"),
+				Selector:              toPtr("sel1"),
 				SelectorMatchOperator: &mo1,
 			},
 			{
 				MatchVariable:         &mv2,
-				Selector:              StrToPointer("sel2"),
+				Selector:              toPtr("sel2"),
 				SelectorMatchOperator: &mo2,
 			},
 		},
@@ -461,10 +461,10 @@ func getTestManagedRuleOverrideOne() *armfrontdoor.ManagedRuleOverride {
 	// - exclusion
 	matchVariable := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestBodyPostArgNames")
 	matchOperator := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Contains")
-	matchSelector := StrToPointer("Cheese")
+	matchSelector := toPtr("Cheese")
 
 	return &armfrontdoor.ManagedRuleOverride{
-		RuleID:       StrToPointer("265220"),
+		RuleID:       toPtr("265220"),
 		Action:       &action,
 		EnabledState: &state,
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
@@ -490,14 +490,14 @@ func getTestManagedRuleOverrideTwo() *armfrontdoor.ManagedRuleOverride {
 	// - exclusion one
 	matchVariable1 := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestHeaderNames")
 	matchOperator1 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("EndsWith")
-	matchSelector1 := StrToPointer("Toast")
+	matchSelector1 := toPtr("Toast")
 	// - exclusion two
 	matchVariable2 := armfrontdoor.ManagedRuleExclusionMatchVariable("QueryStringArgNames")
 	matchOperator2 := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Equals")
-	matchSelector2 := StrToPointer("Vegetable")
+	matchSelector2 := toPtr("Vegetable")
 
 	return &armfrontdoor.ManagedRuleOverride{
-		RuleID:       StrToPointer("265221"),
+		RuleID:       toPtr("265221"),
 		Action:       &action,
 		EnabledState: &state,
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{
@@ -517,7 +517,7 @@ func getTestManagedRuleOverrideTwo() *armfrontdoor.ManagedRuleOverride {
 
 func getManagedRuleGroupOverrideOne() *armfrontdoor.ManagedRuleGroupOverride {
 	return &armfrontdoor.ManagedRuleGroupOverride{
-		RuleGroupName: StrToPointer("JAVA"),
+		RuleGroupName: toPtr("JAVA"),
 		Exclusions:    getTestExclusionsTwo(),
 		Rules:         getTestManagedGroupOverridesOne(),
 	}
@@ -525,7 +525,7 @@ func getManagedRuleGroupOverrideOne() *armfrontdoor.ManagedRuleGroupOverride {
 
 func getManagedRuleGroupOverrideTwo() *armfrontdoor.ManagedRuleGroupOverride {
 	return &armfrontdoor.ManagedRuleGroupOverride{
-		RuleGroupName: StrToPointer("PHP"),
+		RuleGroupName: toPtr("PHP"),
 		Exclusions:    getTestExclusionsTwo(),
 		Rules:         getTestManagedGroupOverridesOne(),
 	}
@@ -533,8 +533,8 @@ func getManagedRuleGroupOverrideTwo() *armfrontdoor.ManagedRuleGroupOverride {
 
 func getTestRuleSetOne() armfrontdoor.ManagedRuleSet {
 	return armfrontdoor.ManagedRuleSet{
-		RuleSetType:        StrToPointer("Microsoft_DefaultRuleSet"),
-		RuleSetVersion:     StrToPointer("1.1"),
+		RuleSetType:        toPtr("Microsoft_DefaultRuleSet"),
+		RuleSetVersion:     toPtr("1.1"),
 		Exclusions:         getTestExclusionsOne(),
 		RuleGroupOverrides: []*armfrontdoor.ManagedRuleGroupOverride{getManagedRuleGroupOverrideOne()},
 		RuleSetAction:      nil,
@@ -543,8 +543,8 @@ func getTestRuleSetOne() armfrontdoor.ManagedRuleSet {
 
 func getTestRuleSetTwo() armfrontdoor.ManagedRuleSet {
 	return armfrontdoor.ManagedRuleSet{
-		RuleSetType:        StrToPointer("Microsoft_BotManagerRuleSet"),
-		RuleSetVersion:     StrToPointer("1.0"),
+		RuleSetType:        toPtr("Microsoft_BotManagerRuleSet"),
+		RuleSetVersion:     toPtr("1.0"),
 		Exclusions:         getTestExclusionsTwo(),
 		RuleGroupOverrides: []*armfrontdoor.ManagedRuleGroupOverride{getManagedRuleGroupOverrideTwo()},
 		RuleSetAction:      nil,
@@ -561,8 +561,8 @@ func getTestRuleSetTwo() armfrontdoor.ManagedRuleSet {
 //
 // func getTestPolicyOne() armfrontdoor.WebApplicationFirewallPolicy {
 // 	return armfrontdoor.WebApplicationFirewallPolicy{
-// 		Etag:     StrToPointer("etag"),
-// 		Location: StrToPointer("uksouth"),
+// 		Etag:     toPtr("etag"),
+// 		Location: toPtr("uksouth"),
 // 		Properties: &armfrontdoor.WebApplicationFirewallPolicyProperties{
 // 			CustomRules:           &armfrontdoor.CustomRuleList{Rules: getTestCRsSetOne()},
 // 			ManagedRules:          &armfrontdoor.ManagedRuleSetList{ManagedRuleSets: getTestManagedRuleSets()},
@@ -595,17 +595,17 @@ func getTestExclusionsOne() []*armfrontdoor.ManagedRuleExclusion {
 	return []*armfrontdoor.ManagedRuleExclusion{
 		{
 			MatchVariable:         &reqHeaderNames,
-			Selector:              StrToPointer("Relax"),
+			Selector:              toPtr("Relax"),
 			SelectorMatchOperator: &endsWith,
 		},
 		{
 			MatchVariable:         &reqBodyPostArgNames,
-			Selector:              StrToPointer("Your"),
+			Selector:              toPtr("Your"),
 			SelectorMatchOperator: &startsWith,
 		},
 		{
 			MatchVariable:         &reqCookieNames,
-			Selector:              StrToPointer("Eyes"),
+			Selector:              toPtr("Eyes"),
 			SelectorMatchOperator: &contains,
 		},
 	}
@@ -622,17 +622,17 @@ func getTestExclusionsTwo() []*armfrontdoor.ManagedRuleExclusion {
 	return []*armfrontdoor.ManagedRuleExclusion{
 		{
 			MatchVariable:         &reqHeaderNames,
-			Selector:              StrToPointer("Al"),
+			Selector:              toPtr("Al"),
 			SelectorMatchOperator: &startsWith,
 		},
 		{
 			MatchVariable:         &reqBodyPostArgNames,
-			Selector:              StrToPointer("Knows"),
+			Selector:              toPtr("Knows"),
 			SelectorMatchOperator: &contains,
 		},
 		{
 			MatchVariable:         &reqCookieNames,
-			Selector:              StrToPointer("all"),
+			Selector:              toPtr("all"),
 			SelectorMatchOperator: &endsWith,
 		},
 	}
@@ -649,17 +649,17 @@ func getTestExclusionsTwo() []*armfrontdoor.ManagedRuleExclusion {
 //	return []*armfrontdoor.ManagedRuleExclusion{
 //		{
 //			MatchVariable:         &reqHeaderNames,
-//			Selector:              StrToPointer("Loki"),
+//			Selector:              toPtr("Loki"),
 //			SelectorMatchOperator: &contains,
 //		},
 //		{
 //			MatchVariable:         &reqBodyPostArgNames,
-//			Selector:              StrToPointer("Loves"),
+//			Selector:              toPtr("Loves"),
 //			SelectorMatchOperator: &startsWith,
 //		},
 //		{
 //			MatchVariable:         &reqCookieNames,
-//			Selector:              StrToPointer("Chicken"),
+//			Selector:              toPtr("Chicken"),
 //			SelectorMatchOperator: &endsWith,
 //		},
 //	}
@@ -733,7 +733,7 @@ func TestStripExclusionFromManagedRuleSet(t *testing.T) {
 //	state := armfrontdoor.ManagedRuleEnabledState("Enabled")
 //	matchVariable := armfrontdoor.ManagedRuleExclusionMatchVariable("RequestBodyPostArgNames")
 //	matchOperator := armfrontdoor.ManagedRuleExclusionSelectorMatchOperator("Contains")
-//	matchSelector := StrToPointer("Cheese")
+//	matchSelector := toPtr("Cheese")
 // func TestMatchManagedRuleGroupOverrideExclusion(t *testing.T) {
 //	o := getTestManagedRuleOverrideOne()
 //	//fmt.Println(matchManagedRuleGroupOverrideExclusion(DeleteManagedRuleExclusionInput{
@@ -877,7 +877,7 @@ func TestStripExclusionAtScopeRuleSetNoMatches(t *testing.T) {
 	require.NotEmpty(t, sMrs)
 	//		{
 	//			MatchVariable:         &reqBodyPostArgNames,
-	//			Selector:              StrToPointer("Knows"),
+	//			Selector:              toPtr("Knows"),
 	//			SelectorMatchOperator: &contains,
 	//		},
 	require.Len(t, sMrs.RuleGroupOverrides[0].Exclusions, 3)
@@ -910,17 +910,17 @@ func TestStripExclusionAtScopeRuleGroup(t *testing.T) {
 	// GROUP EXCLUSIONS
 	// 		{
 	//			MatchVariable:         &reqHeaderNames,
-	//			Selector:              StrToPointer("Al"),
+	//			Selector:              toPtr("Al"),
 	//			SelectorMatchOperator: &startsWith,
 	//		},
 	//		{
 	//			MatchVariable:         &reqBodyPostArgNames,
-	//			Selector:              StrToPointer("Knows"),
+	//			Selector:              toPtr("Knows"),
 	//			SelectorMatchOperator: &contains,
 	//		},
 	//		{
 	//			MatchVariable:         &reqCookieNames,
-	//			Selector:              StrToPointer("all"),
+	//			Selector:              toPtr("all"),
 	//			SelectorMatchOperator: &endsWith,
 	//		},
 

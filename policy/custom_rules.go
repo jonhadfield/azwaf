@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"log"
 	"net/netip"
 	"os"
@@ -22,6 +21,9 @@ import (
 	"go4.org/netipx"
 )
 
+// getIPNetsForPrefix takes a policy, rule name prefix, and an action,
+// and returns a slice of netip.Prefix for those from the standard positive
+// match conditions and another from the negated match conditions
 func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (positive, negative []netip.Prefix, err error) {
 	if policy.Properties.CustomRules == nil {
 		return nil, nil, nil
@@ -37,31 +39,36 @@ func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefi
 			continue
 		}
 
-		// if prefix is empty, then all custom rules are interrogated
-		if strings.HasPrefix(*policy.Properties.CustomRules.Rules[x].Name, string(prefix)) {
-			mc := policy.Properties.CustomRules.Rules[x].MatchConditions
+		// match by custom rule name prefix
+		if !strings.HasPrefix(*policy.Properties.CustomRules.Rules[x].Name, string(prefix)) {
+			continue
+		}
 
-			for y := range mc {
-				// ensure match condition is IP
-				if !matchConditionValidForUnblock(mc[y]) {
-					return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
+		mc := policy.Properties.CustomRules.Rules[x].MatchConditions
+
+		// for each match conditions, get the
+		for y := range mc {
+			// ensure match condition is IP as rules with mixed match
+			// conditions (IPMatch + GeoMatch combination)
+			//  are not currently supported
+			if !matchConditionSupported(mc[y]) {
+				return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
+			}
+
+			for z := range mc[y].MatchValue {
+				n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
+				if tErr != nil {
+					return nil, nil, tErr
 				}
 
-				for z := range mc[y].MatchValue {
-					n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
-					if tErr != nil {
-						return nil, nil, tErr
-					}
+				if err != nil {
+					return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
+				}
 
-					if err != nil {
-						return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
-					}
-
-					if *mc[y].NegateCondition {
-						negative = append(negative, n)
-					} else {
-						positive = append(positive, n)
-					}
+				if *mc[y].NegateCondition {
+					negative = append(negative, n)
+				} else {
+					positive = append(positive, n)
 				}
 			}
 		}
@@ -702,8 +709,8 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfront
 		nets:                  &deDupedNets,
 		negate:                false,
 		maxValuesPerCondition: MaxIPMatchValues - len(deDupedNegatedNets),
-		matchVariable:         to.Ptr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator:         to.Ptr(armfrontdoor.OperatorIPMatch),
+		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
+		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
 		return nil, err
@@ -717,8 +724,8 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfront
 		negate: true,
 		// TODO: set to Max (600) minus the largest possible chunk of positive
 		maxValuesPerCondition: MaxIPMatchValues,
-		matchVariable:         to.Ptr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator:         to.Ptr(armfrontdoor.OperatorIPMatch),
+		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
+		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
 		return nil, err
@@ -759,8 +766,8 @@ func genCustomRuleFromMatchConditions(mcs []*armfrontdoor.MatchCondition, priori
 		Action:          action,
 		MatchConditions: mcs,
 		Priority:        &priority,
-		RuleType:        to.Ptr(armfrontdoor.RuleTypeMatchRule),
-		EnabledState:    to.Ptr(armfrontdoor.CustomRuleEnabledStateEnabled),
+		RuleType:        toPtr(armfrontdoor.RuleTypeMatchRule),
+		EnabledState:    toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
 		Name:            &name,
 		// RateLimitDurationInMinutes: nil,
 		// RateLimitThreshold:         nil,
@@ -792,9 +799,9 @@ func generateMatchConditionsFromNets(in generateMatchConditionsFromNetsInput) (m
 			})
 
 			mc.MatchValue = chunk
-			mc.NegateCondition = to.Ptr(in.negate)
+			mc.NegateCondition = toPtr(in.negate)
 			mc.Operator = in.matchOperator
-			mc.MatchVariable = to.Ptr(armfrontdoor.MatchVariableSocketAddr)
+			mc.MatchVariable = toPtr(armfrontdoor.MatchVariableSocketAddr)
 			mc.Transforms = []*armfrontdoor.TransformType{}
 
 			mcs = append(mcs, &mc)
@@ -916,11 +923,12 @@ type AddCustomRulesPrefixesInput struct {
 	LogLevel *logrus.Level
 }
 
-// matchConditionValidForUnblock returns true if removal of a prefix will mean unblocking the prefix
-func matchConditionValidForUnblock(mc *armfrontdoor.MatchCondition) bool {
-	// if the condition is negated then it's a negative match and removal will not mean unblocking
-	if *mc.NegateCondition {
-		logrus.Debugf("match condition is negated so not valid for unblock")
+// matchConditionSupported returns true if is for IPMatch
+// and is for remote address or socket addresses
+func matchConditionSupported(mc *armfrontdoor.MatchCondition) bool {
+	if mc.MatchVariable == nil || mc.Operator == nil {
+		logrus.Warnf("match condition missing variable or operator")
+
 		return false
 	}
 
