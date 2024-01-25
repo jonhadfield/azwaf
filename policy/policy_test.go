@@ -2,6 +2,7 @@ package policy
 
 import (
 	"encoding/json"
+	"go4.org/netipx"
 	"log"
 	"net"
 	"net/netip"
@@ -200,7 +201,7 @@ func generateIPNets(cidr string) (ipns IPNets) {
 	}
 
 	sort.Slice(ipns, func(i, j int) bool {
-		return ipns[i].String() < ipns[j].String()
+		return netipx.ComparePrefix(ipns[i], ipns[j]) < 0
 	})
 
 	return
@@ -223,14 +224,25 @@ func TestGenerateCustomRulesFromIPNets(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, crs, 28)
 
-	for x := range crs {
-		matchConditions := crs[x].MatchConditions
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "10.0.0.10/32", false))
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "10.0.4.254/32", false))
+}
 
-		mc := matchConditions[0]
-		for y, mv := range mc.MatchValue {
-			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
+func matchCustomRuleMatchValueInCustomRules(crs []*armfrontdoor.CustomRule, matchValue string, negated bool) bool {
+	for x := range crs {
+		for y := range crs[x].MatchConditions {
+			if *crs[x].MatchConditions[y].NegateCondition != negated {
+				continue
+			}
+			for z := range crs[x].MatchConditions[y].MatchValue {
+				if *crs[x].MatchConditions[y].MatchValue[z] == matchValue {
+					return true
+				}
+			}
 		}
 	}
+
+	return false
 }
 
 func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
@@ -250,14 +262,10 @@ func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, crs, 1)
 
-	for x := range crs {
-		matchConditions := crs[x].MatchConditions
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.18/32", false))
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.20/31", false))
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.22/32", false))
 
-		mc := matchConditions[0]
-		for y, mv := range mc.MatchValue {
-			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
-		}
-	}
 }
 
 func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
@@ -277,14 +285,9 @@ func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, crs, 1)
 
-	for x := range crs {
-		matchConditions := crs[x].MatchConditions
-
-		mc := matchConditions[0]
-		for y, mv := range mc.MatchValue {
-			require.Equal(t, ipns[x*MaxIPMatchValues+y].String(), *mv)
-		}
-	}
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.18/32", false))
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.20/31", false))
+	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.22/32", false))
 
 	var ipns2 []netip.Prefix
 	ipns2 = append(ipns2, netip.MustParsePrefix("67.43.236.18/32"))
@@ -358,4 +361,86 @@ func TestGenerateCustomRulesFromIPNetsWithInvalidAction(t *testing.T) {
 		CustomPriorityStart: 0,
 	})
 	require.Error(t, err)
+}
+
+// Require that setting a positive value for max rules limits the number of rules generated
+func TestGenerateCustomRulesFromIPNetsLimitsToMaxRulesWithNegativeMatches(t *testing.T) {
+	ipns := generateIPNets("10.0.0.0/22")
+	require.Len(t, ipns, 1022)
+
+	excludeIpns := generateIPNets("10.1.0.0/24")
+	require.Len(t, excludeIpns, 254)
+
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   excludeIpns,
+		Action:              "Block",
+		MaxRules:            2,
+		CustomNamePrefix:    "",
+		CustomPriorityStart: 0,
+	})
+	// crs, err := GenCustomRulesFromIPNets(ipns, nil, 3, "Block", "", 0)
+	require.NoError(t, err)
+
+	require.Len(t, crs, 2)
+	cr0 := crs[0]
+	cr1 := crs[1]
+
+	require.Equal(t, 2, len(cr0.MatchConditions))
+	require.Equal(t, 346, len(cr0.MatchConditions[0].MatchValue))
+	require.Equal(t, 254, len(cr0.MatchConditions[1].MatchValue))
+	require.Equal(t, 346, len(cr1.MatchConditions[0].MatchValue))
+	require.Equal(t, 254, len(cr1.MatchConditions[1].MatchValue))
+}
+
+// Require that setting a positive value for max rules limits the number of rules generated
+func TestGenerateCustomRulesFromIPNetsLimitsWithEnoughRules(t *testing.T) {
+	ipns := generateIPNets("10.0.0.0/22")
+	require.Len(t, ipns, 1022)
+	// 346 + 254
+	// 346 + 254
+	// 330 + 254
+	// total 1022 - 692 across first two rules = 330 in last rule
+	excludeIpns := generateIPNets("10.0.0.0/24")
+
+	require.Len(t, excludeIpns, 254)
+
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   ipns,
+		NegativeMatchNets:   excludeIpns,
+		Action:              "Block",
+		MaxRules:            3,
+		CustomNamePrefix:    "Test",
+		CustomPriorityStart: 0,
+	})
+	require.NoError(t, err)
+
+	require.Len(t, crs, 3)
+	cr0 := crs[0]
+	cr1 := crs[1]
+	cr2 := crs[2]
+
+	require.Equal(t, 2, len(cr0.MatchConditions))
+	require.Equal(t, 346, len(cr0.MatchConditions[0].MatchValue))
+	require.Equal(t, 254, len(cr0.MatchConditions[1].MatchValue))
+	require.Contains(t, strSliceFromPtrs(cr0.MatchConditions[0].MatchValue), "10.0.1.1/32")
+	require.Contains(t, strSliceFromPtrs(cr0.MatchConditions[1].MatchValue), "10.0.0.1/32")
+
+	// 10.1.0.255
+	require.Equal(t, 346, len(cr1.MatchConditions[0].MatchValue))
+	require.Contains(t, strSliceFromPtrs(cr1.MatchConditions[0].MatchValue), "10.0.2.2/32")
+	require.Equal(t, 254, len(cr1.MatchConditions[1].MatchValue))
+	require.Contains(t, strSliceFromPtrs(cr1.MatchConditions[1].MatchValue), "10.0.0.80/32")
+	require.Equal(t, 330, len(cr2.MatchConditions[0].MatchValue))
+	require.Contains(t, strSliceFromPtrs(cr2.MatchConditions[0].MatchValue), "10.0.2.50/32")
+	require.Equal(t, 254, len(cr2.MatchConditions[1].MatchValue))
+	require.Contains(t, strSliceFromPtrs(cr2.MatchConditions[1].MatchValue), "10.0.0.80/32")
+}
+
+func strSliceFromPtrs(s []*string) (result []string) {
+	for x := range s {
+		result = append(result, *s[x])
+	}
+
+	return
 }
