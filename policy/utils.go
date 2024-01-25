@@ -91,14 +91,14 @@ func splitRuleSetName(rsName string) (rsType, rsVersion string, err error) {
 	return rsName[:pos], rsName[pos+1:], nil
 }
 
-func StrToPointer(s string) (p *string) {
-	return &s
-}
-
 func GetFunctionName() string {
 	pc, _, _, _ := runtime.Caller(1)
 	complete := runtime.FuncForPC(pc).Name()
 	split := strings.Split(complete, "/")
 
 	return split[len(split)-1]
+}
+
+func toPtr[T any](v T) *T {
+	return &v
 }

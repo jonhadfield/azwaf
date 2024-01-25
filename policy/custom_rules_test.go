@@ -1,13 +1,11 @@
 package policy
 
 import (
-	to2 "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/stretchr/testify/assert"
 	"net/netip"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/stretchr/testify/require"
 )
@@ -318,21 +316,21 @@ func TestUpdatePolicyCustomRulesMissingPolicy(t *testing.T) {
 func TestGetLowestPriority(t *testing.T) {
 	require.Equal(t, int32(500), getLowestPriority([]*armfrontdoor.CustomRule{
 		{
-			Priority: to.Int32Ptr(5),
-			Name:     to.StringPtr("Hello"),
+			Priority: toPtr(int32(5)),
+			Name:     toPtr("Hello"),
 		},
 		{
-			Priority: to.Int32Ptr(1234),
-			Name:     to.StringPtr("TestPrefix1234"),
+			Priority: toPtr(int32(1234)),
+			Name:     toPtr("TestPrefix1234"),
 		},
 		{
 			MatchConditions: nil,
-			Priority:        to.Int32Ptr(500),
-			Name:            to.StringPtr("TestPrefix500"),
+			Priority:        toPtr(int32(500)),
+			Name:            toPtr("TestPrefix500"),
 		},
 		{
-			Priority: to.Int32Ptr(6000),
-			Name:     to.StringPtr("TestPrefix6000"),
+			Priority: toPtr(int32(6000)),
+			Name:     toPtr("TestPrefix6000"),
 		},
 	}, "TestPrefix"))
 }
@@ -351,7 +349,7 @@ func TestGetLowestPriority(t *testing.T) {
 // 	mcSet := []armfrontdoor.MatchCondition{mc1}
 //
 // 	return armfrontdoor.CustomRule{
-// 		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+// 		Name:            toPtr("CustomRuleWithDefaultDeny"),
 // 		PriorityS:        Int32ToPointer(1),
 // 		EnabledState:    "Enabled",
 // 		RuleType:        "MatchRule",
@@ -383,7 +381,7 @@ func TestGetLowestPriority(t *testing.T) {
 // 	mcSet := []armfrontdoor.MatchCondition{mc1, mc2}
 //
 // 	return armfrontdoor.CustomRule{
-// 		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+// 		Name:            toPtr("CustomRuleWithDefaultDeny"),
 // 		PriorityS:        Int32ToPointer(1),
 // 		EnabledState:    "Enabled",
 // 		RuleType:        "MatchRule",
@@ -415,7 +413,7 @@ func TestGetLowestPriority(t *testing.T) {
 //
 //	mcSet := []armfrontdoor.MatchCondition{mc1, mc2}
 //	return armfrontdoor.CustomRule{
-//		Name:            StrToPointer("CustomRuleWithDefaultDeny"),
+//		Name:            toPtr("CustomRuleWithDefaultDeny"),
 //		PriorityS:        Int32ToPointer(1),
 //		EnabledState:    "Enabled",
 //		RuleType:        "MatchRule",
@@ -424,35 +422,40 @@ func TestGetLowestPriority(t *testing.T) {
 //	}
 // }
 
-func TestMatchConditionValidForUnblockNegatedCondition(t *testing.T) {
+func TestMatchConditionSupportedNegatedCondition(t *testing.T) {
 	mc := &armfrontdoor.MatchCondition{
-		NegateCondition: to.BoolPtr(true),
+		MatchVariable:   toPtr(armfrontdoor.MatchVariableRemoteAddr),
+		Operator:        toPtr(armfrontdoor.OperatorIPMatch),
+		NegateCondition: toPtr(true),
 	}
-	assert.False(t, matchConditionValidForUnblock(mc))
+
+	assert.True(t, matchConditionSupported(mc))
 }
 
 func TestMatchConditionValidForUnblockInvalidMatchVariable(t *testing.T) {
 	mc := &armfrontdoor.MatchCondition{
-		NegateCondition: to.BoolPtr(false),
-		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRequestMethod),
+		MatchVariable:   toPtr(armfrontdoor.MatchVariableRequestMethod),
+		Operator:        toPtr(armfrontdoor.OperatorIPMatch),
+		NegateCondition: toPtr(false),
 	}
-	assert.False(t, matchConditionValidForUnblock(mc))
+
+	assert.False(t, matchConditionSupported(mc))
 }
 
 func TestMatchConditionValidForUnblockInvalidOperator(t *testing.T) {
 	mc := &armfrontdoor.MatchCondition{
-		NegateCondition: to.BoolPtr(false),
-		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRemoteAddr),
-		Operator:        to2.Ptr(armfrontdoor.OperatorContains),
+		NegateCondition: toPtr(false),
+		MatchVariable:   toPtr(armfrontdoor.MatchVariableRemoteAddr),
+		Operator:        toPtr(armfrontdoor.OperatorContains),
 	}
-	assert.False(t, matchConditionValidForUnblock(mc))
+	assert.False(t, matchConditionSupported(mc))
 }
 
 func TestMatchConditionValidForUnblockValidCondition(t *testing.T) {
 	mc := &armfrontdoor.MatchCondition{
-		NegateCondition: to.BoolPtr(false),
-		MatchVariable:   to2.Ptr(armfrontdoor.MatchVariableRemoteAddr),
-		Operator:        to2.Ptr(armfrontdoor.OperatorIPMatch),
+		NegateCondition: toPtr(false),
+		MatchVariable:   toPtr(armfrontdoor.MatchVariableRemoteAddr),
+		Operator:        toPtr(armfrontdoor.OperatorIPMatch),
 	}
-	assert.True(t, matchConditionValidForUnblock(mc))
+	assert.True(t, matchConditionSupported(mc))
 }
