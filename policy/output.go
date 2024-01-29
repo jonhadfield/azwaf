@@ -26,12 +26,10 @@ import (
 
 // splitExtendedID accepts an extended id <resource id>|<resource item name>, which it parses and then returns
 // the individual components, or any error encountered in deriving them.
-func splitExtendedID(eid string) (id, name string, err error) {
+func splitExtendedID(eid string) (string, string, error) {
 	components := strings.Split(eid, "|")
 	if len(components) != 2 {
-		err = fmt.Errorf("invalid format")
-
-		return
+		return "", "", fmt.Errorf("invalid format")
 	}
 
 	return components[0], components[1], nil
@@ -39,13 +37,15 @@ func splitExtendedID(eid string) (id, name string, err error) {
 
 // GetRawPolicyCustomRuleByID returns a Custom rule matching the resource id.
 // The id is an extended resource id: <Policy>|<Custom rule name>.
-func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, customRuleName string) (pcr armfrontdoor.CustomRule, err error) {
+func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, customRuleName string) (armfrontdoor.CustomRule, error) {
 	logrus.Debugf("getting policy with id %s", policyID.Name)
 
 	p, err := GetRawPolicy(s, policyID.SubscriptionID, policyID.ResourceGroup, policyID.Name)
 	if err != nil {
-		return pcr, err
+		return armfrontdoor.CustomRule{}, fmt.Errorf("failed to get policy: %s", err)
 	}
+
+	var pcr armfrontdoor.CustomRule
 
 	for _, r := range p.Properties.CustomRules.Rules {
 		if *r.Name == customRuleName {
@@ -59,7 +59,7 @@ func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, 
 		return pcr, fmt.Errorf("custom rule '%s' not found", customRuleName)
 	}
 
-	return
+	return pcr, nil
 }
 
 // PrintPolicyCustomRule outputs the Custom rule for a given resource.
@@ -374,7 +374,7 @@ func outputCustomRules(policy *armfrontdoor.WebApplicationFirewallPolicy, showFu
 }
 
 // getRuleConfig gets the configuration for a rule based on the current settings overlapping the defaults
-func getRuleConfig(groupName string, manRuleDef *armfrontdoor.ManagedRuleDefinition, mrs armfrontdoor.ManagedRuleSet) (exclusions []*armfrontdoor.ManagedRuleExclusion, action *armfrontdoor.ActionType, enabled string) {
+func getRuleConfig(groupName string, manRuleDef *armfrontdoor.ManagedRuleDefinition, mrs armfrontdoor.ManagedRuleSet) ([]*armfrontdoor.ManagedRuleExclusion, *armfrontdoor.ActionType, string) {
 	for x := range mrs.RuleGroupOverrides {
 		if mrs.RuleGroupOverrides[x].RuleGroupName != nil && *mrs.RuleGroupOverrides[x].RuleGroupName == groupName {
 			// found matching override for specific group so now find rule within the group
@@ -383,24 +383,25 @@ func getRuleConfig(groupName string, manRuleDef *armfrontdoor.ManagedRuleDefinit
 					continue
 				}
 
+				var exclusions []*armfrontdoor.ManagedRuleExclusion
 				exclusions = mrs.RuleGroupOverrides[x].Rules[y].Exclusions
+
+				var action *armfrontdoor.ActionType
 
 				if mrs.RuleGroupOverrides[x].Rules[y].Action != nil {
 					action = mrs.RuleGroupOverrides[x].Rules[y].Action
 				}
 
-				enabled = string(*mrs.RuleGroupOverrides[x].Rules[y].EnabledState)
-
-				return
+				return exclusions, action, string(*mrs.RuleGroupOverrides[x].Rules[y].EnabledState)
 			}
 		}
 	}
 
 	// no rule override matching rule definition, so return default rule settings
-	action = manRuleDef.DefaultAction
-	enabled = string(*manRuleDef.DefaultState)
+	action := manRuleDef.DefaultAction
+	enabled := string(*manRuleDef.DefaultState)
 
-	return
+	return []*armfrontdoor.ManagedRuleExclusion{}, action, enabled
 }
 
 func getRuleGroupExclusions(groupName string, managedRuleSets []*armfrontdoor.ManagedRuleSet) []*armfrontdoor.ManagedRuleExclusion {
