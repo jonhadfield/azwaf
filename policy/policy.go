@@ -183,7 +183,11 @@ type WAFResourceIDHashMap struct {
 	Entries []WAFResourceIDHashMapEntry
 }
 
-func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (resourceID config.ResourceID, err error) {
+func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (config.ResourceID, error) {
+	var resourceID config.ResourceID
+
+	var err error
+
 	// check cache if we have a match
 	pID, err := GetWAFResourceIDFromCacheByHash(s, hash)
 	if err != nil {
@@ -202,7 +206,7 @@ func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (resource
 	}
 
 	if err = SaveWAFResourceIDHashMap(s, o); err != nil {
-		return
+		return config.ResourceID{}, fmt.Errorf("failed to save waf resource id hash map: %w", err)
 	}
 
 	for _, p := range o {
@@ -216,15 +220,15 @@ func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (resource
 	return resourceID, fmt.Errorf("resource with hash %s could not be found", hash)
 }
 
-func GetPolicyRIDByHash(s *session.Session, subID, hash string) (pID string, err error) {
+func GetPolicyRIDByHash(s *session.Session, subID, hash string) (string, error) {
 	// check cache if we have a match
-	pID, err = GetWAFResourceIDFromCacheByHash(s, hash)
+	pID, err := GetWAFResourceIDFromCacheByHash(s, hash)
 	if err != nil {
 		logrus.Warn(err)
 	}
 
 	if pID != "" {
-		return
+		return pID, nil
 	}
 
 	o, perr := GetAllPolicies(s, GetWrappedPoliciesInput{
@@ -235,14 +239,14 @@ func GetPolicyRIDByHash(s *session.Session, subID, hash string) (pID string, err
 	}
 
 	if err = SaveWAFResourceIDHashMap(s, o); err != nil {
-		return
+		return "", fmt.Errorf("failed to save waf resource id hash map: %w", err)
 	}
 
 	for _, p := range o {
 		if computeAlder32(*p.ID) == hash {
 			pID = *p.ID
 
-			return
+			return pID, nil
 		}
 	}
 
@@ -393,12 +397,12 @@ type DeleteManagedRuleExclusionInput struct {
 	Scope string
 }
 
-func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) (gres []resources.GenericResourceExpanded, err error) {
+func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]resources.GenericResourceExpanded, error) {
 	funcName := GetFunctionName()
 
-	err = s.GetResourcesClient(i.SubscriptionID)
+	err := s.GetResourcesClient(i.SubscriptionID)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	ctx := context.Background()
@@ -410,13 +414,15 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) (gres []resou
 
 	logrus.Debugf("listing first %d Policies in Subscription: %s", top, i.SubscriptionID)
 
-	it, merr := s.ResourcesClients[i.SubscriptionID].ListComplete(ctx, "resourceType eq 'Microsoft.Network/frontdoorWebApplicationFirewallPolicies'", "", &top)
-	if merr != nil {
-		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
+	var it resources.ListResultIterator
+	it, err = s.ResourcesClients[i.SubscriptionID].ListComplete(ctx, "resourceType eq 'Microsoft.Network/frontdoorWebApplicationFirewallPolicies'", "", &top)
+	if err != nil {
+		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	var total int
 
+	var gres []resources.GenericResourceExpanded
 	for it.NotDone() {
 		if it.Value().ID == nil {
 			return nil, fmt.Errorf(fmt.Sprintf("Azure returned a WAF Policy without a resource ID: %+v", it.Value()), funcName)
@@ -434,11 +440,11 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) (gres []resou
 		// passing top as top number of items isn't working due to an API bug
 		// if we have reached top here, then return
 		if total == int(top) {
-			return
+			return gres, nil
 		}
 
-		if merr = it.NextWithContext(ctx); merr != nil {
-			return nil, fmt.Errorf("%s - %w", funcName, merr)
+		if err = it.NextWithContext(ctx); err != nil {
+			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
@@ -447,16 +453,22 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) (gres []resou
 	return gres, err
 }
 
-func getResourceIDsFromGenericResources(gres []resources.GenericResourceExpanded) (rids []config.ResourceID) {
+func getResourceIDsFromGenericResources(gres []resources.GenericResourceExpanded) []config.ResourceID {
+	var rids []config.ResourceID
+
 	for _, gre := range gres {
 		rids = append(rids, config.ParseResourceID(*gre.ID))
 	}
 
-	return
+	return rids
 }
 
-func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput) (o GetWrappedPoliciesOutput, err error) {
+func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput) (GetWrappedPoliciesOutput, error) {
+	funcName := GetFunctionName()
+
 	var rids []config.ResourceID
+
+	var err error
 
 	if len(i.FilterResourceIDs) > 0 {
 		for _, rawID := range i.FilterResourceIDs {
@@ -468,7 +480,7 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 				ConfigPath:     i.Config,
 			})
 			if err != nil {
-				return o, err
+				return GetWrappedPoliciesOutput{}, err
 			}
 
 			rids = append(rids, rid)
@@ -479,11 +491,13 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 
 		gres, err = GetAllPolicies(s, i)
 		if err != nil {
-			return
+			return GetWrappedPoliciesOutput{}, fmt.Errorf("%s - %w", funcName, err)
 		}
 
 		rids = getResourceIDsFromGenericResources(gres)
 	}
+
+	var o GetWrappedPoliciesOutput
 
 	for _, rid := range rids {
 		var p *armfrontdoor.WebApplicationFirewallPolicy
@@ -492,7 +506,7 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 
 		p, err = GetRawPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 		if err != nil {
-			return
+			return GetWrappedPoliciesOutput{}, fmt.Errorf("%s - %w", funcName, err)
 		}
 
 		wp := WrappedPolicy{
@@ -508,18 +522,18 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 		o.Policies = append(o.Policies, wp)
 	}
 
-	return
+	return o, nil
 }
 
 // MatchExistingPolicyByID returns the raw Policy matched by the Policy id of its origin, e.g. where the backup was from
-func MatchExistingPolicyByID(targetPolicyID string, existingPolicies []WrappedPolicy) (found bool, policy WrappedPolicy) {
+func MatchExistingPolicyByID(targetPolicyID string, existingPolicies []WrappedPolicy) (bool, WrappedPolicy) {
 	for x := range existingPolicies {
 		if strings.EqualFold(existingPolicies[x].PolicyID, targetPolicyID) {
 			return true, existingPolicies[x]
 		}
 	}
 
-	return
+	return false, WrappedPolicy{}
 }
 
 type WrappedPolicy struct {
