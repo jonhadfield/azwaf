@@ -560,41 +560,44 @@ type GeneratePolicyPatchOutput struct {
 	ManagedRuleReplacements int
 }
 
-func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (output GeneratePolicyPatchOutput, err error) {
+func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput, error) {
 	funcName := GetFunctionName()
 
+	var output GeneratePolicyPatchOutput
+
+	var err error
+
 	var originalBytes []byte
+
 	switch v := i.Original.(type) {
 	case []byte:
 		originalBytes = v
 	case armfrontdoor.WebApplicationFirewallPolicy:
-		var jerr error
-
-		originalBytes, jerr = json.MarshalIndent(v, "", "    ")
-		if jerr != nil {
-			return output, fmt.Errorf(jerr.Error(), funcName)
+		originalBytes, err = json.MarshalIndent(v, "", "    ")
+		if err != nil {
+			return output, fmt.Errorf(err.Error(), funcName)
 		}
 	case WrappedPolicy:
-		var jerr error
-
-		originalBytes, jerr = json.MarshalIndent(v.Policy, "", "    ")
-		if jerr != nil {
-			return output, fmt.Errorf(jerr.Error(), funcName)
+		originalBytes, err = json.MarshalIndent(v.Policy, "", "    ")
+		if err != nil {
+			return output, fmt.Errorf(err.Error(), funcName)
 		}
 	default:
 		return output, fmt.Errorf("%s - UnexpectedType %s", funcName, reflect.TypeOf(i.Original).String())
 	}
 
-	newPolicyJSON, jerr := json.MarshalIndent(i.New, "", "    ")
-	if jerr != nil {
-		return output, fmt.Errorf(jerr.Error(), funcName)
+	var newPolicyJSON []byte
+
+	newPolicyJSON, err = json.MarshalIndent(i.New, "", "    ")
+	if err != nil {
+		return output, fmt.Errorf(err.Error(), funcName)
 	}
 
 	var patch jsondiff.Patch
 
-	patch, jerr = jsondiff.CompareJSON(originalBytes, newPolicyJSON)
-	if jerr != nil {
-		return output, fmt.Errorf(jerr.Error(), funcName)
+	patch, err = jsondiff.CompareJSON(originalBytes, newPolicyJSON)
+	if err != nil {
+		return output, fmt.Errorf(err.Error(), funcName)
 	}
 
 	output.TotalDifferences = len(patch)
@@ -634,7 +637,7 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (output GeneratePolicyPatc
 	output.ManagedRuleChanges = output.ManagedRuleAdditions + output.ManagedRuleRemovals + output.ManagedRuleReplacements
 	output.TotalRuleDifferences = output.CustomRuleChanges + output.ManagedRuleChanges
 
-	return
+	return output, nil
 }
 
 func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
