@@ -108,7 +108,7 @@ func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, 
 	return
 }
 
-func SaveWAFResourceIDHashMap(s *session.Session, res []resources.GenericResourceExpanded) (err error) {
+func SaveWAFResourceIDHashMap(s *session.Session, res []resources.GenericResourceExpanded) error {
 	funcName := GetFunctionName()
 
 	logrus.Debugf("attempting to save waf resource id hash map from cache")
@@ -124,43 +124,35 @@ func SaveWAFResourceIDHashMap(s *session.Session, res []resources.GenericResourc
 		})
 	}
 
-	mHashMap, jerr := json.Marshal(hashMap)
-	if jerr != nil {
-		err = fmt.Errorf(err.Error(), funcName)
-
-		return
+	mHashMap, err := json.Marshal(hashMap)
+	if err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	cerr := cache.Write(s, WAFResourceIDHashMapName, string(mHashMap))
-	if cerr != nil {
-		err = fmt.Errorf(cerr.Error(), funcName)
-
-		return
+	err = cache.Write(s, WAFResourceIDHashMapName, string(mHashMap))
+	if err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	return
+	return nil
 }
 
-func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (resourceID string, err error) {
+func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (string, error) {
 	funcName := GetFunctionName()
 
 	if s == nil {
 		s = session.New()
 	}
 
-	s.InitialiseCache()
-
 	hashMap, err := GetWAFResourceIDHashMap(s)
 	if err != nil {
-		err = fmt.Errorf(err.Error(), funcName)
-
-		return
+		return "", fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	if len(hashMap.Entries) == 0 {
 		logrus.Debugf("no hashmap entries were loaded")
 
-		return
+		return "", nil
 	}
 
 	for _, entry := range hashMap.Entries {
@@ -171,7 +163,7 @@ func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (resourceI
 		}
 	}
 
-	return
+	return "", nil
 }
 
 type WAFResourceIDHashMapEntry struct {
@@ -259,9 +251,9 @@ type GetWAFPolicyResourceIDInput struct {
 	ConfigPath     string
 }
 
-func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) (resourceID config.ResourceID, err error) {
+func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) (config.ResourceID, error) {
 	// try parsing as azure resource id
-	resourceID = config.ParseResourceID(in.RawPolicyID)
+	resourceID := config.ParseResourceID(in.RawPolicyID)
 	if resourceID.Name != "" {
 		return resourceID, nil
 	}
@@ -269,7 +261,7 @@ func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) 
 	// try loading config file to check for policy aliases
 	fileConfig, err := config.LoadFileConfig(in.ConfigPath)
 	if err != nil && !os.IsNotExist(err) {
-		return
+		return config.ResourceID{}, fmt.Errorf("failed to load config file: %w", err)
 	}
 
 	// get resource id from loaded alias
@@ -304,12 +296,12 @@ func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) 
 	return config.ParseResourceID(rawPolicyID), err
 }
 
-func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) (wafPolicy *armfrontdoor.WebApplicationFirewallPolicy, err error) {
+func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
 	funcName := GetFunctionName()
 
-	err = s.GetFrontDoorPoliciesClient(subscription)
+	err := s.GetFrontDoorPoliciesClient(subscription)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	logrus.Debugf("%s | getting AFD Policy %s from subscription %s and resource group %s",
