@@ -140,7 +140,7 @@ func CopyRules(i CopyRulesInput) error {
 }
 
 // copyWrappedPolicyRules takes two policies and copies the chosen sections from source to the target
-func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, managedRulesOnly bool, appVersion string) (res *WrappedPolicy, err error) {
+func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, managedRulesOnly bool, appVersion string) (*WrappedPolicy, error) {
 	funcName := GetFunctionName()
 
 	updatedTarget, err := copyPolicyRules(&source.Policy, &target.Policy, customRulesOnly, managedRulesOnly)
@@ -149,7 +149,7 @@ func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, mana
 	}
 
 	if updatedTarget.ID == nil {
-		return nil, err
+		return nil, fmt.Errorf("%s - updated policy has no id", funcName)
 	}
 
 	resourceID := config.ParseResourceID(*updatedTarget.ID)
@@ -162,11 +162,11 @@ func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, mana
 		Policy:         *updatedTarget,
 		PolicyID:       *updatedTarget.ID,
 		AppVersion:     appVersion,
-	}, err
+	}, nil
 }
 
 // copyPolicyRules takes two policies and copies the chosen sections from source to the target
-func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, customRulesOnly, managedRulesOnly bool) (res *armfrontdoor.WebApplicationFirewallPolicy, err error) {
+func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, customRulesOnly, managedRulesOnly bool) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
 	if customRulesOnly && managedRulesOnly {
 		return nil, fmt.Errorf("please choose only one of custom-only and managed-only, or neither to copy both")
 	}
@@ -197,7 +197,7 @@ func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, 
 		target.Properties.ManagedRules = source.Properties.ManagedRules
 	}
 
-	return target, err
+	return target, nil
 }
 
 func (c *CopyRulesInput) Validate() error {
@@ -223,33 +223,36 @@ func (c *CopyRulesInput) Validate() error {
 }
 
 // CopyPolicy takes an instance of a policy and returns a duplicate
-func CopyPolicy(original armfrontdoor.WebApplicationFirewallPolicy) (duplicate armfrontdoor.WebApplicationFirewallPolicy, err error) {
+func CopyPolicy(original armfrontdoor.WebApplicationFirewallPolicy) (armfrontdoor.WebApplicationFirewallPolicy, error) {
 	funcName := GetFunctionName()
 
-	originalBytes, jerr := json.Marshal(original)
-	if jerr != nil {
-		return duplicate, fmt.Errorf(jerr.Error(), funcName)
+	originalBytes, err := json.Marshal(original)
+	if err != nil {
+		return armfrontdoor.WebApplicationFirewallPolicy{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	if jerr = json.Unmarshal(originalBytes, &duplicate); err != nil {
-		err = fmt.Errorf(jerr.Error(), funcName)
+	var duplicate armfrontdoor.WebApplicationFirewallPolicy
+	if err = json.Unmarshal(originalBytes, &duplicate); err != nil {
+		return armfrontdoor.WebApplicationFirewallPolicy{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	return
+	return duplicate, nil
 }
 
 // CopyWrappedPolicy takes an instance of a wrapped policy and returns a duplicate
-func CopyWrappedPolicy(original *WrappedPolicy) (duplicate *WrappedPolicy, err error) {
+func CopyWrappedPolicy(original *WrappedPolicy) (*WrappedPolicy, error) {
 	funcName := GetFunctionName()
 
-	originalBytes, jerr := json.Marshal(original)
-	if jerr != nil {
-		return duplicate, fmt.Errorf(jerr.Error(), funcName)
+	var duplicate *WrappedPolicy
+
+	originalBytes, err := json.Marshal(original)
+	if err != nil {
+		return duplicate, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	if jerr = json.Unmarshal(originalBytes, &duplicate); err != nil {
-		err = fmt.Errorf(jerr.Error(), funcName)
+	if err = json.Unmarshal(originalBytes, &duplicate); err != nil {
+		err = fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	return
+	return duplicate, nil
 }

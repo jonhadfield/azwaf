@@ -106,7 +106,7 @@ type ApplyRemoveNetsInput struct {
 }
 
 // RemoveNets removes selected networks from custom rules
-func RemoveNets(input *RemoveNetsInput) (results []ApplyRemoveNetsResult, err error) {
+func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 	if input.LogLevel != nil {
 		logrus.SetLevel(*input.LogLevel)
 	}
@@ -117,17 +117,19 @@ func RemoveNets(input *RemoveNetsInput) (results []ApplyRemoveNetsResult, err er
 
 	policyID := input.ResourceID
 
+	var err error
+
 	if policyID.Raw == "" {
 		if IsRIDHash(input.RawResourceID) {
 			policyID, err = GetPolicyResourceIDByHash(input.Session, input.SubscriptionID, input.RawResourceID)
 
 			if err != nil {
-				return results, err
+				return nil, err
 			}
 		}
 	}
 
-	results, err = ApplyRemoveAddrs(input.Session, &ApplyRemoveNetsInput{
+	results, err := ApplyRemoveAddrs(input.Session, &ApplyRemoveNetsInput{
 		BaseCLIInput: input.BaseCLIInput,
 		MatchPrefix:  input.MatchPrefix,
 		RID:          policyID,
@@ -144,13 +146,17 @@ func RemoveNets(input *RemoveNetsInput) (results []ApplyRemoveNetsResult, err er
 }
 
 // getNetsToRemove adds the IPs from the specified file to the list of IPs to remove
-func getNetsToRemove(path string, inNets IPNets) (outNets IPNets, err error) {
+func getNetsToRemove(path string, inNets IPNets) (IPNets, error) {
+	var err error
+
+	var outNets IPNets
+
 	if path != "" {
 		var fipns IPNets
 
 		fipns, err = loadIPsFromPath(path)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to load IPs from path: %s", err)
 		}
 
 		outNets = fipns
@@ -159,10 +165,10 @@ func getNetsToRemove(path string, inNets IPNets) (outNets IPNets, err error) {
 	outNets = append(outNets, inNets...)
 
 	if len(outNets) == 0 {
-		err = errors.New("no ips to unblock provided")
+		return nil, errors.New("no ips to unblock provided")
 	}
 
-	return outNets, err
+	return outNets, nil
 }
 
 type ApplyRemoveNetsResult struct {
@@ -202,12 +208,14 @@ func getLowestPriority(rules []*armfrontdoor.CustomRule, prefix RuleNamePrefix) 
 }
 
 // ApplyRemoveAddrs removes selected networks from custom rules
-func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results []ApplyRemoveNetsResult, err error) {
+func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
+	var results []ApplyRemoveNetsResult
+
 	lowercaseAction := strings.ToLower(actionBlock)
 
 	inNets, err := getNetsToRemove(input.Filepath, input.Addrs)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to get networks to remove: %s", err)
 	}
 
 	var p *armfrontdoor.WebApplicationFirewallPolicy
@@ -215,7 +223,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 	// check if Policy exists
 	p, err = GetRawPolicy(s, input.RID.SubscriptionID, input.RID.ResourceGroup, input.RID.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get policy: %s", err)
 	}
 
 	if p.Name == nil {
@@ -223,15 +231,17 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 	}
 
 	// take a copy of the Policy for later comparison
-	originalPolicy, err := CopyPolicy(*p)
+	var originalPolicy armfrontdoor.WebApplicationFirewallPolicy
+
+	originalPolicy, err = CopyPolicy(*p)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to copy policy: %s", err)
 	}
 
 	// get a copy of the existing ipnets for the specified action and remove the specified list of nets
 	existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(p, input.MatchPrefix, &input.Action)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to get existing nets: %s", err)
 	}
 
 	logrus.Tracef("existing %s positive nets: %d negative nets: %d", input.MatchPrefix, len(existingPositiveNets), len(existingNegativeNets))
@@ -273,7 +283,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)),
 	})
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to generate custom rules: %s", err)
 	}
 
 	// remove existing block net rules from Policy before adding New
@@ -304,7 +314,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 
 	gppO, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *p})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate policy patch: %s", err)
 	}
 
 	if gppO.CustomRuleChanges == 0 {
@@ -321,14 +331,14 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 
 	np, err := json.Marshal(p)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to marshal policy: %s", err)
 	}
 
 	logrus.Debugf("calling compare with original %d bytes and new %d bytes", 1, 2)
 
 	diffsFound, err := compare(&originalPolicy, np)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compare policies: %s", err)
 	}
 
 	logrus.Debugf("diffsFound: %t", diffsFound)
@@ -342,7 +352,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) (results 
 		Policy:        *p,
 	})
 
-	return results, err
+	return results, nil
 }
 
 type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
@@ -581,65 +591,56 @@ func deDupeIPNets(ipns IPNets) (res []string) {
 	return
 }
 
-// TODO: need to support more than just IP
-// TODO: add support for transforms
-// createCustomRule will return a frontdoor CustomRule constructed from the provided input
-func createCustomRule(name string, action armfrontdoor.ActionType, priority int32, items, negatedItems []*string) armfrontdoor.CustomRule {
-	t := true
-	f := false
-	rt := armfrontdoor.RuleTypeMatchRule
-	es := armfrontdoor.CustomRuleEnabledStateEnabled
-	mv := armfrontdoor.MatchVariableSocketAddr
-	op := armfrontdoor.OperatorIPMatch
-	// at := armfrontdoor.ActionType(action)
-	tt := []*armfrontdoor.TransformType{}
-
-	nameWithPriority := fmt.Sprintf("%s%d", name, priority)
-
-	sort.Slice(items, func(i, j int) bool {
-		return *items[i] < *items[j]
-	})
-
-	var newMatchConditions []*armfrontdoor.MatchCondition
-	newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
-		MatchVariable:   &mv,
-		NegateCondition: &f,
-		Operator:        &op,
-		MatchValue:      items,
-		Transforms:      tt,
-	})
-
-	if len(negatedItems) > 0 {
-		// fmt.Println("ADDING NEW MATCH CONDITION WITH ITEMS:", len(negatedItems))
-		newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
-			MatchVariable:   &mv,
-			NegateCondition: &t,
-			Operator:        &op,
-			MatchValue:      negatedItems,
-			Transforms:      tt,
-		})
-	}
-
-	return armfrontdoor.CustomRule{
-		Name:            &nameWithPriority,
-		Priority:        &priority,
-		EnabledState:    &es,
-		RuleType:        &rt,
-		MatchConditions: newMatchConditions,
-		Action:          &action,
-	}
-
-}
-
-func strsTostrPtrs(in []string) []*string {
-	var out []*string
-
-	for i := range in {
-		out = append(out, &in[i])
-	}
-
-	return out
-}
+//
+// // TODO: need to support more than just IP
+// // TODO: add support for transforms
+// // createCustomRule will return a frontdoor CustomRule constructed from the provided input
+// func createCustomRule(name string, action armfrontdoor.ActionType, priority int32, items, negatedItems []*string) armfrontdoor.CustomRule {
+// 	t := true
+// 	f := false
+// 	rt := armfrontdoor.RuleTypeMatchRule
+// 	es := armfrontdoor.CustomRuleEnabledStateEnabled
+// 	mv := armfrontdoor.MatchVariableSocketAddr
+// 	op := armfrontdoor.OperatorIPMatch
+// 	// at := armfrontdoor.ActionType(action)
+// 	tt := []*armfrontdoor.TransformType{}
+//
+// 	nameWithPriority := fmt.Sprintf("%s%d", name, priority)
+//
+// 	sort.Slice(items, func(i, j int) bool {
+// 		return *items[i] < *items[j]
+// 	})
+//
+// 	var newMatchConditions []*armfrontdoor.MatchCondition
+// 	newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
+// 		MatchVariable:   &mv,
+// 		NegateCondition: &f,
+// 		Operator:        &op,
+// 		MatchValue:      items,
+// 		Transforms:      tt,
+// 	})
+//
+// 	if len(negatedItems) > 0 {
+// 		// fmt.Println("ADDING NEW MATCH CONDITION WITH ITEMS:", len(negatedItems))
+// 		newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
+// 			MatchVariable:   &mv,
+// 			NegateCondition: &t,
+// 			Operator:        &op,
+// 			MatchValue:      negatedItems,
+// 			Transforms:      tt,
+// 		})
+// 	}
+//
+// 	return armfrontdoor.CustomRule{
+// 		Name:            &nameWithPriority,
+// 		Priority:        &priority,
+// 		EnabledState:    &es,
+// 		RuleType:        &rt,
+// 		MatchConditions: newMatchConditions,
+// 		Action:          &action,
+// 	}
+//
+// }
 
 // Normalise accepts a slice of netip.Prefix and returns a unique slice of their string representations
 func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
