@@ -19,7 +19,7 @@ import (
 
 // GetFrontDoorByID returns a front door instance for the provided id.
 // It includes endpoints with any associated waf Policies.
-func GetFrontDoorByID(s *session.Session, frontDoorID string) (frontDoor FrontDoor, err error) {
+func GetFrontDoorByID(s *session.Session, frontDoorID string) (FrontDoor, error) {
 	funcName := GetFunctionName()
 	ctx := context.Background()
 
@@ -27,12 +27,12 @@ func GetFrontDoorByID(s *session.Session, frontDoorID string) (frontDoor FrontDo
 
 	c, err := s.GetFrontDoorsClient(rID.SubscriptionID)
 	if err != nil {
-		return
+		return FrontDoor{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	rawFrontDoor, merr := c.Get(ctx, rID.ResourceGroup, rID.Name, nil)
 	if merr != nil {
-		return frontDoor, fmt.Errorf("%s - %s", funcName, merr.Error())
+		return FrontDoor{}, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	policies := make(map[string]armfrontdoor.WebApplicationFirewallPolicy)
@@ -50,7 +50,7 @@ func GetFrontDoorByID(s *session.Session, frontDoorID string) (frontDoor FrontDo
 
 				wafPolicy, err = GetRawPolicy(s, rID.SubscriptionID, rid.ResourceGroup, rid.Name)
 				if err != nil {
-					return
+					return FrontDoor{}, fmt.Errorf("%s - %w", funcName, err)
 				}
 
 				policies[*e.Properties.WebApplicationFirewallPolicyLink.ID] = *wafPolicy
@@ -69,7 +69,7 @@ func GetFrontDoorByID(s *session.Session, frontDoorID string) (frontDoor FrontDo
 	return FrontDoor{
 		name:      *rawFrontDoor.Name,
 		endpoints: frontDoorEndpoints,
-	}, err
+	}, nil
 }
 
 // PushPolicyInput defines the input for the pushPolicy function
@@ -89,7 +89,7 @@ const (
 )
 
 // PushPolicy creates or updates a waf Policy with the provided Policy instance.
-func PushPolicy(s *session.Session, i *PushPolicyInput) (err error) {
+func PushPolicy(s *session.Session, i *PushPolicyInput) error {
 	funcName := GetFunctionName()
 
 	logrus.Debugf("pushing policy %s...", *i.Policy.Name)
@@ -97,34 +97,32 @@ func PushPolicy(s *session.Session, i *PushPolicyInput) (err error) {
 	ctx := context.Background()
 
 	// check we're not missing a policies client for the Subscription
-	err = s.GetFrontDoorPoliciesClient(i.Subscription)
+	err := s.GetFrontDoorPoliciesClient(i.Subscription)
 	if err != nil {
-		return
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	poller, merr := s.FrontDoorPoliciesClients[i.Subscription].BeginCreateOrUpdate(ctx, i.ResourceGroup, i.Name, i.Policy, nil)
-	if merr != nil {
-		return fmt.Errorf("%s - %s", funcName, merr.Error())
+	poller, err := s.FrontDoorPoliciesClients[i.Subscription].BeginCreateOrUpdate(ctx, i.ResourceGroup, i.Name, i.Policy, nil)
+	if err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	if i.Async {
 		logrus.Info("asynchronous policy push started")
 
-		return
+		return nil
 	}
 
+	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		log.Fatalf("%s | failed to finish the request: %v", funcName, err)
-	}
-
-	_, merr = poller.PollUntilDone(ctx, nil)
-	if merr != nil {
 		log.Fatalf("failed to pull the result: %v", err)
+
+		return err
 	}
 
 	logrus.Infof("policy %s updated", *i.Policy.Name)
 
-	return
+	return nil
 }
 
 type GetWrappedPoliciesInput struct {
@@ -152,42 +150,45 @@ type FrontDoor struct {
 
 type FrontDoors []FrontDoor
 
-func LoadPolicyFromFile(f string) (p armfrontdoor.WebApplicationFirewallPolicy, err error) {
+func LoadPolicyFromFile(f string) (armfrontdoor.WebApplicationFirewallPolicy, error) {
+	funcName := GetFunctionName()
+
 	// #nosec
 	data, err := os.ReadFile(f)
 	if err != nil {
-		return
+		return armfrontdoor.WebApplicationFirewallPolicy{},
+			fmt.Errorf("%s - failed to read file %s: %w", funcName, f, err)
 	}
 
-	err = json.Unmarshal(data, &p)
+	var p armfrontdoor.WebApplicationFirewallPolicy
+	if err = json.Unmarshal(data, &p); err != nil {
+		return armfrontdoor.WebApplicationFirewallPolicy{},
+			fmt.Errorf("%s - failed to unmarshal policy: %w", funcName, err)
+	}
 
-	return
+	return p, nil
 }
 
-func LoadWrappedPolicyFromFile(f string) (wp WrappedPolicy, err error) {
+func LoadWrappedPolicyFromFile(f string) (WrappedPolicy, error) {
 	funcName := GetFunctionName()
 	logrus.Debugf("%s | loading file %s", funcName, f)
 	// #nosec
 	data, err := os.ReadFile(f)
 	if err != nil {
-		err = fmt.Errorf("%s - %w", funcName, err)
-
-		return
+		return WrappedPolicy{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	logrus.Debugf("%s | loaded %d bytes of data from %s", funcName, len(data), f)
 
+	var wp WrappedPolicy
+
 	err = json.Unmarshal(data, &wp)
 	if err != nil {
-		err = fmt.Errorf("%s - %w", funcName, err)
-
-		return
+		return WrappedPolicy{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	if wp.Policy.Properties == nil {
-		err = fmt.Errorf("%s - wrapped policy is invalid", funcName)
-
-		return
+		return WrappedPolicy{}, fmt.Errorf("%s - wrapped policy is invalid", funcName)
 	}
 
 	return wp, nil
@@ -201,18 +202,23 @@ type Action struct {
 	Nets       IPNets
 }
 
-func LoadBackupsFromPaths(paths []string) (wps []WrappedPolicy, err error) {
+func LoadBackupsFromPaths(paths []string) ([]WrappedPolicy, error) {
 	funcName := GetFunctionName()
+
+	var err error
 
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("%s - no paths provided", funcName)
 	}
 
+	var wps []WrappedPolicy
+
 	for _, path := range paths {
 		var pwps []WrappedPolicy
+
 		pwps, err = LoadBackupsFromPath(path)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 
 		wps = append(wps, pwps...)
@@ -220,10 +226,10 @@ func LoadBackupsFromPaths(paths []string) (wps []WrappedPolicy, err error) {
 
 	logrus.Debugf("loaded %d Policy backups", len(wps))
 
-	return
+	return wps, nil
 }
 
-func LoadBackupsFromPath(path string) (wps []WrappedPolicy, err error) {
+func LoadBackupsFromPath(path string) ([]WrappedPolicy, error) {
 	funcName := GetFunctionName()
 
 	info, err := os.Stat(path)
@@ -235,28 +241,30 @@ func LoadBackupsFromPath(path string) (wps []WrappedPolicy, err error) {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
+	var wps []WrappedPolicy
+
 	if !info.IsDir() {
 		if !strings.EqualFold(filepath.Ext(info.Name()), ".json") {
-			return
+			return nil, fmt.Errorf("%s - %s is not a json file", funcName, path)
 		}
 
 		var wp WrappedPolicy
 
 		wp, err = LoadWrappedPolicyFromFile(path)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 
 		wps = append(wps, wp)
 
-		return
+		return wps, nil
 	}
 
 	var files []os.DirEntry
 
 	files, err = os.ReadDir(path)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	for _, file := range files {
@@ -272,7 +280,7 @@ func LoadBackupsFromPath(path string) (wps []WrappedPolicy, err error) {
 
 		wp, err = LoadWrappedPolicyFromFile(filepath.Join(path, info.Name()))
 		if err != nil {
-			return
+			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 
 		wps = append(wps, wp)
@@ -280,5 +288,5 @@ func LoadBackupsFromPath(path string) (wps []WrappedPolicy, err error) {
 
 	logrus.Debugf("loaded %d Policy backups", len(wps))
 
-	return
+	return wps, nil
 }
