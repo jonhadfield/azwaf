@@ -110,16 +110,21 @@ func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
 
 	modified, patch, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
-		Policy:         &wp[0].Policy,
-		SubscriptionID: rid.SubscriptionID,
-		RawResourceID:  rid.Raw,
-		Action:         actionBlock,
-		Output:         false,
-		Addrs:          []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22")},
-		RuleNamePrefix: "BlockList",
-		PriorityStart:  1,
-		MaxRules:       2,
-		LogLevel:       nil,
+		Policy:                     &wp[0].Policy,
+		SubscriptionID:             rid.SubscriptionID,
+		RawResourceID:              rid.Raw,
+		ResourceID:                 config.ResourceID{},
+		Action:                     actionBlock,
+		Output:                     false,
+		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22")},
+		ExcludedAddrs:              nil,
+		RuleNamePrefix:             "BlockList",
+		RuleType:                   armfrontdoor.RuleTypeMatchRule,
+		RateLimitDurationInMinutes: nil,
+		RateLimitThreshold:         nil,
+		PriorityStart:              1,
+		MaxRules:                   2,
+		LogLevel:                   nil,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, patch.CustomRuleChanges)
@@ -232,16 +237,21 @@ func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
 
 	// check that adding exclusions triggers change
 	modified, patch, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
-		BaseCLIInput:   BaseCLIInput{},
-		Policy:         &wp[0].Policy,
-		SubscriptionID: rid.SubscriptionID,
-		RawResourceID:  rid.Raw,
-		Action:         actionBlock,
-		Addrs:          []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
-		ExcludedAddrs:  []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
-		RuleNamePrefix: "BlockList",
-		PriorityStart:  1,
-		MaxRules:       2,
+		BaseCLIInput:               BaseCLIInput{},
+		Policy:                     &wp[0].Policy,
+		SubscriptionID:             rid.SubscriptionID,
+		RawResourceID:              rid.Raw,
+		Action:                     actionBlock,
+		Output:                     false,
+		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
+		ExcludedAddrs:              []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
+		RuleNamePrefix:             "BlockList",
+		RuleType:                   armfrontdoor.RuleTypeMatchRule,
+		RateLimitDurationInMinutes: nil,
+		RateLimitThreshold:         nil,
+		PriorityStart:              1,
+		MaxRules:                   2,
+		LogLevel:                   nil,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, patch.CustomRuleAdditions)
@@ -258,16 +268,22 @@ func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
 
 	// check that adding exclusions triggers change
 	modified, patch, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
-		BaseCLIInput:   BaseCLIInput{},
-		Policy:         &wp[0].Policy,
-		SubscriptionID: rid.SubscriptionID,
-		RawResourceID:  rid.Raw,
-		Action:         actionBlock,
-		Addrs:          []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
-		ExcludedAddrs:  []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
-		RuleNamePrefix: "BlockList",
-		PriorityStart:  1,
-		MaxRules:       2,
+		BaseCLIInput:               BaseCLIInput{},
+		Policy:                     &wp[0].Policy,
+		SubscriptionID:             rid.SubscriptionID,
+		RawResourceID:              rid.Raw,
+		ResourceID:                 config.ResourceID{},
+		Action:                     actionBlock,
+		Output:                     false,
+		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
+		ExcludedAddrs:              []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
+		RuleNamePrefix:             "BlockList",
+		RuleType:                   armfrontdoor.RuleTypeMatchRule,
+		RateLimitDurationInMinutes: nil,
+		RateLimitThreshold:         nil,
+		PriorityStart:              1,
+		MaxRules:                   2,
+		LogLevel:                   nil,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, patch.CustomRuleAdditions)
