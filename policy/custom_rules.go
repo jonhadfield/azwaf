@@ -486,7 +486,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:          positivePrefixes,
 		NegativeMatchNets:          negativePrefixes,
-		RuleType:                   defaultRuleType,
+		RuleType:                   in.RuleType,
 		RateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
 		RateLimitThreshold:         in.RateLimitThreshold,
 		Action:                     in.Action,
