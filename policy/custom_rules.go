@@ -357,17 +357,20 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 
 type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	BaseCLIInput
-	Policy         *armfrontdoor.WebApplicationFirewallPolicy
-	SubscriptionID string
-	RawResourceID  string
-	ResourceID     config.ResourceID
-	Action         armfrontdoor.ActionType
-	Output         bool
-	Filepath       string
-	Addrs          IPNets
-	ExcludedAddrs  IPNets
-	RuleNamePrefix RuleNamePrefix
-	PriorityStart  int
+	Policy                     *armfrontdoor.WebApplicationFirewallPolicy
+	SubscriptionID             string
+	RawResourceID              string
+	ResourceID                 config.ResourceID
+	Action                     armfrontdoor.ActionType
+	Output                     bool
+	Filepath                   string
+	Addrs                      IPNets
+	ExcludedAddrs              IPNets
+	RuleNamePrefix             RuleNamePrefix
+	RuleType                   armfrontdoor.RuleType
+	RateLimitDurationInMinutes *int32
+	RateLimitThreshold         *int32
+	PriorityStart              int
 	// StartRuleNumber int
 	MaxRules int
 	// can be called from external so allow override
@@ -481,12 +484,15 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
-		PositiveMatchNets:   positivePrefixes,
-		NegativeMatchNets:   negativePrefixes,
-		Action:              in.Action,
-		MaxRules:            in.MaxRules,
-		CustomNamePrefix:    in.RuleNamePrefix,
-		CustomPriorityStart: in.PriorityStart,
+		PositiveMatchNets:          positivePrefixes,
+		NegativeMatchNets:          negativePrefixes,
+		RuleType:                   defaultRuleType,
+		RateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
+		RateLimitThreshold:         in.RateLimitThreshold,
+		Action:                     in.Action,
+		MaxRules:                   in.MaxRules,
+		CustomNamePrefix:           in.RuleNamePrefix,
+		CustomPriorityStart:        in.PriorityStart,
 	})
 	if err != nil {
 		return
@@ -667,12 +673,15 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 }
 
 type GenCustomRulesFromIPNetsInput struct {
-	PositiveMatchNets   IPNets
-	NegativeMatchNets   IPNets
-	Action              armfrontdoor.ActionType
-	MaxRules            int
-	CustomNamePrefix    RuleNamePrefix
-	CustomPriorityStart int
+	PositiveMatchNets          IPNets
+	NegativeMatchNets          IPNets
+	RuleType                   armfrontdoor.RuleType
+	RateLimitDurationInMinutes *int32
+	RateLimitThreshold         *int32
+	Action                     armfrontdoor.ActionType
+	MaxRules                   int
+	CustomNamePrefix           RuleNamePrefix
+	CustomPriorityStart        int
 }
 
 // GenCustomRulesFromIPNets accepts two lists of IPs (positive and negative), plus the action to be taken with them, and the maximum
@@ -741,7 +750,16 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfront
 			mcs = append(mcs, negativeMatchConditions[0])
 		}
 
-		cr := genCustomRuleFromMatchConditions(mcs, priorityCount, &in.Action, string(in.CustomNamePrefix))
+		cr := genCustomRuleFromMatchConditions(genCustomRuleFromMatchConditionsInput{
+			mcs:                        mcs,
+			priority:                   priorityCount,
+			action:                     &in.Action,
+			namePrefix:                 string(in.CustomNamePrefix),
+			ruleType:                   in.RuleType,
+			rateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
+			rateLimitThreshold:         in.RateLimitThreshold,
+		})
+
 		logrus.Tracef("generated match condition: %d", priorityCount+1)
 
 		crs = append(crs, &cr)
@@ -760,18 +778,29 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfront
 	return
 }
 
-func genCustomRuleFromMatchConditions(mcs []*armfrontdoor.MatchCondition, priority int32, action *armfrontdoor.ActionType, namePrefix string) armfrontdoor.CustomRule {
-	name := fmt.Sprintf("%s%d", namePrefix, priority)
+type genCustomRuleFromMatchConditionsInput struct {
+	mcs        []*armfrontdoor.MatchCondition
+	priority   int32
+	action     *armfrontdoor.ActionType
+	namePrefix string
+	ruleType   armfrontdoor.RuleType
+	// enabled     armfrontdoor.CustomRuleEnabledState
+	rateLimitDurationInMinutes *int32
+	rateLimitThreshold         *int32
+}
+
+func genCustomRuleFromMatchConditions(in genCustomRuleFromMatchConditionsInput) armfrontdoor.CustomRule {
+	name := fmt.Sprintf("%s%d", in.namePrefix, in.priority)
 
 	return armfrontdoor.CustomRule{
-		Action:          action,
-		MatchConditions: mcs,
-		Priority:        &priority,
-		RuleType:        toPtr(armfrontdoor.RuleTypeMatchRule),
-		EnabledState:    toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
-		Name:            &name,
-		// RateLimitDurationInMinutes: nil,
-		// RateLimitThreshold:         nil,
+		Action:                     in.action,
+		MatchConditions:            in.mcs,
+		Priority:                   &in.priority,
+		RuleType:                   &in.ruleType,
+		EnabledState:               toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
+		Name:                       &name,
+		RateLimitDurationInMinutes: in.rateLimitDurationInMinutes,
+		RateLimitThreshold:         in.rateLimitThreshold,
 	}
 }
 
