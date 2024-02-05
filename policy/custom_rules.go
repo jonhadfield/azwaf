@@ -24,7 +24,11 @@ import (
 // getIPNetsForPrefix takes a policy, rule name prefix, and an action,
 // and returns a slice of netip.Prefix for those from the standard positive
 // match conditions and another from the negated match conditions
-func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (positive, negative []netip.Prefix, err error) {
+func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) ([]netip.Prefix, []netip.Prefix, error) {
+	var positive, negative []netip.Prefix
+
+	var err error
+
 	if policy.Properties.CustomRules == nil {
 		return nil, nil, nil
 	}
@@ -74,7 +78,7 @@ func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefi
 		}
 	}
 
-	return
+	return positive, negative, nil
 }
 
 type RemoveNetsInput struct {
@@ -179,8 +183,10 @@ type ApplyRemoveNetsResult struct {
 type ApplyRemoveNetsResults []ApplyRemoveNetsResult
 
 // getLowestPriority returns the lowest priority assigned to a rule starting with the specified prefix
-func getLowestPriority(rules []*armfrontdoor.CustomRule, prefix RuleNamePrefix) (lowest int32) {
+func getLowestPriority(rules []*armfrontdoor.CustomRule, prefix RuleNamePrefix) int32 {
 	var hadPrefixMatch bool
+
+	var lowest int32
 
 	for x := range rules {
 		// if the custom rule is not a block rule, then add (remove all existing block rules)
@@ -351,6 +357,9 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 		ResourceGroup: input.RID.ResourceGroup,
 		Policy:        *p,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to push policy: %s", err)
+	}
 
 	return results, nil
 }
@@ -377,11 +386,15 @@ type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	LogLevel *logrus.Level
 }
 
-func loadLocalPrefixes(filepath string, prefixes IPNets) (res IPNets, err error) {
+func loadLocalPrefixes(filepath string, prefixes IPNets) (IPNets, error) {
+	var res IPNets
+
+	var err error
+
 	if filepath != "" {
 		res, err = loadIPsFromPath(filepath)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to load IPs from path: %s", err)
 		}
 	}
 
@@ -419,8 +432,10 @@ func (r RuleNamePrefix) Check() error {
 }
 
 // UpdatePolicyCustomRulesIPMatchPrefixes updates an existing Custom Policy with prefixes matching the requested action
-func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPrefixesInput) (modified bool, patch GeneratePolicyPatchOutput, err error) {
+func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPrefixesInput) (bool, GeneratePolicyPatchOutput, error) {
 	funcName := GetFunctionName()
+
+	var patch GeneratePolicyPatchOutput
 
 	if len(in.Addrs) == 0 && len(in.ExcludedAddrs) == 0 {
 		return false, patch, fmt.Errorf("no networks provided")
@@ -433,6 +448,10 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	if in.LogLevel != nil {
 		logrus.SetLevel(*in.LogLevel)
 	}
+
+	var err error
+
+	var modified bool
 
 	if slices.Contains([]armfrontdoor.ActionType{armfrontdoor.ActionTypeBlock, armfrontdoor.ActionTypeLog, armfrontdoor.ActionTypeRedirect}, in.Action) {
 		if err = in.RuleNamePrefix.Check(); err != nil {
@@ -495,7 +514,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		CustomPriorityStart:        in.PriorityStart,
 	})
 	if err != nil {
-		return
+		return false, patch, err
 	}
 
 	// for x := range crs {
@@ -556,7 +575,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	if patch.TotalDifferences == 0 {
 		logrus.Debug("nothing to do")
 
-		return
+		return modified, patch, nil
 	}
 
 	if patch.ManagedRuleChanges != 0 {
@@ -581,7 +600,9 @@ func (i *IPNets) toString() []string {
 }
 
 // deDupeIPNets accepts a slice of net.IPNet and returns a unique slice of their string representations
-func deDupeIPNets(ipns IPNets) (res []string) {
+func deDupeIPNets(ipns IPNets) []string {
+	var res []string
+
 	// check overlaps
 	seen := make(map[string]bool)
 
@@ -594,7 +615,7 @@ func deDupeIPNets(ipns IPNets) (res []string) {
 		seen[i] = true
 	}
 
-	return
+	return res
 }
 
 //
@@ -686,8 +707,9 @@ type GenCustomRulesFromIPNetsInput struct {
 
 // GenCustomRulesFromIPNets accepts two lists of IPs (positive and negative), plus the action to be taken with them, and the maximum
 // number of rules to create and then returns a slice of CustomRules
-func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfrontdoor.CustomRule, err error) {
-	// func GenCustomRulesFromIPNets(ipns, negatedIpns IPNets, maxRules int, action armfrontdoor.ActionType, customNamePrefix RuleNamePrefix, customPriorityStart int) (crs []*armfrontdoor.CustomRule, err error) {
+func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.CustomRule, error) {
+	var crs []*armfrontdoor.CustomRule
+
 	if !slices.Contains(armfrontdoor.PossibleActionTypeValues(), in.Action) {
 		return nil, fmt.Errorf("invalid action: %s", in.Action)
 	}
@@ -775,7 +797,7 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) (crs []*armfront
 		return *crs[i].Priority < *crs[j].Priority
 	})
 
-	return
+	return crs, nil
 }
 
 type genCustomRuleFromMatchConditionsInput struct {
@@ -845,7 +867,9 @@ func generateMatchConditionsFromNets(in generateMatchConditionsFromNetsInput) (m
 }
 
 // readIPsFromFile accepts a file path from which to load IPs (one per line) as strings and return a slice of
-func readIPsFromFile(fPath string) (ipnets IPNets, err error) {
+func readIPsFromFile(fPath string) (IPNets, error) {
+	var ipnets IPNets
+
 	// #nosec
 	file, err := os.Open(fPath)
 	if err != nil {
@@ -866,23 +890,25 @@ func readIPsFromFile(fPath string) (ipnets IPNets, err error) {
 
 			ipnet, err = netip.ParsePrefix(line)
 			if err != nil {
-				return
+				return nil, fmt.Errorf("failed to parse prefix: %s", err)
 			}
 
 			ipnets = append(ipnets, ipnet)
 		}
 	}
 
-	return
+	return ipnets, nil
 }
 
 // loadIPsFromPath accepts a file path or directory and then generates a fully qualified path
 // in order to call a function to load the ips from each fully qualified file path
-func loadIPsFromPath(path string) (ipNets IPNets, err error) {
+func loadIPsFromPath(path string) (IPNets, error) {
+	var ipNets IPNets
+
 	// if path is a folder, then loop through contents
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return
+		return nil, fmt.Errorf("path %s does not exist", path)
 	}
 
 	if info.IsDir() {
@@ -890,7 +916,7 @@ func loadIPsFromPath(path string) (ipNets IPNets, err error) {
 
 		files, err = os.ReadDir(path)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to read directory: %s", err)
 		}
 
 		if len(files) == 0 {
@@ -908,7 +934,7 @@ func loadIPsFromPath(path string) (ipNets IPNets, err error) {
 
 			n, err = readIPsFromFile(p)
 			if err != nil {
-				return
+				return nil, fmt.Errorf("failed to load ips from file: %s", err)
 			}
 
 			logrus.Infof("loaded %d ips from file %s", len(n), p)
@@ -916,21 +942,21 @@ func loadIPsFromPath(path string) (ipNets IPNets, err error) {
 			ipNets = append(ipNets, n...)
 		}
 
-		return
+		return ipNets, nil
 	}
 
 	var n IPNets
 
 	n, err = readIPsFromFile(path)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to load ips from file: %s", err)
 	}
 
 	logrus.Debugf("loaded %d ips from file %s", len(n), path)
 
 	ipNets = append(ipNets, n...)
 
-	return
+	return ipNets, nil
 }
 
 type AddCustomRulesPrefixesInput struct {
