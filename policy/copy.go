@@ -251,7 +251,7 @@ func CopyWrappedPolicy(original *WrappedPolicy) (*WrappedPolicy, error) {
 	}
 
 	if err = json.Unmarshal(originalBytes, &duplicate); err != nil {
-		err = fmt.Errorf("%s - %w", funcName, err)
+		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	return duplicate, nil

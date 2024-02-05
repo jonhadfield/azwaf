@@ -53,8 +53,10 @@ type BotRuleSetStatsOutput struct {
 }
 
 // getPolicyStats returns counts for all items in a rule set
-func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*armfrontdoor.ManagedRuleSetDefinition) (stats []RuleSetStatsOutput, err error) {
+func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*armfrontdoor.ManagedRuleSetDefinition) ([]RuleSetStatsOutput, error) {
 	funcName := GetFunctionName()
+
+	var stats []RuleSetStatsOutput
 
 	if policy == nil || policy.Properties == nil || policy.Properties.ManagedRules == nil || len(policy.Properties.ManagedRules.ManagedRuleSets) == 0 {
 		return stats, fmt.Errorf("%s - policy not defined", funcName)
@@ -81,5 +83,5 @@ func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*a
 		stats = append(stats, getRuleSetStats(rs, matchingDefinitionsOutput.RuleSetDefinition))
 	}
 
-	return
+	return stats, nil
 }
