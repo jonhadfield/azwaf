@@ -99,6 +99,7 @@ type RemoveNetsInput struct {
 	Session       *session.Session
 	RawResourceID string
 	MatchPrefix   RuleNamePrefix
+	RuleType      *armfrontdoor.RuleType
 	ResourceID    config.ResourceID
 	Action        *armfrontdoor.ActionType
 	Filepath      string
@@ -129,6 +130,10 @@ func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 		logrus.SetLevel(*input.LogLevel)
 	}
 
+	if input.RuleType == nil {
+		return nil, errors.New("rule type cannot be nil")
+	}
+
 	if input.Session == nil {
 		input.Session = session.New()
 	}
@@ -154,6 +159,7 @@ func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 		Output:       input.Quiet,
 		DryRun:       input.DryRun,
 		Filepath:     input.Filepath,
+		RuleType:     input.RuleType,
 		Action:       input.Action,
 		Addrs:        input.Nets,
 		MaxRules:     0,
