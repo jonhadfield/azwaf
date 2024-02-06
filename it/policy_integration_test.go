@@ -116,6 +116,7 @@ func TestUpdateCustomRulesPrefixes(t *testing.T) {
 	require.NoError(t, err)
 
 	var priorityStart int
+
 	empty, highestPriority := getHighestPriorityCustomRule(p)
 	if !empty {
 		priorityStart = int(highestPriority + 1)
@@ -133,6 +134,7 @@ func TestUpdateCustomRulesPrefixes(t *testing.T) {
 		},
 		MaxRules:       2,
 		RuleNamePrefix: ruleNamePrefix,
+		RuleType:       toPtr(armfrontdoor.RuleTypeMatchRule),
 		PriorityStart:  priorityStart,
 	}
 
