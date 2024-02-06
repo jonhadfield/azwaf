@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -84,6 +85,10 @@ const (
 	WAFResourceIDHashMapName  = "WAFResourceIDHashMap"
 	defaultRuleSetPrefix      = "Microsoft_DefaultRuleSet"
 	botManagerRuleSetPrefix   = "Microsoft_BotManagerRuleSet"
+)
+
+var (
+	ErrInvalidRuleType = errors.New("invalid rule type")
 )
 
 func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, err error) {
