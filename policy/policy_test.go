@@ -216,8 +216,9 @@ func TestGenerateCustomRulesFromIPNets(t *testing.T) {
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
 		MaxRules:            90,
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
 	})
@@ -254,7 +255,8 @@ func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            90,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -277,7 +279,8 @@ func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            90,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -297,7 +300,8 @@ func TestGenerateCustomRulesFromIPNets3(t *testing.T) {
 	crs2, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns2,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            90,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -318,7 +322,8 @@ func TestGenerateCustomRulesFromIPNetsLimitsToMaxRules(t *testing.T) {
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            3,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -337,7 +342,8 @@ func TestGenerateCustomRulesFromIPNetsLimitsNotLimitedWhenMaxRulesZero(t *testin
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            0,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -355,7 +361,7 @@ func TestGenerateCustomRulesFromIPNetsWithInvalidAction(t *testing.T) {
 	_, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   nil,
-		Action:              "Blocker",
+		Action:              toPtr(armfrontdoor.ActionType("INVALID")),
 		MaxRules:            0,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -374,7 +380,8 @@ func TestGenerateCustomRulesFromIPNetsLimitsToMaxRulesWithNegativeMatches(t *tes
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   excludeIpns,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            2,
 		CustomNamePrefix:    "",
 		CustomPriorityStart: 0,
@@ -408,7 +415,8 @@ func TestGenerateCustomRulesFromIPNetsLimitsWithEnoughRules(t *testing.T) {
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   ipns,
 		NegativeMatchNets:   excludeIpns,
-		Action:              "Block",
+		Action:              toPtr(armfrontdoor.ActionTypeBlock),
+		RuleType:            toPtr(armfrontdoor.RuleTypeMatchRule),
 		MaxRules:            3,
 		CustomNamePrefix:    "Test",
 		CustomPriorityStart: 0,

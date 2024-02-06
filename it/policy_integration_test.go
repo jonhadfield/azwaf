@@ -126,7 +126,7 @@ func TestUpdateCustomRulesPrefixes(t *testing.T) {
 	applyInput := &policy.UpdatePolicyCustomRulesIPMatchPrefixesInput{
 		ResourceID: testSinglePolicyId,
 		Policy:     p,
-		Action:     armfrontdoor.ActionType("Block"),
+		Action:     toPtr(armfrontdoor.ActionType("Block")),
 		Addrs: []netip.Prefix{
 			netip.MustParsePrefix("12.12.12.0/23"),
 			netip.MustParsePrefix("13.13.13.13/32"),
