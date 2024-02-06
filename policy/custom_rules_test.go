@@ -247,7 +247,7 @@ func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
 		SubscriptionID:             rid.SubscriptionID,
 		RawResourceID:              rid.Raw,
 		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                     false,
+		Output:                     true,
 		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
 		ExcludedAddrs:              []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleNamePrefix:             "BlockList",
@@ -479,4 +479,62 @@ func TestMatchConditionValidForUnblockValidCondition(t *testing.T) {
 		Operator:        toPtr(armfrontdoor.OperatorIPMatch),
 	}
 	assert.True(t, matchConditionSupported(mc))
+}
+
+func TestFilterCustomRulesWithNilInput(t *testing.T) {
+	_, err := filterCustomRules(filterCustomRulesInput{})
+	assert.Error(t, err)
+}
+
+func TestFilterCustomRulesWithEmptyCustomRules(t *testing.T) {
+	customRules := []*armfrontdoor.CustomRule{}
+	input := filterCustomRulesInput{
+		customRules: customRules,
+	}
+	_, err := filterCustomRules(input)
+	assert.NoError(t, err)
+}
+
+func TestFilterCustomRulesWithMatchingCriteria(t *testing.T) {
+	action := armfrontdoor.ActionTypeBlock
+	ruleType := armfrontdoor.RuleTypeMatchRule
+	name := "TestRule"
+	customRules := []*armfrontdoor.CustomRule{
+		{
+			Action:   &action,
+			RuleType: &ruleType,
+			Name:     &name,
+		},
+	}
+	input := filterCustomRulesInput{
+		customRules: customRules,
+		action:      &action,
+		ruleType:    &ruleType,
+		namePrefix:  RuleNamePrefix("Test"),
+	}
+	filteredRules, err := filterCustomRules(input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(filteredRules))
+}
+
+func TestFilterCustomRulesWithNonMatchingCriteria(t *testing.T) {
+	action := armfrontdoor.ActionTypeBlock
+	ruleType := armfrontdoor.RuleTypeMatchRule
+	name := "TestRule"
+	customRules := []*armfrontdoor.CustomRule{
+		{
+			Action:   &action,
+			RuleType: &ruleType,
+			Name:     &name,
+		},
+	}
+	input := filterCustomRulesInput{
+		customRules: customRules,
+		action:      &action,
+		ruleType:    &ruleType,
+		namePrefix:  RuleNamePrefix("NonMatching"),
+	}
+	filteredRules, err := filterCustomRules(input)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(filteredRules))
 }

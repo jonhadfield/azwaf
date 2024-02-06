@@ -43,7 +43,7 @@
                                 "negateCondition": false,
                                 "matchValue": [
                                     "3.3.0.0/22",
-                                    "4.4.0/24"
+                                    "4.4.0.0/24"
                                 ],
                                 "transforms": []
                             }

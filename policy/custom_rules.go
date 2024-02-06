@@ -23,98 +23,45 @@ import (
 
 type filterCustomRulesInput struct {
 	namePrefix  RuleNamePrefix
-	customRules *armfrontdoor.CustomRuleList
+	customRules []*armfrontdoor.CustomRule
 	action      *armfrontdoor.ActionType
 	ruleType    *armfrontdoor.RuleType
 }
 
-func filterCustomRules(in filterCustomRulesInput) (*armfrontdoor.CustomRuleList, error) {
-	var positive, negative []netip.Prefix
-
-	var customRules *armfrontdoor.CustomRuleList
-
-	var err error
-
+func filterCustomRules(in filterCustomRulesInput) ([]*armfrontdoor.CustomRule, error) {
 	if in.customRules == nil {
-		return nil, nil
+		return nil, fmt.Errorf("custom rules not defined")
 	}
 
-	if in.action == nil {
-		return nil,, errors.New("action cannot be nil")
-	}
+	var filtered []*armfrontdoor.CustomRule
 
-	for x := range in..Rules {
-		// ensure action is matching
-		if *crl.Rules[x].Action != *in.action {
+	for _, cr := range in.customRules {
+		cr := cr
+		if (in.action != nil && *in.action != *cr.Action) ||
+			(in.ruleType != nil && *in.ruleType != *cr.RuleType) ||
+			(in.namePrefix != "" && !strings.HasPrefix(*cr.Name, string(in.namePrefix))) {
 			continue
 		}
 
-		// match by custom rule name prefix
-		if !strings.HasPrefix(*crl.Rules[x].Name, string(in.namePrefix)) {
-			continue
-		}
-
-		mc := policy.Properties.CustomRules.Rules[x].MatchConditions
-
-		// for each match conditions, get the
-		for y := range mc {
-			// ensure match condition is IP as rules with mixed match
-			// conditions (IPMatch + GeoMatch combination)
-			//  are not currently supported
-			if !matchConditionSupported(mc[y]) {
-				return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
-			}
-
-			for z := range mc[y].MatchValue {
-				n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
-				if tErr != nil {
-					return nil, nil, tErr
-				}
-
-				if err != nil {
-					return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
-				}
-
-				if *mc[y].NegateCondition {
-					negative = append(negative, n)
-				} else {
-					positive = append(positive, n)
-				}
-			}
-		}
+		filtered = append(filtered, cr)
 	}
 
-	return positive, negative, nil
+	return filtered, nil
 }
 
-// getIPNetsForPrefix takes a policy, rule name prefix, and an action,
-// and returns a slice of netip.Prefix for those from the standard positive
-// match conditions and another from the negated match conditions
-func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, action *armfrontdoor.ActionType) ([]netip.Prefix, []netip.Prefix, error) {
+func getIPNetsForPrefix(customRules []*armfrontdoor.CustomRule, action *armfrontdoor.ActionType) ([]netip.Prefix, []netip.Prefix, error) {
 	var positive, negative []netip.Prefix
 
 	var err error
-
-	if policy.Properties.CustomRules == nil {
-		return nil, nil, nil
-	}
 
 	if action == nil {
 		return nil, nil, errors.New("action cannot be nil")
 	}
 
-	for x := range policy.Properties.CustomRules.Rules {
-		// ensure action is matching
-		if *policy.Properties.CustomRules.Rules[x].Action != *action {
-			continue
-		}
+	for _, cr := range customRules {
+		cr := cr
 
-		// match by custom rule name prefix
-		if !strings.HasPrefix(*policy.Properties.CustomRules.Rules[x].Name, string(prefix)) {
-			continue
-		}
-
-		mc := policy.Properties.CustomRules.Rules[x].MatchConditions
+		mc := cr.MatchConditions
 
 		// for each match conditions, get the
 		for y := range mc {
@@ -122,7 +69,7 @@ func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefi
 			// conditions (IPMatch + GeoMatch combination)
 			//  are not currently supported
 			if !matchConditionSupported(mc[y]) {
-				return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *policy.Properties.CustomRules.Rules[x].Name)
+				return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *cr.Name)
 			}
 
 			for z := range mc[y].MatchValue {
@@ -132,7 +79,7 @@ func getIPNetsForPrefix(policy *armfrontdoor.WebApplicationFirewallPolicy, prefi
 				}
 
 				if err != nil {
-					return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *policy.Properties.CustomRules.Rules[x].Name, *mc[y].MatchValue[z])
+					return nil, nil, fmt.Errorf("rule %s has entry with invalid net %s", *cr.Name, *mc[y].MatchValue[z])
 				}
 
 				if *mc[y].NegateCondition {
@@ -311,9 +258,16 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 		return nil, fmt.Errorf("failed to copy policy: %s", err)
 	}
 
-	customRules, err := filterCustomRules(p.Properties.CustomRules, input.Action, input.RuleType)
+	// customRules, err := filterCustomRules(p.Properties.CustomRules, input.Action, input.RuleType)
+	filtered, err := filterCustomRules(filterCustomRulesInput{
+		namePrefix:  input.MatchPrefix,
+		customRules: p.Properties.CustomRules.Rules,
+		action:      nil,
+		ruleType:    nil,
+	})
 	// get a copy of the existing ipnets for the specified action and remove the specified list of nets
-	existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(p, input.MatchPrefix, input.Action)
+	// existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(p, input.MatchPrefix, input.Action)
+	existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(filtered, input.Action)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get existing nets: %s", err)
 	}
@@ -553,8 +507,18 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return modified, patch, err
 	}
 
+	filtered, err := filterCustomRules(filterCustomRulesInput{
+		namePrefix:  in.RuleNamePrefix,
+		customRules: in.Policy.Properties.CustomRules.Rules,
+		action:      in.Action,
+		ruleType:    in.RuleType,
+	})
+	if err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
+	}
+
 	// get a copy of the existing ipnets for the specified action and append to the list of new nets
-	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(in.Policy, in.RuleNamePrefix, in.Action)
+	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(filtered, in.Action)
 	if err != nil {
 		return modified, patch, err
 	}
@@ -693,57 +657,6 @@ func deDupeIPNets(ipns IPNets) []string {
 	return res
 }
 
-//
-// // TODO: need to support more than just IP
-// // TODO: add support for transforms
-// // createCustomRule will return a frontdoor CustomRule constructed from the provided input
-// func createCustomRule(name string, action armfrontdoor.ActionType, priority int32, items, negatedItems []*string) armfrontdoor.CustomRule {
-// 	t := true
-// 	f := false
-// 	rt := armfrontdoor.RuleTypeMatchRule
-// 	es := armfrontdoor.CustomRuleEnabledStateEnabled
-// 	mv := armfrontdoor.MatchVariableSocketAddr
-// 	op := armfrontdoor.OperatorIPMatch
-// 	// at := armfrontdoor.ActionType(action)
-// 	tt := []*armfrontdoor.TransformType{}
-//
-// 	nameWithPriority := fmt.Sprintf("%s%d", name, priority)
-//
-// 	sort.Slice(items, func(i, j int) bool {
-// 		return *items[i] < *items[j]
-// 	})
-//
-// 	var newMatchConditions []*armfrontdoor.MatchCondition
-// 	newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
-// 		MatchVariable:   &mv,
-// 		NegateCondition: &f,
-// 		Operator:        &op,
-// 		MatchValue:      items,
-// 		Transforms:      tt,
-// 	})
-//
-// 	if len(negatedItems) > 0 {
-// 		// fmt.Println("ADDING NEW MATCH CONDITION WITH ITEMS:", len(negatedItems))
-// 		newMatchConditions = append(newMatchConditions, &armfrontdoor.MatchCondition{
-// 			MatchVariable:   &mv,
-// 			NegateCondition: &t,
-// 			Operator:        &op,
-// 			MatchValue:      negatedItems,
-// 			Transforms:      tt,
-// 		})
-// 	}
-//
-// 	return armfrontdoor.CustomRule{
-// 		Name:            &nameWithPriority,
-// 		Priority:        &priority,
-// 		EnabledState:    &es,
-// 		RuleType:        &rt,
-// 		MatchConditions: newMatchConditions,
-// 		Action:          &action,
-// 	}
-//
-// }
-
 // Normalise accepts a slice of netip.Prefix and returns a unique slice of their string representations
 func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 	ipsetBuilder := netipx.IPSetBuilder{}
@@ -868,15 +781,6 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor
 			rateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
 			rateLimitThreshold:         in.RateLimitThreshold,
 		})
-
-		//		Action:                     in.action,
-		//		MatchConditions:            in.mcs,
-		//		Priority:                   &in.priority,
-		//		RuleType:                   &in.ruleType,
-		//		EnabledState:               toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
-		//		Name:                       &name,
-		//		RateLimitDurationInMinutes: in.rateLimitDurationInMinutes,
-		//		RateLimitThreshold:         in.rateLimitThreshold,
 
 		logrus.Tracef("generated match condition: %d", priorityCount+1)
 
@@ -1098,12 +1002,12 @@ func matchConditionSupported(mc *armfrontdoor.MatchCondition) bool {
 	return true
 }
 
-func tryNetStrToPrefix(inNetStr string) (prefix netip.Prefix, err error) {
+func tryNetStrToPrefix(inNetStr string) (netip.Prefix, error) {
 	// if no mask then try parsing as address
 	if !strings.Contains(inNetStr, "/") {
-		addr, pErr := netip.ParseAddr(inNetStr)
-		if pErr != nil {
-			return prefix, pErr
+		addr, err := netip.ParseAddr(inNetStr)
+		if err != nil {
+			return netip.Prefix{}, err
 		}
 
 		return addr.Prefix(addr.BitLen())
