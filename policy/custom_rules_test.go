@@ -10,6 +10,81 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGetRateLimitConfigMismatched(t *testing.T) {
+	rule1 := &armfrontdoor.CustomRule{
+		RateLimitDurationInMinutes: toPtr(int32(1)),
+		RateLimitThreshold:         toPtr(int32(223)),
+	}
+	rule2 := &armfrontdoor.CustomRule{
+		RateLimitDurationInMinutes: toPtr(int32(5)),
+		RateLimitThreshold:         toPtr(int32(123)),
+	}
+
+	rules := []*armfrontdoor.CustomRule{rule1, rule2}
+	_, _, err := getRateLimitConfig(rules)
+	require.Error(t, err)
+}
+
+func TestGetRateLimitConfig(t *testing.T) {
+	rule1 := &armfrontdoor.CustomRule{
+		RuleType:                   toPtr(armfrontdoor.RuleTypeRateLimitRule),
+		RateLimitDurationInMinutes: toPtr(int32(5)),
+		RateLimitThreshold:         toPtr(int32(223)),
+	}
+	rule2 := &armfrontdoor.CustomRule{
+		RuleType:                   toPtr(armfrontdoor.RuleTypeRateLimitRule),
+		RateLimitDurationInMinutes: toPtr(int32(5)),
+		RateLimitThreshold:         toPtr(int32(223)),
+	}
+
+	rules := []*armfrontdoor.CustomRule{rule1, rule2}
+	threshold, duration, err := getRateLimitConfig(rules)
+	require.NoError(t, err)
+	require.NotNil(t, threshold)
+	require.NotNil(t, duration)
+	require.Equal(t, *threshold, int32(223))
+	require.Equal(t, *duration, int32(5))
+}
+
+// TestUpdatePolicyCustomRulesNegativeMatches
+func TestDecorateExistingCustomRules(t *testing.T) {
+	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	require.NoError(t, err)
+
+	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
+
+	// check that adding exclusions triggers change
+	modified, patch, err := DecorateExistingCustomRules(DecorateExistingCustomRulesInput{
+		Policy:                  &wp[0].Policy,
+		SubscriptionID:          rid.SubscriptionID,
+		RawResourceID:           rid.Raw,
+		Action:                  toPtr(armfrontdoor.ActionTypeBlock),
+		Output:                  true,
+		AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
+		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
+		RuleNamePrefix:          "BlockList",
+		RuleType:                toPtr(armfrontdoor.RuleTypeMatchRule),
+		PriorityStart:           1,
+		MaxRules:                2,
+		LogLevel:                nil,
+	})
+	require.NoError(t, err)
+	require.True(t, modified)
+
+	//d, err := json.MarshalIndent(wp[0].Policy, "", "  ")
+	//require.NoError(t, err)
+	//
+	//fmt.Printf("%s\n", d)
+
+	require.Equal(t, 1, patch.CustomRuleAdditions)
+	require.Equal(t, 1, patch.CustomRuleChanges)
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[0].Name, "RuleOne")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].Name, "BlockList1")
+	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitDurationInMinutes)
+	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitThreshold)
+	require.True(t, modified)
+}
+
 func TestIsRulePrefixNameValid(t *testing.T) {
 	require.Nil(t, RuleNamePrefix("Test").Check())
 	require.Error(t, RuleNamePrefix("").Check())

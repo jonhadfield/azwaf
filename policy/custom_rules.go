@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go4.org/netipx"
 	"log"
 	"net/netip"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
-	"go4.org/netipx"
 )
 
 type filterCustomRulesInput struct {
@@ -264,7 +264,6 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 		return nil, fmt.Errorf("failed to copy policy: %s", err)
 	}
 
-	// customRules, err := filterCustomRules(p.Properties.CustomRules, input.Action, input.RuleType)
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		namePrefix:  input.MatchPrefix,
 		customRules: p.Properties.CustomRules.Rules,
@@ -393,6 +392,28 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 	}
 
 	return results, nil
+}
+
+type DecorateExistingCustomRulesInput struct {
+	BaseCLIInput
+	Policy                  *armfrontdoor.WebApplicationFirewallPolicy
+	SubscriptionID          string
+	RawResourceID           string
+	ResourceID              config.ResourceID
+	Action                  *armfrontdoor.ActionType
+	Output                  bool
+	Filepath                string
+	AdditionalAddrs         IPNets
+	AdditionalExcludedAddrs IPNets
+	RuleNamePrefix          RuleNamePrefix
+	RuleType                *armfrontdoor.RuleType
+	//RateLimitDurationInMinutes *int32
+	//RateLimitThreshold         *int32
+	PriorityStart int
+	// StartRuleNumber int
+	MaxRules int
+	// can be called from external so allow override
+	LogLevel *logrus.Level
 }
 
 type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
@@ -569,6 +590,207 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	// 		}
 	// 	}
 	// }
+
+	// remove existing net rules from Policy before adding New
+	var ecrs []*armfrontdoor.CustomRule
+
+	for _, existingCustomRule := range in.Policy.Properties.CustomRules.Rules {
+		// if New Custom rule name doesn't have the prefix in the Action, then add it
+		if !strings.HasPrefix(*existingCustomRule.Name, string(in.RuleNamePrefix)) {
+			ecrs = append(ecrs, existingCustomRule)
+
+			continue
+		}
+	}
+
+	// add the New Custom rules to the existing
+	in.Policy.Properties.CustomRules.Rules = ecrs
+	in.Policy.Properties.CustomRules.Rules = append(in.Policy.Properties.CustomRules.Rules, crs...)
+	// o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
+
+	// check we don't exceed Azure rules limit
+	if len(in.Policy.Properties.CustomRules.Rules) > MaxCustomRules {
+		return modified, patch, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
+	}
+
+	// sort rules by priority
+	sort.Slice(in.Policy.Properties.CustomRules.Rules, func(i, j int) bool {
+		return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
+	})
+
+	sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
+		return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
+	})
+
+	patch, err = GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
+	if err != nil {
+		return modified, patch, err
+	}
+
+	if patch.TotalDifferences == 0 {
+		logrus.Debug("nothing to do")
+
+		return modified, patch, nil
+	}
+
+	if patch.ManagedRuleChanges != 0 {
+		return true, patch, fmt.Errorf("unexpected Managed rules changes. aborting")
+	}
+
+	return true, patch, nil
+}
+
+func getRateLimitConfig(rules []*armfrontdoor.CustomRule) (*int32, *int32, error) {
+	var lastDuration *int32
+
+	var lastThreshold *int32
+
+	// ensure all rules have the same rate limit configuration
+	for x, cr := range rules {
+		cr := cr
+
+		ruleName := "not defined"
+		if cr.Name != nil {
+			ruleName = *cr.Name
+		}
+
+		if cr.RuleType == nil {
+			return nil, nil, fmt.Errorf("rule %d - %s has no rule type", x, ruleName)
+		}
+
+		switch *cr.RuleType {
+		case armfrontdoor.RuleTypeRateLimitRule:
+			if cr.RateLimitDurationInMinutes == nil {
+				return nil, nil, fmt.Errorf("rate limit rule %s has no rate limit duration", ruleName)
+			}
+
+			if cr.RateLimitThreshold == nil {
+				return nil, nil, fmt.Errorf("rate limit rule %s has no rate limit threshold", ruleName)
+			}
+		case armfrontdoor.RuleTypeMatchRule:
+			if cr.RateLimitDurationInMinutes != nil || cr.RateLimitThreshold != nil {
+				return nil, nil, fmt.Errorf("match rule %s has rate limit configuration", ruleName)
+			}
+		default:
+			return nil, nil, fmt.Errorf("rule %s has unknown rule type", ruleName)
+		}
+
+		// grab the first rule's rate limit configuration
+		if x == 0 {
+			// if the first rule has a rate limit configuration, then set the lastDuration and lastThreshold
+			if cr.RateLimitDurationInMinutes != nil && cr.RateLimitThreshold != nil {
+				lastDuration = cr.RateLimitDurationInMinutes
+				lastThreshold = cr.RateLimitThreshold
+
+				continue
+			}
+		}
+
+		// check each rule has the same non-existant/existant rate limit configuration
+		if cr.RateLimitDurationInMinutes != nil && cr.RateLimitThreshold != nil {
+			if (lastThreshold != nil && *lastThreshold != *cr.RateLimitThreshold) || (lastDuration != nil && *lastDuration != *cr.RateLimitDurationInMinutes) {
+				return nil, nil, fmt.Errorf("rules have different rate limit configurations")
+			}
+		}
+	}
+
+	return lastThreshold, lastDuration, nil
+}
+
+// DecorateExistingCustomRules adds to an existing Custom Policy with prefixes matching the requested action
+func DecorateExistingCustomRules(in DecorateExistingCustomRulesInput) (bool, GeneratePolicyPatchOutput, error) {
+	funcName := GetFunctionName()
+
+	var patch GeneratePolicyPatchOutput
+
+	if len(in.AdditionalAddrs) == 0 && len(in.AdditionalExcludedAddrs) == 0 {
+		return false, patch, fmt.Errorf("no networks provided")
+	}
+
+	if in.Policy == nil {
+		return false, patch, fmt.Errorf("%s - policy is nil", funcName)
+	}
+
+	if in.LogLevel != nil {
+		logrus.SetLevel(*in.LogLevel)
+	}
+
+	var err error
+
+	var modified bool
+
+	if in.Policy == nil {
+		return modified, patch, fmt.Errorf("missing policy")
+	}
+
+	if in.Policy.Properties == nil {
+		return modified, patch, fmt.Errorf("policy missing properties")
+	}
+
+	// positivePrefixes are those to match without negation
+	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
+	if err != nil {
+		return false, patch, err
+	}
+
+	// take a copy of the Policy for later comparison
+	originalPolicy, err := CopyPolicy(*in.Policy)
+	if err != nil {
+		return modified, patch, err
+	}
+
+	filtered, err := filterCustomRules(filterCustomRulesInput{
+		namePrefix:  in.RuleNamePrefix,
+		customRules: in.Policy.Properties.CustomRules.Rules,
+		ruleType:    in.RuleType,
+	})
+	if err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
+	}
+
+	// get the current rate-limit configuration from the filtered rules
+	filteredRateLimitDurationInMinutes, filteredRateLimitThreshold, err := getRateLimitConfig(filtered)
+
+	if err != nil {
+		return false, patch, err
+	}
+
+	// get a copy of the existing ipnets for the specified action and append to the list of new nets
+	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(filtered, in.Action)
+	if err != nil {
+		return modified, patch, err
+	}
+
+	positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
+
+	// appending existingAddrs to new set may result in overlap so normalise
+	positivePrefixes, err = Normalise(positivePrefixes)
+	if err != nil {
+		return false, patch, err
+	}
+
+	negativePrefixes := append(in.AdditionalExcludedAddrs, existingNegativeAddrs...)
+	// appending existingAddrs to new set may result in overlap so normalise
+	negativePrefixes, err = Normalise(negativePrefixes)
+	if err != nil {
+		return false, patch, err
+	}
+
+	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets: positivePrefixes,
+		NegativeMatchNets: negativePrefixes,
+		RuleType:          in.RuleType,
+		// retain rate limit configuration
+		RateLimitDurationInMinutes: filteredRateLimitDurationInMinutes,
+		RateLimitThreshold:         filteredRateLimitThreshold,
+		Action:                     in.Action,
+		MaxRules:                   in.MaxRules,
+		CustomNamePrefix:           in.RuleNamePrefix,
+		CustomPriorityStart:        in.PriorityStart,
+	})
+	if err != nil {
+		return false, patch, err
+	}
 
 	// remove existing net rules from Policy before adding New
 	var ecrs []*armfrontdoor.CustomRule
