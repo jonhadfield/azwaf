@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/session"
+	"github.com/sirupsen/logrus"
 	"go4.org/netipx"
 	"log"
 	"net/netip"
@@ -14,11 +18,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 type filterCustomRulesInput struct {
@@ -544,6 +543,12 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return false, GeneratePolicyPatchOutput{}, err
 	}
 
+	// get groupby clause from filtered to ensure we generate new custom rules with the same
+	gbv := []*armfrontdoor.GroupByVariable{}
+	if len(filtered) > 0 {
+		gbv = filtered[0].GroupBy
+	}
+
 	// get a copy of the existing ipnets for the specified action and append to the list of new nets
 	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(filtered, in.Action)
 	if err != nil {
@@ -571,6 +576,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:          positivePrefixes,
 		NegativeMatchNets:          negativePrefixes,
+		GroupBy:                    gbv,
 		RuleType:                   in.RuleType,
 		RateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
 		RateLimitThreshold:         in.RateLimitThreshold,
@@ -630,7 +636,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	if patch.TotalDifferences == 0 {
 		logrus.Debug("nothing to do")
 
-		return modified, patch, nil
+		return false, patch, nil
 	}
 
 	if patch.ManagedRuleChanges != 0 {
@@ -912,6 +918,7 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 type GenCustomRulesFromIPNetsInput struct {
 	PositiveMatchNets          IPNets
 	NegativeMatchNets          IPNets
+	GroupBy                    []*armfrontdoor.GroupByVariable
 	RuleType                   *armfrontdoor.RuleType
 	RateLimitDurationInMinutes *int32
 	RateLimitThreshold         *int32
@@ -1004,6 +1011,7 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor
 			mcs:                        mcs,
 			priority:                   priorityCount,
 			action:                     in.Action,
+			groupBy:                    in.GroupBy,
 			namePrefix:                 string(in.CustomNamePrefix),
 			ruleType:                   in.RuleType,
 			rateLimitDurationInMinutes: in.RateLimitDurationInMinutes,
@@ -1032,6 +1040,7 @@ type genCustomRuleFromMatchConditionsInput struct {
 	mcs                        []*armfrontdoor.MatchCondition
 	priority                   int32
 	action                     *armfrontdoor.ActionType
+	groupBy                    []*armfrontdoor.GroupByVariable
 	enabled                    *armfrontdoor.CustomRuleEnabledState
 	namePrefix                 string
 	ruleType                   *armfrontdoor.RuleType
@@ -1047,6 +1056,7 @@ func genCustomRuleFromMatchConditions(in genCustomRuleFromMatchConditionsInput) 
 		MatchConditions:            in.mcs,
 		Priority:                   &in.priority,
 		RuleType:                   in.ruleType,
+		GroupBy:                    in.groupBy,
 		EnabledState:               toPtr(armfrontdoor.CustomRuleEnabledStateEnabled),
 		Name:                       &name,
 		RateLimitDurationInMinutes: in.rateLimitDurationInMinutes,
