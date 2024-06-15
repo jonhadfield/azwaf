@@ -54,16 +54,16 @@ func TestDecorateExistingCustomRules(t *testing.T) {
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
 
 	// check that adding exclusions triggers change
-	modified, patch, err := DecorateExistingCustomRules(DecorateExistingCustomRulesInput{
+	modified, patch, err := DecorateExistingCustomRule(DecorateExistingCustomRuleInput{
 		Policy:                  &wp[0].Policy,
 		SubscriptionID:          rid.SubscriptionID,
 		RawResourceID:           rid.Raw,
 		Action:                  toPtr(armfrontdoor.ActionTypeBlock),
 		Output:                  true,
-		AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
+		AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
 		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
-		RuleNamePrefix:          "BlockList",
 		RuleType:                toPtr(armfrontdoor.RuleTypeMatchRule),
+		RuleName:                "BlockList1",
 		PriorityStart:           1,
 		MaxRules:                2,
 		LogLevel:                nil,
@@ -71,17 +71,30 @@ func TestDecorateExistingCustomRules(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, modified)
 
-	//d, err := json.MarshalIndent(wp[0].Policy, "", "  ")
-	//require.NoError(t, err)
-	//
-	//fmt.Printf("%s\n", d)
+	require.Equal(t, 2, patch.CustomRuleAdditions)
+	require.Equal(t, 3, patch.CustomRuleChanges)
 
-	require.Equal(t, 1, patch.CustomRuleAdditions)
-	require.Equal(t, 1, patch.CustomRuleChanges)
+	// check that existing rules unaffected
 	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[0].Name, "RuleOne")
+	require.Equal(t, int32ptr(1), wp[0].Policy.Properties.CustomRules.Rules[0].RateLimitDurationInMinutes)
+	require.Equal(t, int32ptr(100), wp[0].Policy.Properties.CustomRules.Rules[0].RateLimitThreshold)
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[0].MatchConditions, 1)
+
+	// check that decorated rule only changed by decoration
 	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].Name, "BlockList1")
 	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitDurationInMinutes)
 	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitThreshold)
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions, 2)
+	// check positive matches
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue, 5)
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[0], "1.1.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[1], "3.3.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[2], "5.5.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[3], "6.6.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[4], "7.4.0.0/24")
+	// check negative match
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[1].MatchValue, 1)
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[1].MatchValue[0], "2.2.0.0/22")
 	require.True(t, modified)
 }
 
@@ -612,4 +625,48 @@ func TestFilterCustomRulesWithNonMatchingCriteria(t *testing.T) {
 	filteredRules, err := filterCustomRules(input)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(filteredRules))
+}
+
+func TestFilterCustomRulesWithMatchingName(t *testing.T) {
+	action := armfrontdoor.ActionTypeBlock
+	ruleType := armfrontdoor.RuleTypeMatchRule
+	name := "TestRule"
+	customRules := []*armfrontdoor.CustomRule{
+		{
+			Action:   &action,
+			RuleType: &ruleType,
+			Name:     &name,
+		},
+	}
+	input := filterCustomRulesInput{
+		customRules: customRules,
+		action:      &action,
+		ruleType:    &ruleType,
+		names:       []string{"TestRule"},
+	}
+	filteredRules, err := filterCustomRules(input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(filteredRules))
+}
+
+func TestFilterCustomRulesWithNonMatchingName(t *testing.T) {
+	action := armfrontdoor.ActionTypeBlock
+	ruleType := armfrontdoor.RuleTypeMatchRule
+	name := "TestRule1"
+	customRules := []*armfrontdoor.CustomRule{
+		{
+			Action:   &action,
+			RuleType: &ruleType,
+			Name:     &name,
+		},
+	}
+	input := filterCustomRulesInput{
+		customRules: customRules,
+		action:      &action,
+		ruleType:    &ruleType,
+		names:       []string{"TestRule"},
+	}
+	filteredRules, err := filterCustomRules(input)
+	require.NoError(t, err)
+	require.NotEqual(t, 1, len(filteredRules))
 }

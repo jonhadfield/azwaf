@@ -77,7 +77,7 @@ func (s *Session) InitialiseFilePaths() error {
 	}
 
 	s.WorkingDir = workingDir
-	logrus.Infof("%s | working directory set to %s", funcName, s.WorkingDir)
+	logrus.Debugf("%s | working directory set to %s", funcName, s.WorkingDir)
 
 	cacheDir := filepath.Join(workingDir, CacheRelPath)
 	if err := createDirectory(cacheDir); err != nil {
@@ -238,7 +238,7 @@ func (s *Session) GetAuthorizer() error {
 
 		s.InitialiseCache()
 
-		logrus.Infof("authenticated with environment")
+		logrus.Debug("authenticated with environment")
 
 		return nil
 	}
@@ -254,7 +254,7 @@ func (s *Session) GetAuthorizer() error {
 		// initialize cache
 		s.InitialiseCache()
 
-		logrus.Info("authenticated with cli")
+		logrus.Debug("authenticated with cli")
 
 		return nil
 	}
