@@ -567,55 +567,59 @@ func (r RuleNamePrefix) Check() error {
 	}
 }
 
-// UpdatePolicyCustomRulesIPMatchPrefixes updates an existing Custom Policy with prefixes matching the requested action
-func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPrefixesInput) (bool, GeneratePolicyPatchOutput, error) {
+func ValidateUpdatePolicyInput(in UpdatePolicyCustomRulesIPMatchPrefixesInput) error {
 	funcName := GetFunctionName()
 
-	var patch GeneratePolicyPatchOutput
-
 	if len(in.Addrs) == 0 && len(in.ExcludedAddrs) == 0 {
-		return false, patch, fmt.Errorf("no networks provided")
+		return fmt.Errorf("no networks provided")
 	}
 
 	if in.Policy == nil {
-		return false, patch, fmt.Errorf("%s - policy is nil", funcName)
+		return fmt.Errorf("%s - policy is nil", funcName)
 	}
 
 	if in.Action == nil {
-		return false, patch, fmt.Errorf("%s - action is nil", funcName)
+		return fmt.Errorf("%s - action is nil", funcName)
+	}
+
+	if slices.Contains(armfrontdoor.PossibleActionTypeValues(), *in.Action) {
+		if err := in.RuleNamePrefix.Check(); err != nil {
+			return err
+		}
+	}
+
+	if in.Policy == nil {
+		return fmt.Errorf("missing policy")
+	}
+
+	if in.Policy.Properties == nil {
+		return fmt.Errorf("policy missing properties")
+	}
+
+	return nil
+}
+
+// UpdatePolicyCustomRulesIPMatchPrefixes updates an existing Custom Policy with prefixes matching the requested action
+func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPrefixesInput) (bool, GeneratePolicyPatchOutput, error) {
+	if err := ValidateUpdatePolicyInput(in); err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	if in.LogLevel != nil {
 		logrus.SetLevel(*in.LogLevel)
 	}
 
-	var err error
-
 	var modified bool
-
-	if slices.Contains(armfrontdoor.PossibleActionTypeValues(), *in.Action) {
-		if err = in.RuleNamePrefix.Check(); err != nil {
-			return modified, patch, err
-		}
-	}
-
-	if in.Policy == nil {
-		return modified, patch, fmt.Errorf("missing policy")
-	}
-
-	if in.Policy.Properties == nil {
-		return modified, patch, fmt.Errorf("policy missing properties")
-	}
 
 	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.Addrs)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
-		return modified, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	filtered, err := filterCustomRules(filterCustomRulesInput{
@@ -637,25 +641,22 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	// get a copy of the existing ipnets for the specified action and append to the list of new nets
 	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(filtered, in.Action)
 	if err != nil {
-		return modified, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
 
-	// for x := range positivePrefixes {
-	// 	fmt.Println(positivePrefixes[x].String())
-	// }
 	// appending existingAddrs to new set may result in overlap so normalise
 	positivePrefixes, err = Normalise(positivePrefixes)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	negativePrefixes := append(in.ExcludedAddrs, existingNegativeAddrs...)
 	// appending existingAddrs to new set may result in overlap so normalise
 	negativePrefixes, err = Normalise(negativePrefixes)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
@@ -671,16 +672,8 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		CustomPriorityStart:        in.PriorityStart,
 	})
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
-
-	// for x := range crs {
-	// 	for y := range crs[x].MatchConditions {
-	// 		for z := range crs[x].MatchConditions[y].MatchValue {
-	// 			fmt.Println("x=", x, "y=", y, "z=", z, "-", *crs[x].MatchConditions[y].MatchValue[z])
-	// 		}
-	// 	}
-	// }
 
 	// remove existing net rules from Policy before adding New
 	var ecrs []*armfrontdoor.CustomRule
@@ -699,9 +692,8 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	in.Policy.Properties.CustomRules.Rules = append(in.Policy.Properties.CustomRules.Rules, crs...)
 	// o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
 
-	// check we don't exceed Azure rules limit
 	if len(in.Policy.Properties.CustomRules.Rules) > MaxCustomRules {
-		return modified, patch, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
+		return modified, GeneratePolicyPatchOutput{}, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
 	}
 
 	// sort rules by priority
@@ -713,7 +705,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
 	})
 
-	patch, err = GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
+	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
 		return modified, patch, err
 	}
@@ -788,46 +780,46 @@ func getRateLimitConfig(rules []*armfrontdoor.CustomRule) (*int32, *int32, error
 	return lastThreshold, lastDuration, nil
 }
 
-// DecorateExistingCustomRule adds to an existing Custom Policy with prefixes matching the requested action
-func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, GeneratePolicyPatchOutput, error) {
+func ValidateDecorateExistingCustomRuleInput(in DecorateExistingCustomRuleInput) error {
 	funcName := GetFunctionName()
 
-	var patch GeneratePolicyPatchOutput
-
 	if len(in.AdditionalAddrs) == 0 && len(in.AdditionalExcludedAddrs) == 0 {
-		return false, patch, fmt.Errorf("no networks provided")
+		return fmt.Errorf("no networks provided")
 	}
 
 	if in.Policy == nil {
-		return false, patch, fmt.Errorf("%s - policy is nil", funcName)
+		return fmt.Errorf("%s - policy is nil", funcName)
+	}
+
+	if in.Policy.Properties == nil {
+		return fmt.Errorf("policy missing properties")
+	}
+
+	return nil
+}
+
+// DecorateExistingCustomRule adds to an existing Custom Policy with prefixes matching the requested action
+func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, GeneratePolicyPatchOutput, error) {
+	if err := ValidateDecorateExistingCustomRuleInput(in); err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	if in.LogLevel != nil {
 		logrus.SetLevel(*in.LogLevel)
 	}
 
-	var err error
-
 	var modified bool
-
-	if in.Policy == nil {
-		return modified, patch, fmt.Errorf("missing policy")
-	}
-
-	if in.Policy.Properties == nil {
-		return modified, patch, fmt.Errorf("policy missing properties")
-	}
 
 	// positivePrefixes are those to match without negation
 	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
-		return modified, patch, err
+		return modified, GeneratePolicyPatchOutput{}, err
 	}
 
 	filtered, err := filterCustomRules(filterCustomRulesInput{
@@ -852,7 +844,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// re-generate the IP match conditions for the "IP Address" match type
 	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForRuleIPMatchConditions(ruleToDecorate)
 	if err != nil {
-		return modified, patch, err
+		return modified, GeneratePolicyPatchOutput{}, err
 	}
 
 	// get a copy of the existing ipnets for the specified action and append to the list of new nets
@@ -862,14 +854,14 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// appending existingAddrs to new set may result in overlap so normalise
 	positivePrefixes, err = Normalise(positivePrefixes)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	negativePrefixes := append(in.AdditionalExcludedAddrs, existingNegativeAddrs...)
 	// appending existingAddrs to new set may result in overlap so normalise
 	negativePrefixes, err = Normalise(negativePrefixes)
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	// get number of those to negate that must appear in each rule
@@ -890,7 +882,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 		matchOperator: toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
@@ -905,7 +897,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return false, patch, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
@@ -917,15 +909,17 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	ruleToDecorate.MatchConditions = replacementMatchConditions
 
 	// sort rules by priority
-	sort.Slice(in.Policy.Properties.CustomRules.Rules, func(i, j int) bool {
-		return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
-	})
+	// sort.Slice(in.Policy.Properties.CustomRules.Rules, func(i, j int) bool {
+	// 	return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
+	// })
+	sortCustomRulesByPriority(in.Policy.Properties.CustomRules.Rules)
+	sortCustomRulesByPriority(originalPolicy.Properties.CustomRules.Rules)
 
-	sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
-		return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
-	})
+	// sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
+	// 	return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
+	// })
 
-	patch, err = GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
+	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
 		return modified, patch, err
 	}
@@ -947,6 +941,12 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	}
 
 	return true, patch, nil
+}
+
+func sortCustomRulesByPriority(in []*armfrontdoor.CustomRule) {
+	sort.Slice(in, func(i, j int) bool {
+		return *in[i].Priority < *in[j].Priority
+	})
 }
 
 type IPNets []netip.Prefix
