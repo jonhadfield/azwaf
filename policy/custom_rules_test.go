@@ -407,6 +407,34 @@ func TestUpdatePolicyCustomRulesInvalidRuleNamePrefix(t *testing.T) {
 	require.ErrorContains(t, err, "white space")
 }
 
+func TestSortCustomRulesByPriority(t *testing.T) {
+	rules := []*armfrontdoor.CustomRule{
+		{
+			Priority: toPtr(int32(5)),
+			Name:     toPtr("Hello"),
+		},
+		{
+			Priority: toPtr(int32(1234)),
+			Name:     toPtr("TestPrefix1234"),
+		},
+		{
+			MatchConditions: nil,
+			Priority:        toPtr(int32(500)),
+			Name:            toPtr("TestPrefix500"),
+		},
+		{
+			Priority: toPtr(int32(6000)),
+			Name:     toPtr("TestPrefix6000"),
+		},
+	}
+
+	sortCustomRulesByPriority(rules)
+	assert.Equal(t, *rules[0].Priority, int32(5))
+	assert.Equal(t, *rules[1].Priority, int32(500))
+	assert.Equal(t, *rules[2].Priority, int32(1234))
+	assert.Equal(t, *rules[3].Priority, int32(6000))
+}
+
 // TestUpdatePolicyCustomRulesInvalidInput tests we get an error with an invalid rule name prefix
 func TestUpdatePolicyCustomRulesMissingPolicy(t *testing.T) {
 	_, _, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
