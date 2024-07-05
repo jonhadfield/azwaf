@@ -798,6 +798,72 @@ func ValidateDecorateExistingCustomRuleInput(in DecorateExistingCustomRuleInput)
 	return nil
 }
 
+// rebuild the IP match conditions for the "IP Address" match type
+func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additionalPositivePrefixes, additionalNegativePrefixes []netip.Prefix) ([]*armfrontdoor.MatchCondition, []*armfrontdoor.MatchCondition, error) {
+	var posMatchConditions, negMatchConditions []*armfrontdoor.MatchCondition
+
+	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForRuleIPMatchConditions(ruleToDecorate)
+	if err != nil {
+		return posMatchConditions, negMatchConditions, err
+	}
+
+	// get a copy of the existing ipnets for the specified action and append to the list of new nets
+	additionalPositivePrefixes = append(additionalPositivePrefixes, existingPositiveAddrs...)
+
+	// appending existingAddrs to new set may result in overlap so normalise
+	additionalPositivePrefixes, err = Normalise(additionalPositivePrefixes)
+	if err != nil {
+		return posMatchConditions, negMatchConditions, err
+	}
+
+	additionalNegativePrefixes = append(additionalNegativePrefixes, existingNegativeAddrs...)
+	// appending existingAddrs to new set may result in overlap so normalise
+	additionalNegativePrefixes, err = Normalise(additionalNegativePrefixes)
+	if err != nil {
+		return posMatchConditions, negMatchConditions, err
+	}
+
+	// get number of those to negate that must appear in each rule
+	// this will be deducted from max values per rule
+	deDupedNegatedNets := deDupeIPNets(additionalNegativePrefixes)
+	sort.Strings(deDupedNegatedNets)
+	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
+
+	deDupedNets := deDupeIPNets(additionalPositivePrefixes)
+	sort.Strings(deDupedNets)
+
+	positiveMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
+		nets:                  &deDupedNets,
+		negate:                false,
+		maxValuesPerCondition: MaxIPMatchValues - len(deDupedNegatedNets),
+		// TODO: should respect the existing match variable
+		matchVariable: toPtr(armfrontdoor.MatchVariableSocketAddr),
+		matchOperator: toPtr(armfrontdoor.OperatorIPMatch),
+	})
+	if err != nil {
+		return posMatchConditions, negMatchConditions, err
+	}
+
+	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
+
+	// generate the match conditions to add to each rule
+	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
+		nets:   &deDupedNegatedNets,
+		negate: true,
+		// TODO: set to Max (600) minus the largest possible chunk of positive
+		maxValuesPerCondition: MaxIPMatchValues,
+		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
+		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
+	})
+	if err != nil {
+		return posMatchConditions, negMatchConditions, err
+	}
+
+	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
+
+	return positiveMatchConditions, negativeMatchConditions, nil
+}
+
 // DecorateExistingCustomRule adds to an existing Custom Policy with prefixes matching the requested action
 func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, GeneratePolicyPatchOutput, error) {
 	if err := ValidateDecorateExistingCustomRuleInput(in); err != nil {
@@ -810,16 +876,16 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 
 	var modified bool
 
-	// positivePrefixes are those to match without negation
-	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
 		return modified, GeneratePolicyPatchOutput{}, err
+	}
+
+	// positivePrefixes are those to match without negation
+	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
+	if err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	filtered, err := filterCustomRules(filterCustomRulesInput{
@@ -841,66 +907,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// with the existing non-IP match conditions
 	replacementMatchConditions := getNonIPMatchConditions(ruleToDecorate)
 
-	// re-generate the IP match conditions for the "IP Address" match type
-	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForRuleIPMatchConditions(ruleToDecorate)
-	if err != nil {
-		return modified, GeneratePolicyPatchOutput{}, err
-	}
-
-	// get a copy of the existing ipnets for the specified action and append to the list of new nets
-
-	positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
-
-	// appending existingAddrs to new set may result in overlap so normalise
-	positivePrefixes, err = Normalise(positivePrefixes)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
-	negativePrefixes := append(in.AdditionalExcludedAddrs, existingNegativeAddrs...)
-	// appending existingAddrs to new set may result in overlap so normalise
-	negativePrefixes, err = Normalise(negativePrefixes)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
-	// get number of those to negate that must appear in each rule
-	// this will be deducted from max values per rule
-	deDupedNegatedNets := deDupeIPNets(negativePrefixes)
-	sort.Strings(deDupedNegatedNets)
-	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
-
-	deDupedNets := deDupeIPNets(positivePrefixes)
-	sort.Strings(deDupedNets)
-
-	positiveMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
-		nets:                  &deDupedNets,
-		negate:                false,
-		maxValuesPerCondition: MaxIPMatchValues - len(deDupedNegatedNets),
-		// TODO: should respect the existing match variable
-		matchVariable: toPtr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator: toPtr(armfrontdoor.OperatorIPMatch),
-	})
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
-	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
-
-	// generate the match condition to add to each rule
-	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
-		nets:   &deDupedNegatedNets,
-		negate: true,
-		// TODO: set to Max (600) minus the largest possible chunk of positive
-		maxValuesPerCondition: MaxIPMatchValues,
-		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
-	})
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
-	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
+	positiveMatchConditions, negativeMatchConditions, err := rebuildIPMatchConditions(ruleToDecorate, positivePrefixes, in.AdditionalExcludedAddrs)
 
 	replacementMatchConditions = append(replacementMatchConditions, positiveMatchConditions...)
 	replacementMatchConditions = append(replacementMatchConditions, negativeMatchConditions...)
@@ -908,16 +915,8 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// replace match conditions
 	ruleToDecorate.MatchConditions = replacementMatchConditions
 
-	// sort rules by priority
-	// sort.Slice(in.Policy.Properties.CustomRules.Rules, func(i, j int) bool {
-	// 	return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
-	// })
 	sortCustomRulesByPriority(in.Policy.Properties.CustomRules.Rules)
 	sortCustomRulesByPriority(originalPolicy.Properties.CustomRules.Rules)
-
-	// sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
-	// 	return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
-	// })
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
