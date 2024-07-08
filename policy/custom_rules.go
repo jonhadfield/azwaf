@@ -64,7 +64,15 @@ func customRuleNamesCheck(in filterCustomRulesInput, cr *armfrontdoor.CustomRule
 
 func filterCustomRules(in filterCustomRulesInput) ([]*armfrontdoor.CustomRule, error) {
 	if in.customRules == nil {
-		return nil, fmt.Errorf("custom rules not defined")
+		return nil, fmt.Errorf("filtering custom rules requires a list of custom rules")
+	}
+
+	if in.ruleType == nil {
+		return nil, errors.New("filtering custom rules requires a type is set")
+	}
+
+	if in.action == nil {
+		return nil, errors.New("filtering custom rules requires an action is set")
 	}
 
 	var filtered []*armfrontdoor.CustomRule
@@ -791,8 +799,24 @@ func ValidateDecorateExistingCustomRuleInput(in DecorateExistingCustomRuleInput)
 		return fmt.Errorf("%s - policy is nil", funcName)
 	}
 
+	if in.Policy.Properties.CustomRules == nil {
+		return fmt.Errorf("%s - policy has no custom rules section", funcName)
+	}
+
+	if in.Policy.Properties.CustomRules.Rules == nil {
+		return fmt.Errorf("%s - policy has no custom rules", funcName)
+	}
+
 	if in.Policy.Properties == nil {
 		return fmt.Errorf("policy missing properties")
+	}
+
+	if in.RuleName == "" {
+		return fmt.Errorf("rule name cannot be empty")
+	}
+
+	if in.RuleType == nil {
+		return fmt.Errorf("rule type cannot be nil")
 	}
 
 	return nil
@@ -896,13 +920,18 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 		names:       []string{in.RuleName},
 		customRules: in.Policy.Properties.CustomRules.Rules,
 		ruleType:    in.RuleType,
+		action:      in.Action,
 	})
 	if err != nil {
 		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	if len(filtered) == 0 {
-		return false, GeneratePolicyPatchOutput{}, fmt.Errorf("no rule found with name %s", in.RuleName)
+		if in.Policy.Name != nil {
+			return false, GeneratePolicyPatchOutput{}, fmt.Errorf("no custom rule found with name %s, type %s, action %s in policy %s", in.RuleName, *in.RuleType, *in.Action, *in.Policy.Name)
+		}
+
+		return false, GeneratePolicyPatchOutput{}, fmt.Errorf("no custom rule found with name %s, type %s, and action %s", in.RuleName, *in.RuleType, *in.Action)
 	}
 
 	ruleToDecorate := filtered[0]
