@@ -12,7 +12,7 @@
                         "name": "RuleOne",
                         "priority": 1,
                         "enabledState": "Enabled",
-                        "ruleType": "MatchRule",
+                        "ruleType": "RateLimitRule",
                         "rateLimitDurationInMinutes": 1,
                         "rateLimitThreshold": 100,
                         "matchConditions": [
