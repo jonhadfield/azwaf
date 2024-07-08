@@ -883,11 +883,15 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	}
 
 	// positivePrefixes are those to match without negation
-	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
+	var positivePrefixes []netip.Prefix
+	if in.Filepath != "" || len(in.AdditionalAddrs) > 0 {
+		positivePrefixes, err = loadLocalPrefixes(in.Filepath, in.AdditionalAddrs)
+		if err != nil {
+			return false, GeneratePolicyPatchOutput{}, err
+		}
 	}
 
+	// retrieve specified rule by name
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		names:       []string{in.RuleName},
 		customRules: in.Policy.Properties.CustomRules.Rules,
@@ -908,6 +912,9 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	replacementMatchConditions := getNonIPMatchConditions(ruleToDecorate)
 
 	positiveMatchConditions, negativeMatchConditions, err := rebuildIPMatchConditions(ruleToDecorate, positivePrefixes, in.AdditionalExcludedAddrs)
+	if err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
+	}
 
 	replacementMatchConditions = append(replacementMatchConditions, positiveMatchConditions...)
 	replacementMatchConditions = append(replacementMatchConditions, negativeMatchConditions...)
@@ -925,7 +932,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 
 	// op, _ := json.MarshalIndent(originalPolicy, "", "  ")
 	// os.WriteFile("orig", op, 0644)
-	//
+
 	// np, _ := json.MarshalIndent(*in.Policy, "", "  ")
 	// os.WriteFile("new", np, 0644)
 
