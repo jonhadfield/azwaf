@@ -63,6 +63,7 @@ func stripCustomRulesMatchingNameOrPriority(prioritySet bool, priority int, name
 			priority:    priority,
 			nameMatch:   nameMatch,
 		}, cr) {
+
 			res = append(res, cr)
 		}
 	}

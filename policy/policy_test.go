@@ -267,7 +267,6 @@ func TestGenerateCustomRulesFromIPNets2(t *testing.T) {
 	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.18/32", false))
 	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.20/31", false))
 	require.True(t, matchCustomRuleMatchValueInCustomRules(crs, "67.43.236.22/32", false))
-
 }
 
 func TestGenerateCustomRulesFromIPNets3(t *testing.T) {

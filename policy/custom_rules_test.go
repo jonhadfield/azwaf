@@ -46,6 +46,76 @@ func TestGetRateLimitConfig(t *testing.T) {
 	require.Equal(t, *duration, int32(5))
 }
 
+func TestRebuildIPMatchConditions(t *testing.T) {
+	cr := &armfrontdoor.CustomRule{
+		Action:                     nil,
+		MatchConditions:            nil,
+		Priority:                   nil,
+		RuleType:                   nil,
+		EnabledState:               nil,
+		GroupBy:                    nil,
+		Name:                       nil,
+		RateLimitDurationInMinutes: nil,
+		RateLimitThreshold:         nil,
+	}
+
+	pos, neg, err := rebuildIPMatchConditions(cr, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, pos)
+	require.Nil(t, neg)
+}
+
+func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
+	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	require.NoError(t, err)
+
+	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
+
+	// check that adding exclusions triggers change
+	modified, patch, err := DecorateExistingCustomRule(DecorateExistingCustomRuleInput{
+		Policy:         &wp[0].Policy,
+		SubscriptionID: rid.SubscriptionID,
+		RawResourceID:  rid.Raw,
+		Action:         toPtr(armfrontdoor.ActionTypeBlock),
+		Output:         true,
+		// AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
+		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
+		RuleType:                toPtr(armfrontdoor.RuleTypeMatchRule),
+		RuleName:                "BlockList1",
+		PriorityStart:           1,
+		MaxRules:                2,
+		LogLevel:                nil,
+	})
+	require.NoError(t, err)
+	require.True(t, modified)
+	// a new match condition still counts as an addition
+	require.Equal(t, 1, patch.CustomRuleAdditions)
+	// see previous comment
+	require.Equal(t, 1, patch.CustomRuleChanges)
+
+	// check that existing rules unaffected
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[0].Name, "RuleOne")
+	require.Equal(t, int32ptr(1), wp[0].Policy.Properties.CustomRules.Rules[0].RateLimitDurationInMinutes)
+	require.Equal(t, int32ptr(100), wp[0].Policy.Properties.CustomRules.Rules[0].RateLimitThreshold)
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[0].MatchConditions, 1)
+
+	// check that decorated rule only changed by decoration
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].Name, "BlockList1")
+	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitDurationInMinutes)
+	require.Nil(t, wp[0].Policy.Properties.CustomRules.Rules[1].RateLimitThreshold)
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions, 2)
+	// check positive matches
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue, 4)
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[0], "1.1.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[1], "3.3.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[2], "5.5.0.0/22")
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[0].MatchValue[3], "7.4.0.0/24")
+	// check negative match
+	require.Len(t, wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[1].MatchValue, 1)
+	require.Equal(t, *wp[0].Policy.Properties.CustomRules.Rules[1].MatchConditions[1].MatchValue[0], "2.2.0.0/22")
+	require.True(t, modified)
+}
+
 // TestUpdatePolicyCustomRulesNegativeMatches
 func TestDecorateExistingCustomRules(t *testing.T) {
 	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
