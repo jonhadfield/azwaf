@@ -518,6 +518,7 @@ type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	Output                     bool
 	Filepath                   string
 	Addrs                      IPNets
+	ReplaceAddrs               bool
 	ExcludedAddrs              IPNets
 	RuleNamePrefix             RuleNamePrefix
 	RuleType                   *armfrontdoor.RuleType
@@ -619,16 +620,18 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 
 	var modified bool
 
-	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.Addrs)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
-
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
 		return false, GeneratePolicyPatchOutput{}, err
 	}
+
+	positivePrefixes, err := loadLocalPrefixes(in.Filepath, in.Addrs)
+	if err != nil {
+		return false, GeneratePolicyPatchOutput{}, err
+	}
+
+	negativePrefixes := in.ExcludedAddrs
 
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		namePrefix:  in.RuleNamePrefix,
@@ -646,25 +649,30 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		gbv = filtered[0].GroupBy
 	}
 
-	// get a copy of the existing ipnets for the specified action and append to the list of new nets
-	existingPositiveAddrs, existingNegativeAddrs, err := getIPNetsForPrefix(filtered, in.Action)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
+	// if we're not replacing the existing rules, then append the existing rules to the new rules
+	if !in.ReplaceAddrs {
+		// get a copy of the existing ipnets for the specified action and append to the list of new nets
+		var existingPositiveAddrs, existingNegativeAddrs []netip.Prefix
 
-	positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
+		existingPositiveAddrs, existingNegativeAddrs, err = getIPNetsForPrefix(filtered, in.Action)
+		if err != nil {
+			return false, GeneratePolicyPatchOutput{}, err
+		}
 
-	// appending existingAddrs to new set may result in overlap so normalise
-	positivePrefixes, err = Normalise(positivePrefixes)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
-	}
+		positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
 
-	negativePrefixes := append(in.ExcludedAddrs, existingNegativeAddrs...)
-	// appending existingAddrs to new set may result in overlap so normalise
-	negativePrefixes, err = Normalise(negativePrefixes)
-	if err != nil {
-		return false, GeneratePolicyPatchOutput{}, err
+		// appending existingAddrs to new set may result in overlap so normalise
+		positivePrefixes, err = Normalise(positivePrefixes)
+		if err != nil {
+			return false, GeneratePolicyPatchOutput{}, err
+		}
+
+		negativePrefixes = append(in.ExcludedAddrs, existingNegativeAddrs...)
+		// appending existingAddrs to new set may result in overlap so normalise
+		negativePrefixes, err = Normalise(negativePrefixes)
+		if err != nil {
+			return false, GeneratePolicyPatchOutput{}, err
+		}
 	}
 
 	crs, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
@@ -705,13 +713,8 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	// sort rules by priority
-	sort.Slice(in.Policy.Properties.CustomRules.Rules, func(i, j int) bool {
-		return *in.Policy.Properties.CustomRules.Rules[i].Priority < *in.Policy.Properties.CustomRules.Rules[j].Priority
-	})
-
-	sort.Slice(originalPolicy.Properties.CustomRules.Rules, func(i, j int) bool {
-		return *originalPolicy.Properties.CustomRules.Rules[i].Priority < *originalPolicy.Properties.CustomRules.Rules[j].Priority
-	})
+	sortRulesByPriority(in.Policy.Properties.CustomRules.Rules)
+	sortRulesByPriority(originalPolicy.Properties.CustomRules.Rules)
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
@@ -729,6 +732,12 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	return true, patch, nil
+}
+
+func sortRulesByPriority(rules []*armfrontdoor.CustomRule) {
+	sort.Slice(rules, func(i, j int) bool {
+		return *rules[i].Priority < *rules[j].Priority
+	})
 }
 
 func getRateLimitConfig(rules []*armfrontdoor.CustomRule) (*int32, *int32, error) {
