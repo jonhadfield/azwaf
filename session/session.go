@@ -21,9 +21,7 @@ const (
 )
 
 type Session struct {
-	// Authorizer                          *autorest.Authorizer
-	ClientCredential                    *azidentity.DefaultAzureCredential
-	Credential                          azcore.TokenCredential
+	ClientCredential                    azcore.TokenCredential
 	FrontDoorPoliciesClients            map[string]*armfrontdoor.PoliciesClient
 	FrontDoorsClients                   map[string]*armfrontdoor.FrontDoorsClient
 	FrontDoorsManagedRuleSetsClients    map[string]*armfrontdoor.ManagedRuleSetsClient
@@ -173,6 +171,20 @@ func (s *Session) GetClientCredential() error {
 	funcName := GetFunctionName()
 
 	logrus.Debugf("getting Azure API credential")
+
+	managed, err := azidentity.NewManagedIdentityCredential(nil)
+	if err == nil {
+		logrus.Debugf("%s | retrieved credential via managed identity", funcName)
+
+		s.ClientCredential, err = azidentity.NewChainedTokenCredential([]azcore.TokenCredential{managed}, nil)
+		if err == nil {
+			s.InitialiseCache()
+
+			return nil
+		}
+	}
+
+	logrus.Debugf("failed to get credential via managed identity so trying default")
 
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
