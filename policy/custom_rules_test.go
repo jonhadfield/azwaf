@@ -509,6 +509,38 @@ func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
 	require.True(t, modified)
 }
 
+// TestUpdatePolicyCustomRulesReplaceExistingMatches tests that we can replace, instead of append, prefixes
+func TestUpdatePolicyCustomRulesReplaceExistingMatches(t *testing.T) {
+	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	require.NoError(t, err)
+
+	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
+
+	// check that adding exclusions triggers change
+	modified, patch, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
+		BaseCLIInput:               BaseCLIInput{},
+		Policy:                     &wp[0].Policy,
+		SubscriptionID:             rid.SubscriptionID,
+		RawResourceID:              rid.Raw,
+		ResourceID:                 config.ResourceID{},
+		ReplaceAddrs:               true,
+		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
+		Output:                     false,
+		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
+		RuleNamePrefix:             "BlockList",
+		RuleType:                   toPtr(armfrontdoor.RuleTypeMatchRule),
+		RateLimitDurationInMinutes: nil,
+		RateLimitThreshold:         nil,
+		PriorityStart:              1,
+		MaxRules:                   2,
+		LogLevel:                   nil,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, patch.CustomRuleAdditions)
+	require.Equal(t, 3, patch.CustomRuleChanges)
+	require.True(t, modified)
+}
+
 // TestUpdatePolicyCustomRulesInvalidInput tests we get an error with nil input
 func TestUpdatePolicyCustomRulesInvalidInput(t *testing.T) {
 	_, _, err := UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{})
