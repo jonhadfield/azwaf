@@ -36,7 +36,7 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 	logrus.Debugf("creating resources client for subscription: %s", subID)
 
 	c := resources.NewClient(subID)
-
+	
 	err = s.GetAuthorizer()
 	if err != nil {
 		logrus.Error(err.Error())
