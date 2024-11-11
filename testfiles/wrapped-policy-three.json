@@ -10,7 +10,7 @@
                 "rules": [
                     {
                         "name": "RuleOne",
-                        "priority": 1,
+                        "priority": 0,
                         "enabledState": "Enabled",
                         "ruleType": "MatchRule",
                         "rateLimitDurationInMinutes": 1,
