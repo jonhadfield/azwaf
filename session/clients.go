@@ -3,10 +3,10 @@ package session
 import (
 	"errors"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"runtime"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/sirupsen/logrus"
@@ -24,7 +24,7 @@ func GetFunctionName() string {
 // If an authorizer instance is missing, it will make a call to create it and then store in the session also.
 func (s *Session) GetResourcesClient(subID string) (err error) {
 	if s.ResourcesClients == nil {
-		s.ResourcesClients = make(map[string]*resources.Client)
+		s.ResourcesClients = make(map[string]*armresources.Client)
 	}
 
 	if s.ResourcesClients[subID] != nil {
@@ -35,16 +35,19 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 
 	logrus.Debugf("creating resources client for subscription: %s", subID)
 
-	c := resources.NewClient(subID)
-	
-	err = s.GetAuthorizer()
-	if err != nil {
-		logrus.Error(err.Error())
-		return
+	if s.ClientCredential == nil {
+		err = s.GetClientCredential()
+		if err != nil {
+			return
+		}
 	}
 
-	s.ResourcesClients[subID] = &c
-	s.ResourcesClients[subID].Authorizer = *s.Authorizer
+	c, err := armresources.NewClient(subID, s.ClientCredential, nil)
+	if err != nil {
+		return fmt.Errorf(err.Error(), GetFunctionName())
+	}
+
+	s.ResourcesClients[subID] = c
 
 	return
 }
@@ -68,21 +71,14 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 
 	logrus.Debugf("%s | creating new policies client for subscription: %s", funcName, subID)
 
-	if s.Authorizer == nil {
-		err = s.GetAuthorizer()
+	if s.ClientCredential == nil {
+		err = s.GetClientCredential()
 		if err != nil {
 			return
 		}
 	}
 
-	if s.Credential == nil {
-		err = s.GetCredential()
-		if err != nil {
-			return
-		}
-	}
-
-	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.Credential, nil)
+	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.ClientCredential, nil)
 	if merr != nil {
 		return fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
@@ -111,20 +107,16 @@ func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
 
 	logrus.Debugf("creating arm front door managed rule sets client for subscription: %s", subID)
 
-	if s.Authorizer == nil {
-		err = s.GetAuthorizer()
+	if s.ClientCredential == nil {
+		err = s.GetClientCredential()
 		if err != nil {
 			return
 		}
 	}
 
-	if s.GetCredential() != nil {
-		return
-	}
-
 	logrus.Debugf("creating new manage rule sets client for sub: %s", subID)
 
-	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.Credential, nil)
+	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
 		return fmt.Errorf(merr.Error(), GetFunctionName())
 	}

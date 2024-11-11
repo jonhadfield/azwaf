@@ -12,7 +12,7 @@ import (
 
 	"github.com/jonhadfield/azwaf/config"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 
 	"github.com/jonhadfield/azwaf/session"
@@ -88,19 +88,22 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 
 	if in.StorageAccountResourceID != "" {
 		sari := config.ParseResourceID(in.StorageAccountResourceID)
-		storageAccountsClient := storage.NewAccountsClient(sari.SubscriptionID)
-		storageAccountsClient.Authorizer = *s.Authorizer
+		var storageAccountsClient *armstorage.AccountsClient
+		storageAccountsClient, err = armstorage.NewAccountsClient(sari.SubscriptionID, s.ClientCredential, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create storage account client - %s", err.Error())
+		}
+
 		ctx := context.Background()
 
-		var sac storage.AccountListKeysResult
+		var sac armstorage.AccountsClientListKeysResponse
 
-		sac, oerr := storageAccountsClient.ListKeys(ctx, sari.ResourceGroup, sari.Name, "")
+		sac, oerr := storageAccountsClient.ListKeys(ctx, sari.ResourceGroup, sari.Name, nil)
 		if oerr != nil {
 			return fmt.Errorf("failed to list keys for storage account %s - %s", sari.Name, oerr.Error())
 		}
 
-		keys := *sac.Keys
-		b := keys[0]
+		b := sac.Keys[0]
 
 		credential, oerr := azblob.NewSharedKeyCredential(sari.Name, *b.Value)
 		if oerr != nil {
