@@ -14,7 +14,6 @@ import (
 
 	"github.com/jonhadfield/azwaf/config"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/jonhadfield/azwaf/cache"
 
@@ -113,7 +112,7 @@ func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, 
 	return
 }
 
-func SaveWAFResourceIDHashMap(s *session.Session, res []resources.GenericResourceExpanded) error {
+func SaveWAFResourceIDHashMap(s *session.Session, res []armfrontdoor.WebApplicationFirewallPolicy) error {
 	funcName := GetFunctionName()
 
 	logrus.Debugf("attempting to save waf resource id hash map from cache")
@@ -394,10 +393,10 @@ type DeleteManagedRuleExclusionInput struct {
 	Scope string
 }
 
-func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]resources.GenericResourceExpanded, error) {
+func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdoor.WebApplicationFirewallPolicy, error) {
 	funcName := GetFunctionName()
 
-	err := s.GetResourcesClient(i.SubscriptionID)
+	err := s.GetFrontDoorPoliciesClient(i.SubscriptionID)
 	if err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
@@ -411,53 +410,42 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]resources.
 
 	logrus.Debugf("listing first %d Policies in Subscription: %s", top, i.SubscriptionID)
 
-	var it resources.ListResultIterator
-	it, err = s.ResourcesClients[i.SubscriptionID].ListComplete(ctx, "resourceType eq 'Microsoft.Network/frontdoorWebApplicationFirewallPolicies'", "", &top)
-	if err != nil {
-		return nil, fmt.Errorf("%s - %w", funcName, err)
-	}
+	pager := s.FrontDoorPoliciesClients[i.SubscriptionID].NewListBySubscriptionPager(nil)
+
+	var gres []armfrontdoor.WebApplicationFirewallPolicy
 
 	var total int
 
-	var gres []resources.GenericResourceExpanded
-	for it.NotDone() {
-		if it.Value().ID == nil {
-			return nil, fmt.Errorf(fmt.Sprintf("Azure returned a WAF Policy without a resource ID: %+v", it.Value()), funcName)
+	for pager.More() {
+		var page armfrontdoor.PoliciesClientListBySubscriptionResponse
+
+		page, err = pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%s failed to advance page of waf policies - %w", funcName, err)
 		}
 
-		// add if filters not provided, or filters are provided, and we have a match
+		for _, resource := range page.Value {
+			if resource.ID == nil {
+				return nil, fmt.Errorf("%s | Azure returned a WAF Policy without a resource ID: %+v", funcName, resource)
+			}
 
-		// TODO: test this
-		if len(i.FilterResourceIDs) == 0 || slices.Contains(i.FilterResourceIDs, *it.Value().ID) {
-			gres = append(gres, it.Value())
-		}
+			if len(i.FilterResourceIDs) == 0 || slices.Contains(i.FilterResourceIDs, *resource.ID) {
+				gres = append(gres, *resource)
+			}
 
-		total++
+			total++
 
-		// passing top as top number of items isn't working due to an API bug
-		// if we have reached top here, then return
-		if total == int(top) {
-			return gres, nil
-		}
-
-		if err = it.NextWithContext(ctx); err != nil {
-			return nil, fmt.Errorf("%s - %w", funcName, err)
+			// passing top as top number of items isn't working due to an API bug
+			// if we have reached top here, then return
+			if total == int(top) {
+				return gres, nil
+			}
 		}
 	}
 
 	logrus.Debugf("retrieved %d resources", total)
 
 	return gres, err
-}
-
-func getResourceIDsFromGenericResources(gres []resources.GenericResourceExpanded) []config.ResourceID {
-	var rids []config.ResourceID
-
-	for _, gre := range gres {
-		rids = append(rids, config.ParseResourceID(*gre.ID))
-	}
-
-	return rids
 }
 
 func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput) (GetWrappedPoliciesOutput, error) {
@@ -484,14 +472,16 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 		}
 	} else {
 		// retrieve all Policies as generic resources
-		var gres []resources.GenericResourceExpanded
+		var gres []armfrontdoor.WebApplicationFirewallPolicy
 
 		gres, err = GetAllPolicies(s, i)
 		if err != nil {
 			return GetWrappedPoliciesOutput{}, fmt.Errorf("%s - %w", funcName, err)
 		}
 
-		rids = getResourceIDsFromGenericResources(gres)
+		for _, g := range gres {
+			rids = append(rids, config.ParseResourceID(*g.ID))
+		}
 	}
 
 	var o GetWrappedPoliciesOutput

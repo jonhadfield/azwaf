@@ -3,7 +3,7 @@ package policy
 import (
 	"context"
 	"fmt"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
 )
@@ -29,7 +29,7 @@ func ListFrontDoors(subID string) error {
 
 func GetFrontDoorIDs(s *session.Session, subID string) (ids []string, err error) {
 	// get all front door ids
-	err = s.GetResourcesClient(subID)
+	_, err = s.GetFrontDoorsClient(subID)
 	if err != nil {
 		return
 	}
@@ -38,21 +38,26 @@ func GetFrontDoorIDs(s *session.Session, subID string) (ids []string, err error)
 
 	fetchMax := int32(MaxFrontDoorsToFetch)
 
-	it, merr := s.ResourcesClients[subID].ListComplete(ctx, "resourceType eq 'Microsoft.Network/frontdoors'", "", &fetchMax)
-	if merr != nil {
-		return nil, fmt.Errorf(merr.Error(), GetFunctionName())
-	}
+	pager := s.FrontDoorsClients[subID].NewListPager(nil)
 
-	for it.NotDone() {
-		if it.Value().ID == nil {
-			panic("unexpected front door with nil id returned")
+	var total int
+
+	for pager.More() {
+		var page armfrontdoor.FrontDoorsClientListResponse
+
+		page, err = pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to advance page of front doors - %w", err)
 		}
 
-		ids = append(ids, *it.Value().ID)
+		for _, resource := range page.Value {
+			ids = append(ids, *resource.ID)
 
-		merr = it.NextWithContext(ctx)
-		if merr != nil {
-			return nil, fmt.Errorf(merr.Error(), GetFunctionName())
+			total++
+
+			if total == int(fetchMax) {
+				return
+			}
 		}
 	}
 

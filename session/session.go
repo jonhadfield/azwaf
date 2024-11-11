@@ -2,20 +2,15 @@ package session
 
 import (
 	"fmt"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/Azure/go-autorest/autorest"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -26,13 +21,14 @@ const (
 )
 
 type Session struct {
-	Authorizer                          *autorest.Authorizer
+	// Authorizer                          *autorest.Authorizer
+	ClientCredential                    *azidentity.DefaultAzureCredential
 	Credential                          azcore.TokenCredential
 	FrontDoorPoliciesClients            map[string]*armfrontdoor.PoliciesClient
 	FrontDoorsClients                   map[string]*armfrontdoor.FrontDoorsClient
 	FrontDoorsManagedRuleSetsClients    map[string]*armfrontdoor.ManagedRuleSetsClient
 	FrontDoorsManagedRuleSetDefinitions []*armfrontdoor.ManagedRuleSetDefinition
-	ResourcesClients                    map[string]*resources.Client
+	ResourcesClients                    map[string]*armresources.Client
 	WorkingDir                          string
 	BackupsDir                          string
 	CacheDir                            string
@@ -154,21 +150,16 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 		return *s.FrontDoorsClients[subID], nil
 	}
 
-	if s.Authorizer == nil {
-		err = s.GetAuthorizer()
+	if s.ClientCredential == nil {
+		err = s.GetClientCredential()
 		if err != nil {
 			return
 		}
 	}
 
-	err = s.GetCredential()
-	if err != nil {
-		return
-	}
-
 	logrus.Debugf("creating front doors client")
 
-	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.Credential, nil)
+	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
 		return c, fmt.Errorf(merr.Error(), GetFunctionName())
 	}
@@ -178,89 +169,19 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 	return
 }
 
-func (s *Session) GetCredential() error {
+func (s *Session) GetClientCredential() error {
 	funcName := GetFunctionName()
 
-	if s.Credential != nil {
-		logrus.Debug("returning existing credential from session")
+	logrus.Debugf("getting Azure API credential")
 
-		return nil
-	}
-
-	// try from environment first
-	cred, err := azidentity.NewEnvironmentCredential(nil)
-	if err != nil {
-		logrus.Debugf("%s | failed to get credential from environment", funcName)
-	}
-
-	if cred != nil {
-		s.Credential = cred
-
-		logrus.Debugf("%s | retrieved credential from environment", funcName)
-
-		return nil
-	}
-
-	s.Credential, err = azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return err
-	}
-
-	if s.Credential != nil {
-		logrus.Debugf("%s | retrieved default credential", funcName)
-
-		return nil
-	}
-
-	s.Credential, err = azidentity.NewAzureCLICredential(nil)
-	if err != nil {
-		logrus.Debugf("failed to get new cli credential")
-	}
-
-	return fmt.Errorf(err.Error(), funcName)
-}
-
-func (s *Session) GetAuthorizer() error {
-	funcName := GetFunctionName()
-
-	logrus.Debugf("authenticating with Azure")
-
-	if s.Authorizer != nil {
-		return nil
-	}
-
-	// try from environment first
-	a, err := auth.NewAuthorizerFromEnvironment()
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err == nil {
-		s.Authorizer = &a
+		logrus.Debugf("%s | retrieved credential", funcName)
 
-		logrus.Debugf("%s | retrieved Authorizer from environment", funcName)
-
+		s.ClientCredential = cred
 		s.InitialiseCache()
 
-		logrus.Debug("authenticated with environment")
-
 		return nil
-	}
-
-	logrus.Debugf("%s | failed to create authorizer from environment: %s", funcName, err.Error())
-
-	a, err = auth.NewAuthorizerFromCLI()
-	if err == nil {
-		s.Authorizer = &a
-
-		logrus.Debugf("%s | retrieved Authorizer from cli", funcName)
-
-		// initialize cache
-		s.InitialiseCache()
-
-		logrus.Debug("authenticated with cli")
-
-		return nil
-	}
-
-	if strings.Contains(err.Error(), "CERTIFICATE_VERIFY_FAILED") {
-		return fmt.Errorf("%s - ssl handshake failed", funcName)
 	}
 
 	return fmt.Errorf("%s | authorization failed: %s", err.Error(), funcName)
