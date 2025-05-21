@@ -247,67 +247,40 @@ func backupPolicies(policies []WrappedPolicy, containerURL *azblob.ContainerURL,
 	return
 }
 
-func PadToWidth(input, char string, inputLengthOverride int, trimToWidth bool) (output string) {
-	var lines []string
+func PadToWidth(input, char string, inputLengthOverride int, trimToWidth bool) string {
+	lines := strings.Split(strings.TrimSuffix(input, "\n"), "\n")
 
-	var newLines []string
-
-	if strings.Contains(input, "\n") {
-		lines = strings.Split(input, "\n")
-	} else {
-		lines = []string{input}
+	width, _, err := terminal.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width == -1 {
+		width = 80
 	}
-
-	var paddingSize int
 
 	for i, line := range lines {
-		fd := int(os.Stdout.Fd())
-
-		width, _, err := terminal.GetSize(fd)
-		if err != nil {
-			logrus.Fatalf("failed to get terminal width - %s", err.Error())
-		}
-
-		if width == -1 {
-			width = 80
-		}
-		// No padding for a line that already meets or exceeds console width
-		var length int
+		length := len(line)
 		if inputLengthOverride > 0 {
 			length = inputLengthOverride
-		} else {
-			length = len(line)
 		}
 
-		switch {
-		case length >= width:
+		if length >= width {
 			if trimToWidth {
-				output = line[0:width]
-			} else {
-				output = input
+				return line[:width]
 			}
 
-			return
-		case i == len(lines)-1:
-			if inputLengthOverride != 0 {
-				paddingSize = width - inputLengthOverride
-			} else {
-				paddingSize = width - len(line)
-			}
-
-			if paddingSize >= 1 {
-				newLines = append(newLines, fmt.Sprintf("%s%s\r", line, strings.Repeat(char, paddingSize)))
-			} else {
-				newLines = append(newLines, fmt.Sprintf("%s\r", line))
-			}
-		default:
-			var suffix string
-
-			newLines = append(newLines, fmt.Sprintf("%s%s%s\n", line, strings.Repeat(char, paddingSize), suffix))
+			return input
 		}
+
+		padding := width - length
+		if inputLengthOverride != 0 {
+			padding = width - inputLengthOverride
+		}
+
+		suffix := "\n"
+		if i == len(lines)-1 {
+			suffix = "\r"
+		}
+
+		lines[i] = fmt.Sprintf("%s%s%s", line, strings.Repeat(char, padding), suffix)
 	}
 
-	output = strings.Join(newLines, "")
-
-	return
+	return strings.Join(lines, "")
 }
