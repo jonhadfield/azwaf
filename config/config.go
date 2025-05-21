@@ -49,15 +49,17 @@ type ResourceID struct {
 	Raw            string
 }
 
-func NewResourceID(subID, rg, provider, name string) (rid ResourceID) {
-	rid.SubscriptionID = subID
-	rid.ResourceGroup = rg
-	rid.Provider = provider
-	rid.Name = name
-	rid.Raw = fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s/%s",
-		subID, rg, provider, name)
-
-	return
+func NewResourceID(subID, rg, provider, name string) ResourceID {
+	return ResourceID{
+		SubscriptionID: subID,
+		ResourceGroup:  rg,
+		Provider:       provider,
+		Name:           name,
+		Raw: fmt.Sprintf(
+			"/subscriptions/%s/resourceGroups/%s/providers/%s/%s",
+			subID, rg, provider, name,
+		),
+	}
 }
 
 func (rid *ResourceID) SetSubscriptionID(subID string) {

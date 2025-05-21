@@ -113,6 +113,13 @@ func TestLoadIPsFromDirWithMultiple(t *testing.T) {
 	require.Contains(t, ips, netip.MustParsePrefix("201.1.0.0/24"))
 }
 
+func TestIsIPv4IPv6(t *testing.T) {
+	require.True(t, IsIPv4("192.168.1.1"))
+	require.False(t, IsIPv4("2001:db8::1"))
+	require.True(t, IsIPv6("2001:db8::1"))
+	require.False(t, IsIPv6("10.0.0.1"))
+}
+
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
