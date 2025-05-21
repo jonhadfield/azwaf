@@ -39,49 +39,24 @@ func Write(sess *session.Session, key, value string) error {
 	return err
 }
 
-func Read(sess *session.Session, key string) (val string, cerr error) {
-	funcName := GetFunctionName()
-
+func Read(sess *session.Session, key string) (string, error) {
 	if sess.Cache == nil {
-		return val, fmt.Errorf("%s - session cache not provided", funcName)
+		return "", fmt.Errorf("%s - session cache not provided", GetFunctionName())
 	}
 
+	var val string
 	err := sess.Cache.View(func(tx *buntdb.Tx) error {
 		var err error
 		val, err = tx.Get(key)
-		if err != nil && err.Error() != "not found" {
-			err = fmt.Errorf("%w", err)
+		if err != nil && err != buntdb.ErrNotFound {
 			return err
 		}
-
 		return nil
 	})
-
-	if sess.Cache == nil {
-		logrus.Warnf("%s | opening cache %s - unexpected?", funcName, sess.CachePath)
-
-		sess.Cache, err = buntdb.Open(sess.CachePath)
-		if err != nil {
-			err = fmt.Errorf("%s: %w", funcName, err)
-			return
-		}
+	if err == buntdb.ErrNotFound {
+		logrus.Debugf("%s | %s not found in the db", GetFunctionName(), key)
+		return "", nil
 	}
 
-	err = sess.Cache.View(func(tx *buntdb.Tx) error {
-		val, err = tx.Get(key)
-		if err != nil && err.Error() != "not found" {
-			err = fmt.Errorf("%w", err)
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil && err.Error() == "not found" {
-		logrus.Debugf("%s | %s not found in the db", funcName, key)
-
-		err = nil
-	}
-
-	return
+	return val, err
 }
