@@ -205,80 +205,64 @@ type Action struct {
 func LoadBackupsFromPaths(paths []string) ([]WrappedPolicy, error) {
 	funcName := GetFunctionName()
 
-	var err error
-
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("%s - no paths provided", funcName)
 	}
 
-	var wps []WrappedPolicy
+	var all []WrappedPolicy
 
-	for _, path := range paths {
-		var pwps []WrappedPolicy
-
-		pwps, err = LoadBackupsFromPath(path)
+	for _, p := range paths {
+		wps, err := LoadBackupsFromPath(p)
 		if err != nil {
 			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 
-		wps = append(wps, pwps...)
+		all = append(all, wps...)
 	}
 
-	logrus.Debugf("loaded %d Policy backups", len(wps))
+	logrus.Debugf("loaded %d Policy backups", len(all))
 
-	return wps, nil
+	return all, nil
 }
 
-func LoadBackupsFromPath(path string) ([]WrappedPolicy, error) {
+func LoadBackupsFromPath(rootPath string) ([]WrappedPolicy, error) {
 	funcName := GetFunctionName()
 
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("%s - %w", funcName, err)
-	}
-
+	info, err := os.Stat(rootPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%s - %w", funcName, err)
+		}
+
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
-
-	var wps []WrappedPolicy
 
 	if !info.IsDir() {
 		if !strings.EqualFold(filepath.Ext(info.Name()), ".json") {
-			return nil, fmt.Errorf("%s - %s is not a json file", funcName, path)
+			return nil, fmt.Errorf("%s - %s is not a json file", funcName, rootPath)
 		}
 
-		var wp WrappedPolicy
-
-		wp, err = LoadWrappedPolicyFromFile(path)
+		wp, err := LoadWrappedPolicyFromFile(rootPath)
 		if err != nil {
 			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
 
-		wps = append(wps, wp)
-
-		return wps, nil
+		return []WrappedPolicy{wp}, nil
 	}
 
-	var files []os.DirEntry
-
-	files, err = os.ReadDir(path)
+	files, err := os.ReadDir(rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
+	var wps []WrappedPolicy
+
 	for _, file := range files {
-		if file.IsDir() {
+		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".json") {
 			continue
 		}
 
-		if !strings.EqualFold(filepath.Ext(file.Name()), ".json") {
-			continue
-		}
-
-		var wp WrappedPolicy
-
-		wp, err = LoadWrappedPolicyFromFile(filepath.Join(path, info.Name()))
+		wp, err := LoadWrappedPolicyFromFile(filepath.Join(rootPath, file.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("%s - %w", funcName, err)
 		}
