@@ -561,45 +561,21 @@ type GeneratePolicyPatchOutput struct {
 	ManagedRuleReplacements int
 }
 
-func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput, error) {
-	funcName := GetFunctionName()
-
-	var output GeneratePolicyPatchOutput
-
-	var err error
-
-	var originalBytes []byte
-
-	switch v := i.Original.(type) {
+func marshalPolicy(original interface{}) ([]byte, error) {
+	switch v := original.(type) {
 	case []byte:
-		originalBytes = v
+		return v, nil
 	case armfrontdoor.WebApplicationFirewallPolicy:
-		originalBytes, err = json.MarshalIndent(v, "", "    ")
-		if err != nil {
-			return output, fmt.Errorf(err.Error(), funcName)
-		}
+		return json.MarshalIndent(v, "", "    ")
 	case WrappedPolicy:
-		originalBytes, err = json.MarshalIndent(v.Policy, "", "    ")
-		if err != nil {
-			return output, fmt.Errorf(err.Error(), funcName)
-		}
+		return json.MarshalIndent(v.Policy, "", "    ")
 	default:
-		return output, fmt.Errorf("%s - UnexpectedType %s", funcName, reflect.TypeOf(i.Original).String())
+		return nil, fmt.Errorf("UnexpectedType %s", reflect.TypeOf(original).String())
 	}
+}
 
-	var newPolicyJSON []byte
-
-	newPolicyJSON, err = json.MarshalIndent(i.New, "", "    ")
-	if err != nil {
-		return output, fmt.Errorf(err.Error(), funcName)
-	}
-
-	var patch jsondiff.Patch
-
-	patch, err = jsondiff.CompareJSON(originalBytes, newPolicyJSON)
-	if err != nil {
-		return output, fmt.Errorf(err.Error(), funcName)
-	}
+func calculatePatchStats(patch jsondiff.Patch) GeneratePolicyPatchOutput {
+	var output GeneratePolicyPatchOutput
 
 	output.TotalDifferences = len(patch)
 
@@ -637,6 +613,31 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput
 	output.CustomRuleChanges = output.CustomRuleAdditions + output.CustomRuleRemovals + output.CustomRuleReplacements
 	output.ManagedRuleChanges = output.ManagedRuleAdditions + output.ManagedRuleRemovals + output.ManagedRuleReplacements
 	output.TotalRuleDifferences = output.CustomRuleChanges + output.ManagedRuleChanges
+
+	return output
+}
+
+func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput, error) {
+	funcName := GetFunctionName()
+
+	var output GeneratePolicyPatchOutput
+
+	originalBytes, err := marshalPolicy(i.Original)
+	if err != nil {
+		return output, fmt.Errorf(err.Error(), funcName)
+	}
+
+	newPolicyJSON, err := json.MarshalIndent(i.New, "", "    ")
+	if err != nil {
+		return output, fmt.Errorf(err.Error(), funcName)
+	}
+
+	patch, err := jsondiff.CompareJSON(originalBytes, newPolicyJSON)
+	if err != nil {
+		return output, fmt.Errorf(err.Error(), funcName)
+	}
+
+	output = calculatePatchStats(patch)
 
 	return output, nil
 }
