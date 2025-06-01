@@ -336,154 +336,117 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 		return nil, fmt.Errorf("failed to get networks to remove: %s", err)
 	}
 
-	var p *armfrontdoor.WebApplicationFirewallPolicy
-
-	// check if Policy exists
-	p, err = GetRawPolicy(s, input.RID.SubscriptionID, input.RID.ResourceGroup, input.RID.Name)
+	p, originalPolicy, existingPositiveNets, _, err := loadPolicyNets(s, input.RID, input.MatchPrefix, input.Action)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get policy: %s", err)
+		return nil, err
 	}
 
+	trimmed, results := buildTrimmedNetworks(inNets, existingPositiveNets, input.RID.Raw)
+
+	if err = replaceRulesAndPush(s, p, originalPolicy, trimmed, input, lowercaseAction); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (*armfrontdoor.WebApplicationFirewallPolicy, armfrontdoor.WebApplicationFirewallPolicy, []netip.Prefix, []netip.Prefix, error) {
+	p, err := GetRawPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("failed to get policy: %w", err)
+	}
 	if p.Name == nil {
-		return nil, fmt.Errorf("specified policy not found")
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("specified policy not found")
 	}
-
-	// take a copy of the Policy for later comparison
-	var originalPolicy armfrontdoor.WebApplicationFirewallPolicy
-
-	originalPolicy, err = CopyPolicy(*p)
+	original, err := CopyPolicy(*p)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy policy: %s", err)
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("failed to copy policy: %w", err)
 	}
-
 	filtered, err := filterCustomRules(filterCustomRulesInput{
-		namePrefix:  input.MatchPrefix,
+		namePrefix:  prefix,
 		customRules: p.Properties.CustomRules.Rules,
-		action:      nil,
-		ruleType:    nil,
 	})
-	// get a copy of the existing ipnets for the specified action and remove the specified list of nets
-	// existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(p, input.MatchPrefix, input.Action)
-	existingPositiveNets, existingNegativeNets, err := getIPNetsForPrefix(filtered, input.Action)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get existing nets: %s", err)
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
 	}
+	pos, neg, err := getIPNetsForPrefix(filtered, action)
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
+	}
+	logrus.Tracef("existing %s positive nets: %d negative nets: %d", prefix, len(pos), len(neg))
+	return p, original, pos, neg, nil
+}
 
-	logrus.Tracef("existing %s positive nets: %d negative nets: %d", input.MatchPrefix, len(existingPositiveNets), len(existingNegativeNets))
-
+func buildTrimmedNetworks(inNets, existing []netip.Prefix, policyID string) ([]netip.Prefix, []ApplyRemoveNetsResult) {
 	var trimmed []netip.Prefix
-
-	// get networks being removed or not
+	var results []ApplyRemoveNetsResult
 	for _, inNet := range inNets {
-		if slices.Contains(existingPositiveNets, inNet) {
-			results = append(results, ApplyRemoveNetsResult{
-				Addr:     inNet,
-				PolicyID: input.RID.Raw,
-				Removed:  true,
-			})
+		if slices.Contains(existing, inNet) {
+			results = append(results, ApplyRemoveNetsResult{Addr: inNet, PolicyID: policyID, Removed: true})
 		} else {
-			results = append(results, ApplyRemoveNetsResult{
-				Addr:     inNet,
-				PolicyID: input.RID.Raw,
-				Removed:  false,
-			})
+			results = append(results, ApplyRemoveNetsResult{Addr: inNet, PolicyID: policyID, Removed: false})
 		}
 	}
-
-	for _, n := range existingPositiveNets {
-		// check net to remove in existing nets
+	for _, n := range existing {
 		if !slices.Contains(inNets, n) {
-			// no match, so retain
 			trimmed = append(trimmed, n)
 		}
 	}
+	return trimmed, results
+}
 
-	// proposedRules, err := GenCustomRulesFromIPNets(trimmed, nil, input.MaxRules, input.Action, input.MatchPrefix, int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)))
+func replaceRulesAndPush(s *session.Session, p *armfrontdoor.WebApplicationFirewallPolicy, original armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, input *ApplyRemoveNetsInput, action string) error {
 	proposedRules, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
-		PositiveMatchNets: trimmed,
-		// NegativeMatchNets:          input.NegativeMatchNets,
-		RuleType: input.RuleType,
-		// RateLimitDurationInMinutes: input.RateLimitDurationInMinutes,
-		// RateLimitThreshold:         input.RateLimitThreshold,
+		PositiveMatchNets:   trimmed,
+		RuleType:            input.RuleType,
 		Action:              input.Action,
 		MaxRules:            input.MaxRules,
 		CustomNamePrefix:    input.MatchPrefix,
 		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate custom rules: %s", err)
+		return fmt.Errorf("failed to generate custom rules: %w", err)
 	}
-
-	// remove existing block net rules from Policy before adding New
 	var ecrs []*armfrontdoor.CustomRule
-
 	for _, existingCustomRule := range p.Properties.CustomRules.Rules {
-		// if the custom rule is not a block rule, then add (remove all existing block rules)
 		if !strings.HasPrefix(*existingCustomRule.Name, string(input.MatchPrefix)) {
 			ecrs = append(ecrs, existingCustomRule)
 		}
 	}
-
-	// add proposed rules to the custom rules that have existing blocks removed
-	// effectively replacing all existing block rules with our new proposed set of block rules: existing minus those to remove (unblock)
 	ecrs = append(ecrs, proposedRules...)
-
-	sort.Slice(ecrs, func(i, j int) bool {
-		return *ecrs[i].Priority < *ecrs[j].Priority
-	})
-
-	// add the New Custom rules to the existing
+	sort.Slice(ecrs, func(i, j int) bool { return *ecrs[i].Priority < *ecrs[j].Priority })
 	p.Properties.CustomRules.Rules = ecrs
-
-	// check we don't exceed Azure rules limit
 	if len(p.Properties.CustomRules.Rules) > MaxCustomRules {
-		return nil, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
+		return fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
 	}
-
-	gppO, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *p})
+	gppO, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: original, New: *p})
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate policy patch: %s", err)
+		return fmt.Errorf("failed to generate policy patch: %w", err)
 	}
-
 	if gppO.CustomRuleChanges == 0 {
 		logrus.Debug("nothing to do")
-
-		return results, nil
+		return nil
 	}
-
 	if input.DryRun {
-		logrus.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), gppO.CustomRuleChanges, lowercaseAction)
-
-		return results, nil
+		logrus.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), gppO.CustomRuleChanges, action)
+		return nil
 	}
-
 	np, err := json.Marshal(p)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal policy: %s", err)
+		return fmt.Errorf("failed to marshal policy: %w", err)
 	}
-
-	logrus.Debugf("calling compare with original %d bytes and new %d bytes", 1, 2)
-
-	diffsFound, err := compare(&originalPolicy, np)
+	diffsFound, err := compare(&original, np)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compare policies: %s", err)
+		return fmt.Errorf("failed to compare policies: %w", err)
 	}
-
 	logrus.Debugf("diffsFound: %t", diffsFound)
-
 	logrus.Printf("updating policy %s", *p.Name)
-
-	err = PushPolicy(s, &PushPolicyInput{
+	return PushPolicy(s, &PushPolicyInput{
 		Name:          *p.Name,
 		Subscription:  input.RID.SubscriptionID,
 		ResourceGroup: input.RID.ResourceGroup,
 		Policy:        *p,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to push policy: %s", err)
-	}
-
-	return results, nil
 }
 
 type DecorateExistingCustomRuleInput struct {
