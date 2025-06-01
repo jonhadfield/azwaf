@@ -1026,49 +1026,40 @@ type GenCustomRulesFromIPNetsInput struct {
 	CustomPriorityStart        int
 }
 
-// GenCustomRulesFromIPNets accepts two lists of IPs (positive and negative), plus the action to be taken with them, and the maximum
-// number of rules to create and then returns a slice of CustomRules
-func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.CustomRule, error) {
-	var crs []*armfrontdoor.CustomRule
-
+// validateGenCustomRulesInput ensures required fields are set and valid
+func validateGenCustomRulesInput(in GenCustomRulesFromIPNetsInput) error {
 	if in.Action == nil {
-		return nil, fmt.Errorf("action cannot be nil")
+		return fmt.Errorf("action cannot be nil")
 	}
 
 	if !slices.Contains(armfrontdoor.PossibleActionTypeValues(), *in.Action) {
-		return nil, fmt.Errorf("invalid action: %s", *in.Action)
+		return fmt.Errorf("invalid action: %s", *in.Action)
 	}
 
 	if in.RuleType == nil {
-		return nil, fmt.Errorf("rule type cannot be nil")
+		return fmt.Errorf("rule type cannot be nil")
 	}
 
 	if !slices.Contains(armfrontdoor.PossibleRuleTypeValues(), *in.RuleType) {
-		return nil, fmt.Errorf("invalid rule type: %s %w", *in.RuleType, ErrInvalidRuleType)
+		return fmt.Errorf("invalid rule type: %s %w", *in.RuleType, ErrInvalidRuleType)
 	}
 
-	var priorityStart int
+	return nil
+}
 
-	if in.CustomPriorityStart != 0 {
-		priorityStart = in.CustomPriorityStart
-	}
-
-	// get number of those to negate that must appear in each rule
-	// this will be deducted from max values per rule
+// prepareMatchConditions converts provided prefixes into match conditions for rule generation
+func prepareMatchConditions(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.MatchCondition, []*armfrontdoor.MatchCondition, error) {
 	deDupedNegatedNets := deDupeIPNets(in.NegativeMatchNets)
 	sort.Strings(deDupedNegatedNets)
 	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
 
 	deDupedNets := deDupeIPNets(in.PositiveMatchNets)
 	sort.Strings(deDupedNets)
-
 	logrus.Tracef("total networks after deduplication: %d", len(deDupedNets))
 
 	if len(deDupedNegatedNets) >= 599 {
-		return nil, fmt.Errorf("%d negated match values specified but cannot exceed 599", len(deDupedNegatedNets))
+		return nil, nil, fmt.Errorf("%d negated match values specified but cannot exceed 599", len(deDupedNegatedNets))
 	}
-
-	priorityCount := int32(priorityStart)
 
 	positiveMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
 		nets:                  &deDupedNets,
@@ -1078,31 +1069,37 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor
 		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
 
-	// generate the match condition to add to each rule
 	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
-		nets:   &deDupedNegatedNets,
-		negate: true,
-		// TODO: set to Max (600) minus the largest possible chunk of positive
+		nets:                  &deDupedNegatedNets,
+		negate:                true,
 		maxValuesPerCondition: MaxIPMatchValues,
 		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
 		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
 
-	for x := range positiveMatchConditions {
-		mcs := []*armfrontdoor.MatchCondition{positiveMatchConditions[x]}
-		// add the negative match condition set to the rule
-		if len(negativeMatchConditions) == 1 {
-			mcs = append(mcs, negativeMatchConditions[0])
+	return positiveMatchConditions, negativeMatchConditions, nil
+}
+
+// buildCustomRules iterates over match conditions and creates the resulting custom rules
+func buildCustomRules(pos, neg []*armfrontdoor.MatchCondition, in GenCustomRulesFromIPNetsInput, start int32) []*armfrontdoor.CustomRule {
+	var crs []*armfrontdoor.CustomRule
+
+	priorityCount := start
+
+	for x := range pos {
+		mcs := []*armfrontdoor.MatchCondition{pos[x]}
+		if len(neg) == 1 {
+			mcs = append(mcs, neg[0])
 		}
 
 		cr := genCustomRuleFromMatchConditions(genCustomRuleFromMatchConditionsInput{
@@ -1126,6 +1123,25 @@ func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor
 			break
 		}
 	}
+
+	return crs
+}
+
+// GenCustomRulesFromIPNets accepts two lists of IPs (positive and negative), plus the action to be taken with them, and the maximum
+// number of rules to create and then returns a slice of CustomRules
+func GenCustomRulesFromIPNets(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.CustomRule, error) {
+	if err := validateGenCustomRulesInput(in); err != nil {
+		return nil, err
+	}
+
+	priorityStart := int32(in.CustomPriorityStart)
+
+	pos, neg, err := prepareMatchConditions(in)
+	if err != nil {
+		return nil, err
+	}
+
+	crs := buildCustomRules(pos, neg, in, priorityStart)
 
 	sort.Slice(crs, func(i, j int) bool {
 		return *crs[i].Priority < *crs[j].Priority
