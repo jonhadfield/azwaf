@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"context"
+        "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,7 +62,10 @@ const (
 	// MaxMatchValuesPerColumn is the number of match values to output per column when showing policies and rules
 	MaxMatchValuesPerColumn = 3
 	// MaxMatchValuesOutput is the maximum number of match values to output when showing policies and rules
-	MaxMatchValuesOutput = 9
+        MaxMatchValuesOutput = 9
+
+       // policyGetTimeout specifies how long to wait when fetching a policy
+       policyGetTimeout = 30 * time.Second
 )
 
 const (
@@ -319,7 +322,7 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 		subscription,
 		resourceGroup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+       ctx, cancel := context.WithTimeout(context.Background(), policyGetTimeout)
 	defer cancel()
 
 	options := armfrontdoor.PoliciesClientGetOptions{}
