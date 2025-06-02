@@ -17,12 +17,11 @@ func toJSON(i interface{}) (out string, err error) {
 
 	switch v := i.(type) {
 	case string:
-		// TODO: don't assume it's json
+		// v already contains the json string
 		return v, nil
 	case []byte:
-		if err = json.Unmarshal(v, &out); err != nil {
-			return "", fmt.Errorf("%s - %w", funcName, err)
-		}
+		// return the byte slice as a string without attempting to unmarshal
+		return string(v), nil
 	case armfrontdoor.WebApplicationFirewallPolicy:
 		var j []byte
 
