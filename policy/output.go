@@ -1,7 +1,7 @@
 package policy
 
 import (
-        "encoding/json"
+	"encoding/json"
 	errors2 "errors"
 	"fmt"
 	"hash/adler32"
@@ -17,21 +17,21 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/alexeyco/simpletable"
-       "github.com/gookit/color"
+	"github.com/gookit/color"
 
-       "github.com/jonhadfield/azwaf/session"
-       "github.com/jonhadfield/findexec"
-       "github.com/sirupsen/logrus"
+	"github.com/jonhadfield/azwaf/session"
+	"github.com/jonhadfield/findexec"
+	"github.com/sirupsen/logrus"
 )
 
 const (
-       maxColumnWidth    = 80
-       shortURLLength    = 27
-       lineLengthLimit   = 60
-       geoCodeMaxLen     = 4
-       valsPerGeoLine    = 4
-       diffErrorExitCode = 2
-       trimDescriptionLength = 80
+	maxColumnWidth        = 80
+	shortURLLength        = 27
+	lineLengthLimit       = 60
+	geoCodeMaxLen         = 4
+	valsPerGeoLine        = 4
+	diffErrorExitCode     = 2
+	trimDescriptionLength = 80
 )
 
 // splitExtendedID accepts an extended id <resource id>|<resource item name>, which it parses and then returns
@@ -137,14 +137,13 @@ func PrintPolicy(policyID, subscriptionID, configPath string) error {
 	return nil
 }
 
-func computeAlder32(r string) string {
+func computeAdler32(r string) string {
 	// change to lower case to avoid inconsistent api responses
 	r = strings.ToLower(r)
 
 	h := adler32.New()
-	if _, err := h.Write([]byte(r)); err != nil {
-		panic(err)
-	}
+	// Write for hash.Hash never returns an error.
+	_, _ = h.Write([]byte(r))
 
 	hi := h.Sum32()
 
@@ -514,8 +513,8 @@ func getManagedRulesetRows(managedRuleSetConfig armfrontdoor.ManagedRuleSet, mrs
 
 			cells = append(cells, []*simpletable.Cell{
 				{Text: ""},
-                               {Text: color.BgDarkGray.Sprintf("Rule Group Description: %s",
-                                       TrimString(*managedRuleSetDefinitionRuleGroup.Description, trimDescriptionLength, "..."))},
+				{Text: color.BgDarkGray.Sprintf("Rule Group Description: %s",
+					TrimString(*managedRuleSetDefinitionRuleGroup.Description, trimDescriptionLength, "..."))},
 				{Text: ""},
 				{Text: ""},
 				{Text: rowRGExclusions},
@@ -541,7 +540,7 @@ func getManagedRulesetRows(managedRuleSetConfig armfrontdoor.ManagedRuleSet, mrs
 
 			cells = append(cells, []*simpletable.Cell{
 				{Text: *rg.RuleID},
-                               {Text: TrimString(*rg.Description, trimDescriptionLength, "...")},
+				{Text: TrimString(*rg.Description, trimDescriptionLength, "...")},
 				{Text: ruleActionOutput},
 				{Text: ruleEnabledState},
 				{Text: rowRExclusions},
@@ -1015,7 +1014,7 @@ func OutputManagedRuleSetExclusionsTable(in *OutputManagedRuleExclusionsTableInp
 
 func OutputPolicyMetaData(policy *armfrontdoor.WebApplicationFirewallPolicy) {
 	rid := config.ParseResourceID(*policy.ID)
-	fmt.Printf("\n%s:%s%s (hash: %s)\n", color.Bold.Sprint("Policy Name"), spaces(9), rid.Name, computeAlder32(*policy.ID))
+	fmt.Printf("\n%s:%s%s (hash: %s)\n", color.Bold.Sprint("Policy Name"), spaces(9), rid.Name, computeAdler32(*policy.ID))
 	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("SKU"), spaces(17), *policy.SKU.Name)
 	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Resource Group"), spaces(6), rid.ResourceGroup)
 	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Subscription"), spaces(8), rid.SubscriptionID)
@@ -1180,20 +1179,20 @@ func dashIfEmptyString(val interface{}) string {
 }
 
 func processMatchVal(s string) (result string, isURL, isIPv4, isIPv6, isGeo bool) {
-       if len(s) <= geoCodeMaxLen {
-               isGeo = true
-       }
+	if len(s) <= geoCodeMaxLen {
+		isGeo = true
+	}
 
 	isURL = strings.HasPrefix(s, "http")
 	isIPv4 = IsIPv4(s)
 	isIPv6 = IsIPv6(s)
 
-       maxColWidth := maxColumnWidth
-       if len(s) > maxColWidth && isURL {
-               result = fmt.Sprintf("%s...", s[:shortURLLength])
-       } else {
-               result = s
-       }
+	maxColWidth := maxColumnWidth
+	if len(s) > maxColWidth && isURL {
+		result = fmt.Sprintf("%s...", s[:shortURLLength])
+	} else {
+		result = s
+	}
 
 	return
 }
@@ -1231,8 +1230,8 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 		}
 
 		switch {
-               case isGeo:
-                       if valsWritten == valsPerGeoLine {
+		case isGeo:
+			if valsWritten == valsPerGeoLine {
 				if _, err := builder.WriteString(fmt.Sprintf("%s\n", val)); err != nil {
 					logrus.Fatalf("builder failed to write output - err: %s", err.Error())
 				}
@@ -1276,7 +1275,7 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 					valsWritten = 0
 
 					prevType = ""
-                               case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
+				case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 					// if we've written one already, then output this as last if line will be over long
 					if _, err := builder.WriteString(fmt.Sprintf("%s\n", val)); err != nil {
 						logrus.Fatalf("builder failed to write string - %s", err.Error())
@@ -1306,7 +1305,7 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 					valsWritten = 0
 
 					prevType = ""
-                               case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
+				case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 					// if we've written one already, then output this as last if line will be over long
 					if _, err := builder.WriteString(fmt.Sprintf("%s\n", val)); err != nil {
 						logrus.Fatalf("builder failed to write string - err: %s", err.Error())
@@ -1340,7 +1339,7 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 				prevType = "ipv6"
 			case "ipv4":
 				switch {
-                               case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
+				case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 					// if we've written one already, then output this as last if line will be over long
 					if _, err := builder.WriteString(fmt.Sprintf("%s\n", val)); err != nil {
 						logrus.Fatalf("builder failed to write string - err: %s", err.Error())
@@ -1369,7 +1368,7 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 				}
 			case "ipv6":
 				switch {
-                               case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
+				case valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 					// if we've written one already, then output this as last if line will be over long
 					if _, err := builder.WriteString(fmt.Sprintf("%s\n", val)); err != nil {
 						logrus.Fatalf("builder failed to write string - err: %s", err.Error())
@@ -1465,9 +1464,9 @@ func DisplayStringDiffWithDiffTool(orig, updated string) error {
 		}
 	}
 
-       if exitCode == diffErrorExitCode {
-               return fmt.Errorf("failed to compare policies")
-       }
+	if exitCode == diffErrorExitCode {
+		return fmt.Errorf("failed to compare policies")
+	}
 
 	fmt.Println(string(out))
 
@@ -1559,13 +1558,13 @@ func ListPolicies(in ListPoliciesInput) error {
 		if in.Full {
 			r = []*simpletable.Cell{
 				{Text: rID.Raw},
-				{Text: computeAlder32(*p.ID)},
+				{Text: computeAdler32(*p.ID)},
 			}
 		} else {
 			r = []*simpletable.Cell{
 				{Text: rID.ResourceGroup},
 				{Text: rID.Name},
-				{Text: computeAlder32(*p.ID)},
+				{Text: computeAdler32(*p.ID)},
 			}
 		}
 

@@ -1,7 +1,7 @@
 package policy
 
 import (
-        "context"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,10 +62,10 @@ const (
 	// MaxMatchValuesPerColumn is the number of match values to output per column when showing policies and rules
 	MaxMatchValuesPerColumn = 3
 	// MaxMatchValuesOutput is the maximum number of match values to output when showing policies and rules
-        MaxMatchValuesOutput = 9
+	MaxMatchValuesOutput = 9
 
-       // policyGetTimeout specifies how long to wait when fetching a policy
-       policyGetTimeout = 30 * time.Second
+	// policyGetTimeout specifies how long to wait when fetching a policy
+	policyGetTimeout = 30 * time.Second
 )
 
 const (
@@ -123,7 +123,7 @@ func SaveWAFResourceIDHashMap(s *session.Session, res []armfrontdoor.WebApplicat
 	var hashMap WAFResourceIDHashMap
 
 	for _, r := range res {
-		hash := computeAlder32(*r.ID)
+		hash := computeAdler32(*r.ID)
 
 		hashMap.Entries = append(hashMap.Entries, WAFResourceIDHashMapEntry{
 			Hash:       hash,
@@ -209,7 +209,7 @@ func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (config.R
 	}
 
 	for _, p := range o {
-		if computeAlder32(*p.ID) == hash {
+		if computeAdler32(*p.ID) == hash {
 			pID = *p.ID
 
 			return config.ParseResourceID(pID), nil
@@ -242,7 +242,7 @@ func GetPolicyRIDByHash(s *session.Session, subID, hash string) (string, error) 
 	}
 
 	for _, p := range o {
-		if computeAlder32(*p.ID) == hash {
+		if computeAdler32(*p.ID) == hash {
 			pID = *p.ID
 
 			return pID, nil
@@ -322,7 +322,7 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 		subscription,
 		resourceGroup)
 
-       ctx, cancel := context.WithTimeout(context.Background(), policyGetTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), policyGetTimeout)
 	defer cancel()
 
 	options := armfrontdoor.PoliciesClientGetOptions{}
