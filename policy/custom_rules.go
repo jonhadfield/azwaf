@@ -515,6 +515,54 @@ func loadLocalPrefixes(filepath string, prefixes IPNets) (IPNets, error) {
 	return res, nil
 }
 
+// getGroupByFromRules returns the GroupBy clause from the first rule if one
+// exists.  It returns an empty slice if there are no rules.
+func getGroupByFromRules(rules []*armfrontdoor.CustomRule) []*armfrontdoor.GroupByVariable {
+	if len(rules) == 0 {
+		return []*armfrontdoor.GroupByVariable{}
+	}
+
+	return rules[0].GroupBy
+}
+
+// mergePrefixesWithExisting appends the IP prefixes extracted from existing
+// rules to the provided positive and negative prefix slices.  The resulting
+// slices are normalised before being returned.
+func mergePrefixesWithExisting(rules []*armfrontdoor.CustomRule, action *armfrontdoor.ActionType, pos, neg IPNets) (IPNets, IPNets, error) {
+	existingPos, existingNeg, err := getIPNetsForPrefix(rules, action)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pos = append(pos, existingPos...)
+	pos, err = Normalise(pos)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	neg = append(neg, existingNeg...)
+	neg, err = Normalise(neg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return pos, neg, nil
+}
+
+// replaceRulesWithPrefix removes any existing custom rules whose name has the
+// supplied prefix and appends the provided rules.
+func replaceRulesWithPrefix(p *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, newRules []*armfrontdoor.CustomRule) {
+	var cleaned []*armfrontdoor.CustomRule
+
+	for _, r := range p.Properties.CustomRules.Rules {
+		if !strings.HasPrefix(*r.Name, string(prefix)) {
+			cleaned = append(cleaned, r)
+		}
+	}
+
+	p.Properties.CustomRules.Rules = append(cleaned, newRules...)
+}
+
 type RuleNamePrefix string
 
 var (
@@ -581,8 +629,6 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		logrus.SetLevel(*in.LogLevel)
 	}
 
-	var modified bool
-
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
@@ -607,32 +653,11 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	// get groupby clause from filtered to ensure we generate new custom rules with the same
-	gbv := []*armfrontdoor.GroupByVariable{}
-	if len(filtered) > 0 {
-		gbv = filtered[0].GroupBy
-	}
+	gbv := getGroupByFromRules(filtered)
 
 	// if we're not replacing the existing rules, then append the existing rules to the new rules
 	if !in.ReplaceAddrs {
-		// get a copy of the existing ipnets for the specified action and append to the list of new nets
-		var existingPositiveAddrs, existingNegativeAddrs []netip.Prefix
-
-		existingPositiveAddrs, existingNegativeAddrs, err = getIPNetsForPrefix(filtered, in.Action)
-		if err != nil {
-			return false, GeneratePolicyPatchOutput{}, err
-		}
-
-		positivePrefixes = append(positivePrefixes, existingPositiveAddrs...)
-
-		// appending existingAddrs to new set may result in overlap so normalise
-		positivePrefixes, err = Normalise(positivePrefixes)
-		if err != nil {
-			return false, GeneratePolicyPatchOutput{}, err
-		}
-
-		negativePrefixes = append(in.ExcludedAddrs, existingNegativeAddrs...)
-		// appending existingAddrs to new set may result in overlap so normalise
-		negativePrefixes, err = Normalise(negativePrefixes)
+		positivePrefixes, negativePrefixes, err = mergePrefixesWithExisting(filtered, in.Action, positivePrefixes, negativePrefixes)
 		if err != nil {
 			return false, GeneratePolicyPatchOutput{}, err
 		}
@@ -654,25 +679,12 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 		return false, GeneratePolicyPatchOutput{}, err
 	}
 
-	// remove existing net rules from Policy before adding New
-	var ecrs []*armfrontdoor.CustomRule
-
-	for _, existingCustomRule := range in.Policy.Properties.CustomRules.Rules {
-		// if New Custom rule name doesn't have the prefix in the Action, then add it
-		if !strings.HasPrefix(*existingCustomRule.Name, string(in.RuleNamePrefix)) {
-			ecrs = append(ecrs, existingCustomRule)
-
-			continue
-		}
-	}
-
-	// add the New Custom rules to the existing
-	in.Policy.Properties.CustomRules.Rules = ecrs
-	in.Policy.Properties.CustomRules.Rules = append(in.Policy.Properties.CustomRules.Rules, crs...)
+	// remove existing rules with the prefix and append the new ones
+	replaceRulesWithPrefix(in.Policy, in.RuleNamePrefix, crs)
 	// o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
 
 	if len(in.Policy.Properties.CustomRules.Rules) > MaxCustomRules {
-		return modified, GeneratePolicyPatchOutput{}, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
+		return false, GeneratePolicyPatchOutput{}, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
 	}
 
 	// sort rules by priority
@@ -681,7 +693,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
-		return modified, patch, err
+		return false, patch, err
 	}
 
 	if patch.TotalDifferences == 0 {
@@ -870,12 +882,10 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 		logrus.SetLevel(*in.LogLevel)
 	}
 
-	var modified bool
-
 	// take a copy of the Policy for later comparison
 	originalPolicy, err := CopyPolicy(*in.Policy)
 	if err != nil {
-		return modified, GeneratePolicyPatchOutput{}, err
+		return false, GeneratePolicyPatchOutput{}, err
 	}
 
 	// positivePrefixes are those to match without negation
@@ -928,7 +938,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
-		return modified, patch, err
+		return false, patch, err
 	}
 
 	// op, _ := json.MarshalIndent(originalPolicy, "", "  ")
@@ -940,7 +950,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	if patch.TotalDifferences == 0 {
 		logrus.Debug("nothing to do")
 
-		return modified, patch, nil
+		return false, patch, nil
 	}
 
 	if patch.ManagedRuleChanges != 0 {
