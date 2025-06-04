@@ -8,14 +8,14 @@ import (
 )
 
 func TestToJSONBasic(t *testing.T) {
-	s, err := toJSON("{\"a\":1}")
+	s, err := toJSON(`{"a":1}`)
 	require.NoError(t, err)
-	require.Equal(t, "{\"a\":1}", s)
+	require.Equal(t, `{"a":1}`, s)
 
-	b, _ := json.Marshal("hello")
+	b, _ := json.Marshal(`hello`)
 	s, err = toJSON(b)
 	require.NoError(t, err)
-	require.Equal(t, "hello", s)
+	require.Equal(t, `"hello"`, s)
 
 	_, err = toJSON(123)
 	require.Error(t, err)

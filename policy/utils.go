@@ -13,8 +13,6 @@ import (
 )
 
 func toJSON(i interface{}) (out string, err error) {
-	funcName := GetFunctionName()
-
 	switch v := i.(type) {
 	case string:
 		// v already contains the json string
@@ -43,8 +41,6 @@ func toJSON(i interface{}) (out string, err error) {
 	default:
 		return "", tracerr.Errorf("unexpected type: %s", reflect.TypeOf(i).String())
 	}
-
-	return
 }
 
 func actionStringToActionType(action string) (at armfrontdoor.ActionType, err error) {
