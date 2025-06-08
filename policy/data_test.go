@@ -24,11 +24,11 @@ func TestParseResourceID(t *testing.T) {
 }
 
 func TestLoadWrappedPolicyFromFile(t *testing.T) {
-	wp, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	wp, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
 	require.Equal(t, "/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone", wp.PolicyID)
 
-	_, err = LoadWrappedPolicyFromFile("testfiles/non-existant-wrapped-Policy-one.json")
+	_, err = LoadWrappedPolicyFromFile("testfiles/non-existant-wrapped-policy-one.json")
 	require.Error(t, err)
 }
 
