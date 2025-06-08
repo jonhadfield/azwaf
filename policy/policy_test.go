@@ -63,7 +63,7 @@ func TestValidateSubscriptionID(t *testing.T) {
 }
 
 func TestMatchExistingPolicyByID(t *testing.T) {
-	wp, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	wp, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
 
 	targetPolicyID := "/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone"
@@ -74,10 +74,10 @@ func TestMatchExistingPolicyByID(t *testing.T) {
 
 // TestGeneratePolicyPatch compares two Policies and checks that the differences match the operations:
 func TestGeneratePolicyPatch(t *testing.T) {
-	pOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	pOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
 
-	pTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	pTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{

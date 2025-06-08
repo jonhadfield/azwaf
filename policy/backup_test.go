@@ -8,10 +8,10 @@ import (
 )
 
 func TestGeneratePolicyToRestoreBackupOnly(t *testing.T) {
-	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
-	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
 	// test that if only backup provided, that backup is returned
@@ -21,12 +21,12 @@ func TestGeneratePolicyToRestoreBackupOnly(t *testing.T) {
 }
 
 func TestGeneratePolicyToRestoreBackupWithoutOptions(t *testing.T) {
-	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
-	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
-	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
 	// test that providing two Policies without options returns Original with backup rules replacing Original's
@@ -36,14 +36,14 @@ func TestGeneratePolicyToRestoreBackupWithoutOptions(t *testing.T) {
 }
 
 func TestGeneratePolicyToRestoreBackupCustomOnly(t *testing.T) {
-	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
-	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
-	policyOneStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	policyOneStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
-	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
 	// test that providing two Policies (with both different Custom rules and Managed rules) with option to only replace
@@ -64,14 +64,14 @@ func TestGeneratePolicyToRestoreBackupCustomOnly(t *testing.T) {
 }
 
 func TestGeneratePolicyToRestoreBackupManagedOnly(t *testing.T) {
-	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	policyOne, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
-	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwo, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
-	policyOneStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-one.json")
+	policyOneStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-one.json")
 	require.NoError(t, err)
-	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-Policy-two.json")
+	policyTwoStatic, err := LoadWrappedPolicyFromFile("../testfiles/wrapped-policy-two.json")
 	require.NoError(t, err)
 
 	// test that providing two Policies (with both different Custom rules and Managed rules) with option to only replace
