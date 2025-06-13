@@ -2,15 +2,17 @@ package session
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/jonhadfield/azwaf/helpers"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
-	"os"
-	"path/filepath"
 )
 
 const (
@@ -44,7 +46,7 @@ func createDirectory(path string) error {
 }
 
 func (s *Session) InitialiseFilePaths() error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// attempt to use home directory as working directory for cache and auto-backups
 	workingRoot, herr := homedir.Dir()
@@ -91,14 +93,14 @@ func New() *Session {
 	s := &Session{}
 
 	if err := s.InitialiseFilePaths(); err != nil {
-		logrus.Fatalf("%s | failed to initialise paths: %s", GetFunctionName(), err.Error())
+		logrus.Fatalf("%s | failed to initialise paths: %s", helpers.GetFunctionName(), err.Error())
 	}
 
 	return s
 }
 
 func (s *Session) InitialiseCache() {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// if we don't have a session or we do, and the cache is initialised, then return it
 	if s == nil {
@@ -156,7 +158,7 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 
 	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
-		return c, fmt.Errorf(merr.Error(), GetFunctionName())
+		return c, fmt.Errorf(merr.Error(), helpers.GetFunctionName())
 	}
 
 	s.FrontDoorsClients[subID] = frontDoorsClient
@@ -165,7 +167,7 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 }
 
 func (s *Session) GetClientCredential() error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logrus.Debugf("getting Azure API credential")
 

@@ -3,22 +3,14 @@ package session
 import (
 	"errors"
 	"fmt"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"runtime"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/sirupsen/logrus"
 )
-
-func GetFunctionName() string {
-	pc, _, _, _ := runtime.Caller(1)
-	complete := runtime.FuncForPC(pc).Name()
-	split := strings.Split(complete, "/")
-
-	return split[len(split)-1]
-}
 
 // GetResourcesClient creates a new resources client instance and stores it in the provided session.
 // If an authorizer instance is missing, it will make a call to create it and then store in the session also.
@@ -44,7 +36,7 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 
 	c, err := armresources.NewClient(subID, s.ClientCredential, nil)
 	if err != nil {
-		return fmt.Errorf(err.Error(), GetFunctionName())
+		return fmt.Errorf(err.Error(), helpers.GetFunctionName())
 	}
 
 	s.ResourcesClients[subID] = c
@@ -53,7 +45,7 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 }
 
 func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if s == nil {
 		return errors.New("session is nil")
@@ -89,7 +81,7 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 }
 
 func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if subID == "" {
 		return fmt.Errorf("%s - subscription id is mandatory", funcName)
@@ -118,7 +110,7 @@ func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
 
 	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
-		return fmt.Errorf(merr.Error(), GetFunctionName())
+		return fmt.Errorf(merr.Error(), helpers.GetFunctionName())
 	}
 
 	s.FrontDoorsManagedRuleSetsClients[subID] = frontDoorManagedRuleSetsClient
