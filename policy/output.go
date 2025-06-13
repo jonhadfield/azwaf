@@ -257,6 +257,70 @@ func colourEnabledState(es string) string {
 	return es
 }
 
+func appendCustomRuleRows(table *simpletable.Table, cr *armfrontdoor.CustomRule, showFull bool) {
+	rldim := " "
+	if cr.RateLimitDurationInMinutes != nil && string(*cr.RuleType) == "RateLimitRule" {
+		rldim = strconv.Itoa(int(*cr.RateLimitDurationInMinutes))
+	}
+
+	rlt := " "
+	if cr.RateLimitThreshold != nil && string(*cr.RuleType) == "RateLimitRule" {
+		rlt = strconv.Itoa(int(*cr.RateLimitThreshold))
+	}
+
+	table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
+		{Text: color.BgDarkGray.Sprint(*cr.Name) + "\n" + strings.Repeat("-", 11)},
+		{Text: colourEnabledState(string(*cr.EnabledState)) + "\n" + strings.Repeat("-", 9)},
+		{Text: strconv.Itoa(int(*cr.Priority)) + "\n" + strings.Repeat("-", 10)},
+		{Text: string(*cr.RuleType) + "\n" + strings.Repeat("-", 13)},
+		{Text: rldim + "\n" + strings.Repeat("-", 28)},
+		{Text: rlt + "\n" + strings.Repeat("-", 22)},
+		{Align: simpletable.AlignCenter, Text: formatRuleAction(cr.Action) + "\n" + strings.Repeat("-", 8)},
+	}, []*simpletable.Cell{
+		{Text: color.HiBlue.Sprintf("Match Variable")},
+		{Text: color.HiBlue.Sprintf("Selector")},
+		{Text: color.HiBlue.Sprintf("Negate")},
+		{Text: color.HiBlue.Sprintf("Operator")},
+		{Text: color.HiBlue.Sprintf("Transforms")},
+		{Text: color.HiBlue.Sprintf("Match Value")},
+		{Text: ""},
+	})
+
+	for _, mc := range cr.MatchConditions {
+		var transformsOutput strings.Builder
+
+		for x, t := range mc.Transforms {
+			if x+1 == len(mc.Transforms) {
+				if _, err := transformsOutput.WriteString(string(*t)); err != nil {
+					logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				}
+
+				continue
+			}
+
+			if _, err := transformsOutput.WriteString(fmt.Sprintf("%s, ", string(*t))); err != nil {
+				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+			}
+		}
+
+		if mc.NegateCondition == nil {
+			panic("negate condition not set")
+		}
+
+		table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
+			{Text: dashIfEmptyString(mc.MatchVariable)},
+			{Text: dashIfEmptyString(mc.Selector)},
+			{Text: strconv.FormatBool(*mc.NegateCondition)},
+			{Text: dashIfEmptyString(dashIfEmptyString(mc.Operator))},
+			{Text: dashIfEmptyString(transformsOutput.String())},
+			{Text: wrapMatchValues(mc.MatchValue, showFull)},
+			{Text: ""},
+		})
+	}
+
+	table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{{Text: ""}, {Text: ""}, {Text: ""}, {Text: ""}, {Text: ""}, {Text: ""}, {Text: ""}})
+}
+
 func outputCustomRules(policy *armfrontdoor.WebApplicationFirewallPolicy, showFull bool) {
 	if ok, _ := HasCustomRules(policy); !ok {
 		color.Bold.Println("Custom Rules:  None defined")
@@ -281,85 +345,8 @@ func outputCustomRules(policy *armfrontdoor.WebApplicationFirewallPolicy, showFu
 	if len(customRules) > 0 {
 		color.HiWhite.Println("Custom Rules")
 
-		var maxCRNameLen int
-
 		for _, cr := range customRules {
-			// determine maximum characters for Custom rule name
-			if len(*cr.Name) > maxCRNameLen {
-				maxCRNameLen = len(*cr.Name)
-			}
-
-			rldim := " "
-			if cr.RateLimitDurationInMinutes != nil && string(*cr.RuleType) == "RateLimitRule" {
-				rldim = strconv.Itoa(int(*cr.RateLimitDurationInMinutes))
-			}
-
-			rlt := " "
-
-			if cr.RateLimitThreshold != nil && string(*cr.RuleType) == "RateLimitRule" {
-				rlt = strconv.Itoa(int(*cr.RateLimitThreshold))
-			}
-
-			table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-				{Text: color.BgDarkGray.Sprint(*cr.Name) + "\n" + strings.Repeat("-", 11)},
-				{Text: colourEnabledState(string(*cr.EnabledState)) + "\n" + strings.Repeat("-", 9)},
-				{Text: strconv.Itoa(int(*cr.Priority)) + "\n" + strings.Repeat("-", 10)},
-				{Text: string(*cr.RuleType) + "\n" + strings.Repeat("-", 13)},
-				{Text: rldim + "\n" + strings.Repeat("-", 28)},
-				{Text: rlt + "\n" + strings.Repeat("-", 22)},
-				{Align: simpletable.AlignCenter, Text: formatRuleAction(cr.Action) + "\n" + strings.Repeat("-", 8)},
-			}, []*simpletable.Cell{
-				{Text: color.HiBlue.Sprintf("Match Variable")},
-				{Text: color.HiBlue.Sprintf("Selector")},
-				{Text: color.HiBlue.Sprintf("Negate")},
-				{Text: color.HiBlue.Sprintf("Operator")},
-				{Text: color.HiBlue.Sprintf("Transforms")},
-				{Text: color.HiBlue.Sprintf("Match Value")},
-				{Text: ""},
-			})
-
-			for _, mc := range cr.MatchConditions {
-				// cast the transforms slice to string slice
-				var transformsOutput strings.Builder
-
-				for x, t := range mc.Transforms {
-					if x+1 == len(mc.Transforms) {
-						if _, err := transformsOutput.WriteString(string(*t)); err != nil {
-							logrus.Fatalf("builder failed to write string - err: %s", err.Error())
-						}
-
-						continue
-					}
-
-					if _, err := transformsOutput.WriteString(fmt.Sprintf("%s, ", string(*t))); err != nil {
-						logrus.Fatalf("builder failed to write string - err: %s", err.Error())
-					}
-				}
-
-				if mc.NegateCondition == nil {
-					panic("negate condition not set")
-				}
-
-				table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-					{Text: dashIfEmptyString(mc.MatchVariable)},
-					{Text: dashIfEmptyString(mc.Selector)},
-					{Text: strconv.FormatBool(*mc.NegateCondition)},
-					{Text: dashIfEmptyString(dashIfEmptyString(mc.Operator))},
-					{Text: dashIfEmptyString(transformsOutput.String())},
-					{Text: wrapMatchValues(mc.MatchValue, showFull)},
-					{Text: ""},
-				})
-			}
-			// separator
-			table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-				{Text: ""},
-				{Text: ""},
-				{Text: ""},
-				{Text: ""},
-				{Text: ""},
-				{Text: ""},
-				{Text: ""},
-			})
+			appendCustomRuleRows(table, cr, showFull)
 		}
 	}
 
