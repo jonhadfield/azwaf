@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"runtime"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/ztrue/tracerr"
 )
 
@@ -69,7 +69,7 @@ func Int32ToPointer(i int32) (p *int32) {
 }
 
 func splitRuleSetName(rsName string) (rsType, rsVersion string, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	if rsName == "" {
 		err = fmt.Errorf("%s - rule set name missing", funcName)
 
@@ -87,11 +87,7 @@ func splitRuleSetName(rsName string) (rsType, rsVersion string, err error) {
 }
 
 func GetFunctionName() string {
-	pc, _, _, _ := runtime.Caller(1)
-	complete := runtime.FuncForPC(pc).Name()
-	split := strings.Split(complete, "/")
-
-	return split[len(split)-1]
+	return helpers.GetParentFunctionName()
 }
 
 func toPtr[T any](v T) *T {
