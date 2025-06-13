@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
 func ReadFileBytes(path string) (content []byte, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logrus.Debugf("%s | reading %s", funcName, path)
 
