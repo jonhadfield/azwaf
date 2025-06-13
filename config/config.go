@@ -3,19 +3,19 @@ package config
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
 // ParseResourceID accepts an azure resource ID as a string and returns a struct instance containing the components.
 func ParseResourceID(rawID string) ResourceID {
-    components := strings.Split(rawID, "/")
-    if len(components) != resourceIDComponents {
-        return ResourceID{}
-    }
+	components := strings.Split(rawID, "/")
+	if len(components) != resourceIDComponents {
+		return ResourceID{}
+	}
 
 	return ResourceID{
 		SubscriptionID: components[2],
@@ -70,16 +70,8 @@ type FileConfig struct {
 	PolicyAliases map[string]string `yaml:"policy_aliases"`
 }
 
-func GetFunctionName() string {
-	pc, _, _, _ := runtime.Caller(1)
-	complete := runtime.FuncForPC(pc).Name()
-	split := strings.Split(complete, "/")
-
-	return split[len(split)-1]
-}
-
 func ReadFileBytes(path string) (content []byte, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logrus.Debugf("%s | reading %s", funcName, path)
 

@@ -2,10 +2,9 @@ package cache
 
 import (
 	"fmt"
-	"runtime"
-	"strings"
 	"sync"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
@@ -13,16 +12,8 @@ import (
 
 var m sync.Mutex
 
-func GetFunctionName() string {
-	pc, _, _, _ := runtime.Caller(1)
-	complete := runtime.FuncForPC(pc).Name()
-	split := strings.Split(complete, "/")
-
-	return split[len(split)-1]
-}
-
 func Write(sess *session.Session, key, value string) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	logrus.Debugf("%s | writing key %s with length %d to %s", funcName, key, len(value), sess.CachePath)
 
 	m.Lock()
@@ -41,7 +32,7 @@ func Write(sess *session.Session, key, value string) error {
 
 func Read(sess *session.Session, key string) (string, error) {
 	if sess.Cache == nil {
-		return "", fmt.Errorf("%s - session cache not provided", GetFunctionName())
+		return "", fmt.Errorf("%s - session cache not provided", helpers.GetFunctionName())
 	}
 
 	var val string
@@ -54,7 +45,7 @@ func Read(sess *session.Session, key string) (string, error) {
 		return nil
 	})
 	if err == buntdb.ErrNotFound {
-		logrus.Debugf("%s | %s not found in the db", GetFunctionName(), key)
+		logrus.Debugf("%s | %s not found in the db", helpers.GetFunctionName(), key)
 		return "", nil
 	}
 
