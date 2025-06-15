@@ -21,12 +21,12 @@ func CmdBackup(versionOutput string) *cli.Command {
 			config := BackupPoliciesInput{
 				BaseCLIInput: BaseCLIInput{
 					AppVersion:     versionOutput,
-					AutoBackup:     c.Bool("auto-backup"),
+					AutoBackup:     c.Bool(FlagAutoBackup),
 					Debug:          c.Bool("debug"),
-					ConfigPath:     c.String("config"),
-					SubscriptionID: c.String("subscription-id"),
+					ConfigPath:     c.String(FlagConfig),
+					SubscriptionID: c.String(FlagSubscriptionID),
 					Quiet:          c.Bool("quiet"),
-					DryRun:         c.Bool("dry-run"),
+					DryRun:         c.Bool(FlagDryRun),
 				},
 				RIDs:                     input,
 				Path:                     c.String("path"),

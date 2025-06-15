@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/jonhadfield/azwaf/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -51,12 +52,14 @@ func validateSubscriptionID(subscriptionID string) error {
 		return errors.New("subscription-id is required")
 	}
 
-	if !slices.Contains([]int{36, 38}, len(subscriptionID)) {
+	if !slices.Contains([]int{config.SubscriptionIDLengthShort, config.SubscriptionIDLengthLong}, len(subscriptionID)) {
 		return fmt.Errorf("%s - subscription-id has incorrect length", funcName)
 	}
 
-	if subscriptionID[8] != '-' || subscriptionID[13] != '-' || subscriptionID[18] != '-' || subscriptionID[23] != '-' {
-		return fmt.Errorf("%s - subscription-id is invalid format", funcName)
+	for _, idx := range config.SubscriptionIDHyphenPositions {
+		if subscriptionID[idx] != '-' {
+			return fmt.Errorf("%s - subscription-id is invalid format", funcName)
+		}
 	}
 
 	return nil
@@ -163,7 +166,7 @@ func ValidateResourceID(rawID string, extended bool) error {
 	}
 
 	// start checks for explicit resource id
-	if len(strings.Split(rawID, "/")) != 9 {
+	if len(strings.Split(rawID, "/")) != config.ResourceIDComponents {
 		return fmt.Errorf("resource id has incorrect number of sections")
 	}
 

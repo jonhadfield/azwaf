@@ -24,11 +24,11 @@ func CmdAdd(appVersion string) *cli.Command {
 				Aliases:     []string{"managed"},
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:  "dry-run",
+						Name:  FlagDryRun,
 						Usage: "show changes without applying", Aliases: []string{"d"},
 					},
 					&cli.BoolFlag{
-						Name:  "show-diff",
+						Name:  FlagShowDiff,
 						Usage: "show difference between original and updated",
 					},
 					&cli.StringFlag{
@@ -73,12 +73,12 @@ func CmdAdd(appVersion string) *cli.Command {
 					addManagedRuleExclusionCLIInput := AddManagedRuleExclusionCLIInput{
 						BaseCLIInput: BaseCLIInput{
 							AppVersion:     appVersion,
-							AutoBackup:     c.Bool("auto-backup"),
+							AutoBackup:     c.Bool(FlagAutoBackup),
 							Debug:          c.Bool("debug"),
-							ConfigPath:     c.String("config"),
-							SubscriptionID: c.String("subscription-id"),
+							ConfigPath:     c.String(FlagConfig),
+							SubscriptionID: c.String(FlagSubscriptionID),
 							Quiet:          c.Bool("quiet"),
-							DryRun:         c.Bool("dry-run"),
+							DryRun:         c.Bool(FlagDryRun),
 						},
 						PolicyID:              input,
 						RuleSet:               c.String("rule-set"),
@@ -87,11 +87,11 @@ func CmdAdd(appVersion string) *cli.Command {
 						ExclusionRuleVariable: c.String("match-variable"),
 						ExclusionRuleOperator: c.String("match-operator"),
 						ExclusionRuleSelector: c.String("match-selector"),
-						ShowDiff:              c.Bool("show-diff"),
+						ShowDiff:              c.Bool(FlagShowDiff),
 					}
 
-					addManagedRuleExclusionCLIInput.DryRun = c.Bool("dry-run")
-					addManagedRuleExclusionCLIInput.AutoBackup = c.Bool("auto-backup")
+					addManagedRuleExclusionCLIInput.DryRun = c.Bool(FlagDryRun)
+					addManagedRuleExclusionCLIInput.AutoBackup = c.Bool(FlagAutoBackup)
 					addManagedRuleExclusionCLIInput.AppVersion = appVersion
 
 					return AddManagedRuleExclusion(&addManagedRuleExclusionCLIInput)

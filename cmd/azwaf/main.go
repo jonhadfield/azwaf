@@ -74,18 +74,18 @@ func main() {
 	app.Usage = "azwaf [global options] command [command options] [arguments...]"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
-			Name:     "subscription-id",
+			Name:     commands.FlagSubscriptionID,
 			Usage:    "specify the suscription id containing the policies",
 			EnvVars:  []string{"AZURE_SUBSCRIPTION_ID"},
 			Aliases:  []string{"s", "subscription"},
 			Required: false,
 		},
 		&cli.StringFlag{
-			Name: "config", Usage: "path to configuration file",
+			Name: commands.FlagConfig, Usage: "path to configuration file",
 			Value: filepath.Join(home, ".config", appName, configFile),
 		},
 		&cli.BoolFlag{Name: "quiet", Usage: "suppress output"},
-		&cli.BoolFlag{Name: "auto-backup", Usage: "backup policy before applying any changes", Value: autoBackup},
+		&cli.BoolFlag{Name: commands.FlagAutoBackup, Usage: "backup policy before applying any changes", Value: autoBackup},
 	}
 	app.Commands = []*cli.Command{
 		commands.CmdAdd(versionOutput),

@@ -32,8 +32,8 @@ func CmdShow() *cli.Command {
 				},
 				Action: func(c *cli.Context) error {
 					config := ShowPolicyInput{
-						ConfigPath:     c.String("config"),
-						SubscriptionID: c.String("subscription-id"),
+						ConfigPath:     c.String(FlagConfig),
+						SubscriptionID: c.String(FlagSubscriptionID),
 						PolicyID:       c.Args().First(),
 						Full:           c.Bool("show-full"),
 						Custom:         c.Bool("custom"),
@@ -76,12 +76,12 @@ func CmdShow() *cli.Command {
 
 					input := ShowExclusionsCLIInput{
 						BaseCLIInput: BaseCLIInput{
-							AutoBackup:     c.Bool("auto-backup"),
+							AutoBackup:     c.Bool(FlagAutoBackup),
 							Debug:          c.Bool("debug"),
-							ConfigPath:     c.String("config"),
-							SubscriptionID: c.String("subscription-id"),
+							ConfigPath:     c.String(FlagConfig),
+							SubscriptionID: c.String(FlagSubscriptionID),
 							Quiet:          c.Bool("quiet"),
-							DryRun:         c.Bool("dry-run"),
+							DryRun:         c.Bool(FlagDryRun),
 						},
 						PolicyID:  policyID,
 						RuleSet:   c.String("rule-set"),
