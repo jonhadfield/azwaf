@@ -13,7 +13,7 @@ import (
 // ParseResourceID accepts an azure resource ID as a string and returns a struct instance containing the components.
 func ParseResourceID(rawID string) ResourceID {
 	components := strings.Split(rawID, "/")
-	if len(components) != resourceIDComponents {
+	if len(components) != ResourceIDComponents {
 		return ResourceID{}
 	}
 

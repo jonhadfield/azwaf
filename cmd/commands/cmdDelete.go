@@ -21,11 +21,11 @@ func CmdDelete(versionOutput string) *cli.Command {
 				Aliases: []string{"m", "mre", "exclusion"},
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:  "dry-run",
+						Name:  FlagDryRun,
 						Usage: "Show changes without applying", Aliases: []string{"d"},
 					},
 					&cli.BoolFlag{
-						Name:  "show-diff",
+						Name:  FlagShowDiff,
 						Usage: "Show differences",
 					},
 					&cli.StringFlag{
@@ -68,7 +68,7 @@ func CmdDelete(versionOutput string) *cli.Command {
 							return err
 						}
 
-						subID := c.String("subscription-id")
+						subID := c.String(FlagSubscriptionID)
 						if IsRIDHash(input) && subID == "" {
 							// nolint:errcheck
 							_ = cli.ShowSubcommandHelp(c)
@@ -82,14 +82,14 @@ func CmdDelete(versionOutput string) *cli.Command {
 							RuleSet:               c.String("rule-set"),
 							RuleGroup:             c.String("rule-group"),
 							RuleID:                c.String("rule-id"),
-							ShowDiff:              c.Bool("show-diff"),
+							ShowDiff:              c.Bool(FlagShowDiff),
 							ExclusionRuleVariable: c.String("match-variable"),
 							ExclusionRuleOperator: c.String("match-operator"),
 							ExclusionRuleSelector: c.String("match-selector"),
 						}
 
-						dmre.AutoBackup = c.Bool("auto-backup")
-						dmre.DryRun = c.Bool("dry-run")
+						dmre.AutoBackup = c.Bool(FlagAutoBackup)
+						dmre.DryRun = c.Bool(FlagDryRun)
 						dmre.AppVersion = versionOutput
 
 						return DeleteManagedRuleExclusion(&dmre)
@@ -107,7 +107,7 @@ func CmdDelete(versionOutput string) *cli.Command {
 				Usage:       "Get custom-rules",
 				Description: "azwaf [-dcr | --Gete-custom-rule] [-p | --priority <rulepriority>] [-n | --name <rulename>] <policy-resource-id>",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "dry-run", Usage: "Show changes without applying", Aliases: []string{"d"}},
+					&cli.BoolFlag{Name: FlagDryRun, Usage: "Show changes without applying", Aliases: []string{"d"}},
 					&cli.StringFlag{Name: "name", Usage: "custom-rule name (regex match)", Aliases: []string{"n"}},
 					&cli.StringFlag{Name: "priority", Usage: "custom-rule priority", Aliases: []string{"p"}},
 				},
@@ -129,12 +129,12 @@ func CmdDelete(versionOutput string) *cli.Command {
 						return DeleteCustomRulesCLI(&DeleteCustomRulesCLIInput{
 							BaseCLIInput: BaseCLIInput{
 								AppVersion:     versionOutput,
-								AutoBackup:     c.Bool("auto-backup"),
+								AutoBackup:     c.Bool(FlagAutoBackup),
 								Debug:          c.Bool("debug"),
-								ConfigPath:     c.String("config"),
-								SubscriptionID: c.String("subscription-id"),
+								ConfigPath:     c.String(FlagConfig),
+								SubscriptionID: c.String(FlagSubscriptionID),
 								Quiet:          c.Bool("quiet"),
-								DryRun:         c.Bool("dry-run"),
+								DryRun:         c.Bool(FlagDryRun),
 							},
 							PolicyID: input,
 							Name:     c.String("name"),
