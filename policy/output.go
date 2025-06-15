@@ -446,6 +446,74 @@ func getManagedRule(in getManagedRuleInput) (mro getManagedRuleOutput) {
 	return
 }
 
+func rulesetHeaderRows(cfg armfrontdoor.ManagedRuleSet, numEx int) [][]*simpletable.Cell {
+	blue := color.New(color.HiBlue)
+	hdr := blue.Sprintf("%s %s", *cfg.RuleSetType, *cfg.RuleSetVersion)
+	return [][]*simpletable.Cell{
+		{
+			{Span: 2, Text: hdr},
+			{Text: formatRuleAction(cfg.RuleSetAction)},
+			{Text: ""},
+			{Text: strconv.Itoa(numEx)},
+			{Text: ""},
+		},
+		{
+			{Text: "-----------"},
+			{Text: "--------------------------------------------------------------------"},
+			{Text: "--------"},
+			{Text: "--------"},
+			{Text: "----------"},
+			{Text: "--------------------------"},
+		},
+	}
+}
+
+func ruleGroupRows(cfg armfrontdoor.ManagedRuleSet, rgd *armfrontdoor.ManagedRuleGroupDefinition, numRsExclusions int) [][]*simpletable.Cell {
+	var cells [][]*simpletable.Cell
+
+	rges := getRuleGroupExclusions(*rgd.RuleGroupName, []*armfrontdoor.ManagedRuleSet{&cfg})
+	numRges := len(rges)
+
+	rowRGExclusions := color.Bold.Sprintf("%d (%d)", numRsExclusions+numRges, numRges)
+	if numRges == 0 {
+		rowRGExclusions = color.Bold.Sprintf("%d", numRsExclusions)
+	}
+
+	cells = append(cells, []*simpletable.Cell{
+		{Text: ""},
+		{Text: color.BgDarkGray.Sprintf("Rule Group Description: %s",
+			TrimString(*rgd.Description, trimDescriptionLength, "..."))},
+		{Text: ""},
+		{Text: ""},
+		{Text: rowRGExclusions},
+		{Text: color.Bold.Sprintf(*rgd.RuleGroupName)},
+	})
+
+	for _, rg := range rgd.Rules {
+		exclusions, ruleAction, ruleEnabledState := getRuleConfig(*rgd.RuleGroupName, rg, cfg)
+		numRes := len(exclusions)
+
+		ruleEnabledState = formatRuleEnabledState(ruleEnabledState, string(*rg.DefaultState))
+		ruleActionOutput := formatRuleAction(ruleAction)
+
+		rowRExclusions := fmt.Sprintf("%d", numRsExclusions+numRges+numRes)
+		if numRes > 0 {
+			rowRExclusions = fmt.Sprintf("%d (%d)", numRsExclusions+numRges+numRes, numRes)
+		}
+
+		cells = append(cells, []*simpletable.Cell{
+			{Text: *rg.RuleID},
+			{Text: TrimString(*rg.Description, trimDescriptionLength, "...")},
+			{Text: ruleActionOutput},
+			{Text: ruleEnabledState},
+			{Text: rowRExclusions},
+			{Text: *rgd.RuleGroupName},
+		})
+	}
+
+	return cells
+}
+
 func getManagedRulesetRows(managedRuleSetConfig armfrontdoor.ManagedRuleSet, mrsdl []*armfrontdoor.ManagedRuleSetDefinition) (cells [][]*simpletable.Cell) {
 	mrsl := &armfrontdoor.ManagedRuleSetList{
 		ManagedRuleSets: []*armfrontdoor.ManagedRuleSet{&managedRuleSetConfig},
@@ -457,83 +525,16 @@ func getManagedRulesetRows(managedRuleSetConfig armfrontdoor.ManagedRuleSet, mrs
 		ruleSetVersion: *managedRuleSetConfig.RuleSetVersion,
 	})
 
-	myBlueStyle := color.New(color.HiBlue)
-	mrsTypeAndVersion := myBlueStyle.Sprintf("%s %s", *managedRuleSetConfig.RuleSetType, *managedRuleSetConfig.RuleSetVersion)
-
 	var numRsExclusions int
 
 	if managedRuleSetConfig.Exclusions != nil {
 		numRsExclusions = len(managedRuleSetConfig.Exclusions)
 	}
 
-	cells = append(cells, []*simpletable.Cell{
-		{Span: 2, Text: mrsTypeAndVersion},
-		// RuleSetAction is in API spec but doesn't allow user to manage
-		{Text: formatRuleAction(managedRuleSetConfig.RuleSetAction)},
-		{Text: ""},
-		{Text: strconv.Itoa(numRsExclusions)},
-		{Text: ""},
-	}, []*simpletable.Cell{
-		{Text: "-----------"},
-		{Text: "------------------------------------------------------------------------------------"},
-		{Text: "--------"},
-		{Text: "--------"},
-		{Text: "----------"},
-		{Text: "--------------------------"},
-	})
-	// record the previous group name so we know when to output row with exclusions count
-	prevGroupName := ""
+	cells = append(cells, rulesetHeaderRows(managedRuleSetConfig, numRsExclusions)...)
 
-	for _, managedRuleSetDefinitionRuleGroup := range matchingDefinitions.RuleSetDefinition.Properties.RuleGroups {
-		// TODO: Get number of RuleGroup exclusions
-		rges := getRuleGroupExclusions(*managedRuleSetDefinitionRuleGroup.RuleGroupName,
-			[]*armfrontdoor.ManagedRuleSet{&managedRuleSetConfig})
-		numRges := len(rges)
-
-		if prevGroupName != *managedRuleSetDefinitionRuleGroup.RuleGroupName {
-			prevGroupName = *managedRuleSetDefinitionRuleGroup.RuleGroupName
-			rowRGExclusions := color.Bold.Sprintf("%d (%d)", numRsExclusions+numRges, numRges)
-
-			if len(rges) == 0 {
-				rowRGExclusions = color.Bold.Sprintf("%d", numRsExclusions)
-			}
-
-			cells = append(cells, []*simpletable.Cell{
-				{Text: ""},
-				{Text: color.BgDarkGray.Sprintf("Rule Group Description: %s",
-					TrimString(*managedRuleSetDefinitionRuleGroup.Description, trimDescriptionLength, "..."))},
-				{Text: ""},
-				{Text: ""},
-				{Text: rowRGExclusions},
-				{Text: color.Bold.Sprintf(*managedRuleSetDefinitionRuleGroup.RuleGroupName)},
-			})
-		}
-
-		// loop through each rule in group, making those we have overrided and have exclusions for
-		for _, rg := range managedRuleSetDefinitionRuleGroup.Rules {
-			// check if rule has any overrides configured
-			exclusions, ruleAction, ruleEnabledState := getRuleConfig(*managedRuleSetDefinitionRuleGroup.RuleGroupName, rg, managedRuleSetConfig)
-			numRes := len(exclusions)
-
-			ruleEnabledState = formatRuleEnabledState(ruleEnabledState, string(*rg.DefaultState))
-
-			ruleActionOutput := formatRuleAction(ruleAction)
-
-			rowRExclusions := fmt.Sprintf("%d", numRsExclusions+numRges+numRes)
-			if numRes > 0 {
-				// direct exclusions set, so output in brackets
-				rowRExclusions = fmt.Sprintf("%d (%d)", numRsExclusions+numRges+numRes, numRes)
-			}
-
-			cells = append(cells, []*simpletable.Cell{
-				{Text: *rg.RuleID},
-				{Text: TrimString(*rg.Description, trimDescriptionLength, "...")},
-				{Text: ruleActionOutput},
-				{Text: ruleEnabledState},
-				{Text: rowRExclusions},
-				{Text: *managedRuleSetDefinitionRuleGroup.RuleGroupName},
-			})
-		}
+	for _, rgd := range matchingDefinitions.RuleSetDefinition.Properties.RuleGroups {
+		cells = append(cells, ruleGroupRows(managedRuleSetConfig, rgd, numRsExclusions)...)
 	}
 
 	return
