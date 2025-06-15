@@ -22,11 +22,11 @@ func CmdList() *cli.Command {
 				UsageText: "azwaf list frontdoors [--subscription=<AZURE_SUBSCRIPTION_ID>]",
 				Aliases:   []string{"f"},
 				Action: func(c *cli.Context) error {
-					if c.String("subscription-id") == "" {
+					if c.String(FlagSubscriptionID) == "" {
 						return fmt.Errorf("subscription-id required")
 					}
 
-					return ListFrontDoors(c.String("subscription-id"))
+					return ListFrontDoors(c.String(FlagSubscriptionID))
 				},
 			},
 			{
@@ -39,7 +39,7 @@ func CmdList() *cli.Command {
 				},
 				Action: func(c *cli.Context) error {
 					input := ListPoliciesInput{
-						SubscriptionID: c.String("subscription-id"),
+						SubscriptionID: c.String(FlagSubscriptionID),
 						Full:           c.Bool("full"),
 						Max:            c.Int("top"),
 					}
