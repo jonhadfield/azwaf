@@ -186,8 +186,6 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 		return
 	}
 
-	var updatedPolicy *armfrontdoor.WebApplicationFirewallPolicy
-
 	var modified bool
 	if modified, err = DeleteCustomRulesPrefixes(DeleteCustomRulesPrefixesInput{
 		RID:         policyID,
@@ -213,7 +211,7 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 		PolicyName:       *getPolicyOutput.Policy.Name,
 		SubscriptionID:   policyID.SubscriptionID,
 		ResourceGroup:    policyID.ResourceGroup,
-		PolicyPostChange: *updatedPolicy,
+		PolicyPostChange: *getPolicyOutput.Policy,
 		DryRun:           cliInput.DryRun,
 		Debug:            dcri.Debug,
 	})
