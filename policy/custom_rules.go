@@ -343,7 +343,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 
 	trimmed, results := buildTrimmedNetworks(inNets, existingPositiveNets, input.RID.Raw)
 
-	if err = replaceRulesAndPush(s, p, originalPolicy, trimmed, input, lowercaseAction); err != nil {
+	if err = updatePolicyRules(s, p, originalPolicy, trimmed, input, lowercaseAction); err != nil {
 		return nil, err
 	}
 
@@ -395,52 +395,71 @@ func buildTrimmedNetworks(inNets, existing []netip.Prefix, policyID string) ([]n
 	return trimmed, results
 }
 
-func replaceRulesAndPush(s *session.Session, p *armfrontdoor.WebApplicationFirewallPolicy, original armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, input *ApplyRemoveNetsInput, action string) error {
+func mergeCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, in *ApplyRemoveNetsInput) ([]*armfrontdoor.CustomRule, error) {
 	proposedRules, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
 		PositiveMatchNets:   trimmed,
-		RuleType:            input.RuleType,
-		Action:              input.Action,
-		MaxRules:            input.MaxRules,
-		CustomNamePrefix:    input.MatchPrefix,
-		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, input.MatchPrefix)),
+		RuleType:            in.RuleType,
+		Action:              in.Action,
+		MaxRules:            in.MaxRules,
+		CustomNamePrefix:    in.MatchPrefix,
+		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, in.MatchPrefix)),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to generate custom rules: %w", err)
+		return nil, fmt.Errorf("failed to generate custom rules: %w", err)
 	}
-	var ecrs []*armfrontdoor.CustomRule
-	for _, existingCustomRule := range p.Properties.CustomRules.Rules {
-		if !strings.HasPrefix(*existingCustomRule.Name, string(input.MatchPrefix)) {
-			ecrs = append(ecrs, existingCustomRule)
+
+	var rules []*armfrontdoor.CustomRule
+	for _, cr := range p.Properties.CustomRules.Rules {
+		if !strings.HasPrefix(*cr.Name, string(in.MatchPrefix)) {
+			rules = append(rules, cr)
 		}
 	}
-	ecrs = append(ecrs, proposedRules...)
-	sort.Slice(ecrs, func(i, j int) bool { return *ecrs[i].Priority < *ecrs[j].Priority })
-	p.Properties.CustomRules.Rules = ecrs
-	if len(p.Properties.CustomRules.Rules) > MaxCustomRules {
-		return fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
+	rules = append(rules, proposedRules...)
+	sort.Slice(rules, func(i, j int) bool { return *rules[i].Priority < *rules[j].Priority })
+
+	if len(rules) > MaxCustomRules {
+		return nil, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
 	}
-	gppO, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: original, New: *p})
+
+	return rules, nil
+}
+
+func updatePolicyRules(s *session.Session, p *armfrontdoor.WebApplicationFirewallPolicy, original armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, input *ApplyRemoveNetsInput, action string) error {
+	merged, err := mergeCustomRules(p, trimmed, input)
+	if err != nil {
+		return err
+	}
+
+	p.Properties.CustomRules.Rules = merged
+
+	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: original, New: *p})
 	if err != nil {
 		return fmt.Errorf("failed to generate policy patch: %w", err)
 	}
-	if gppO.CustomRuleChanges == 0 {
+
+	if patch.CustomRuleChanges == 0 {
 		logrus.Debug("nothing to do")
 		return nil
 	}
+
 	if input.DryRun {
-		logrus.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), gppO.CustomRuleChanges, action)
+		logrus.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), patch.CustomRuleChanges, action)
 		return nil
 	}
+
 	np, err := json.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("failed to marshal policy: %w", err)
 	}
+
 	diffsFound, err := compare(&original, np)
 	if err != nil {
 		return fmt.Errorf("failed to compare policies: %w", err)
 	}
+
 	logrus.Debugf("diffsFound: %t", diffsFound)
 	logrus.Printf("updating policy %s", *p.Name)
+
 	return PushPolicy(s, &PushPolicyInput{
 		Name:          *p.Name,
 		Subscription:  input.RID.SubscriptionID,
