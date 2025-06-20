@@ -11,28 +11,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeRefStrs(t *testing.T) {
-	strs := deRefStrs([]*string{toPtr("hello"), toPtr("world")})
+func TestDereferenceStrings(t *testing.T) {
+	strs := dereferenceStrings([]*string{toPtr("hello"), toPtr("world")})
 	require.Equal(t, []string{"hello", "world"}, strs)
 }
 
-func TestInt32ToPointer(t *testing.T) {
-	i := Int32ToPointer(1)
+func TestInt32Ptr(t *testing.T) {
+	i := int32Ptr(1)
 	require.Equal(t, int32(1), *i)
 }
 
-func TestSplitRuleSetName(t *testing.T) {
-	key, val, err := splitRuleSetName("hello_world")
+func TestParseRuleSetName(t *testing.T) {
+	key, val, err := parseRuleSetName("hello_world")
 	require.NoError(t, err)
 	require.Equal(t, "hello", key)
 	require.Equal(t, "world", val)
 	require.NotEmpty(t, key)
 
-	_, _, err = splitRuleSetName("helloworld")
+	_, _, err = parseRuleSetName("helloworld")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "underscore")
 
-	_, _, err = splitRuleSetName("")
+	_, _, err = parseRuleSetName("")
 	require.Error(t, err)
 }
 
