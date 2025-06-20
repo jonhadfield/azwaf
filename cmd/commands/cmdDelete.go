@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
 )
 
@@ -61,7 +61,7 @@ func CmdDelete(versionOutput string) *cli.Command {
 					input := c.Args().First()
 					if input != "" {
 						// TODO: check if extended or not and allow specification of custom-rule?
-						if err := ValidateResourceID(input, false); err != nil {
+						if err := policy.ValidateResourceID(input, false); err != nil {
 							// nolint:errcheck
 							_ = cli.ShowSubcommandHelp(c)
 
@@ -69,14 +69,14 @@ func CmdDelete(versionOutput string) *cli.Command {
 						}
 
 						subID := c.String(FlagSubscriptionID)
-						if IsRIDHash(input) && subID == "" {
+						if policy.IsRIDHash(input) && subID == "" {
 							// nolint:errcheck
 							_ = cli.ShowSubcommandHelp(c)
 
 							return fmt.Errorf("using a policy hash requires a subscription id")
 						}
 
-						dmre := DeleteManagedRuleExclusionCLIInput{
+						dmre := policy.DeleteManagedRuleExclusionCLIInput{
 							SubscriptionID:        subID,
 							PolicyID:              input,
 							RuleSet:               c.String("rule-set"),
@@ -92,7 +92,7 @@ func CmdDelete(versionOutput string) *cli.Command {
 						dmre.DryRun = c.Bool(FlagDryRun)
 						dmre.AppVersion = versionOutput
 
-						return DeleteManagedRuleExclusion(&dmre)
+						return policy.DeleteManagedRuleExclusion(&dmre)
 					}
 
 					// nolint:errcheck
@@ -122,12 +122,12 @@ func CmdDelete(versionOutput string) *cli.Command {
 					input := c.Args().First()
 					if input != "" {
 						// TODO: check if extended or not and allow specification of custom-rule?
-						if err := ValidateResourceID(input, false); err != nil {
+						if err := policy.ValidateResourceID(input, false); err != nil {
 							return cli.ShowSubcommandHelp(c)
 						}
 
-						return DeleteCustomRulesCLI(&DeleteCustomRulesCLIInput{
-							BaseCLIInput: BaseCLIInput{
+						return policy.DeleteCustomRulesCLI(&policy.DeleteCustomRulesCLIInput{
+							BaseCLIInput: policy.BaseCLIInput{
 								AppVersion:     versionOutput,
 								AutoBackup:     c.Bool(FlagAutoBackup),
 								Debug:          c.Bool("debug"),

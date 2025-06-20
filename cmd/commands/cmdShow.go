@@ -5,7 +5,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdShow() *cli.Command {
@@ -31,7 +31,7 @@ func CmdShow() *cli.Command {
 					&cli.BoolFlag{Name: "shadows", Usage: "show shadows", Value: false},
 				},
 				Action: func(c *cli.Context) error {
-					config := ShowPolicyInput{
+					config := policy.ShowPolicyInput{
 						ConfigPath:     c.String(FlagConfig),
 						SubscriptionID: c.String(FlagSubscriptionID),
 						PolicyID:       c.Args().First(),
@@ -51,7 +51,7 @@ func CmdShow() *cli.Command {
 						return err
 					}
 
-					return ShowPolicy(config)
+					return policy.ShowPolicy(config)
 				},
 			},
 			{
@@ -74,8 +74,8 @@ func CmdShow() *cli.Command {
 						return fmt.Errorf("policy id must be specified")
 					}
 
-					input := ShowExclusionsCLIInput{
-						BaseCLIInput: BaseCLIInput{
+					input := policy.ShowExclusionsCLIInput{
+						BaseCLIInput: policy.BaseCLIInput{
 							AutoBackup:     c.Bool(FlagAutoBackup),
 							Debug:          c.Bool("debug"),
 							ConfigPath:     c.String(FlagConfig),
@@ -93,7 +93,7 @@ func CmdShow() *cli.Command {
 						return err
 					}
 
-					return ShowExclusions(&input)
+					return policy.ShowExclusions(&input)
 				},
 			},
 		},
