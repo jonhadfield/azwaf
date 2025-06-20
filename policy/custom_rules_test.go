@@ -644,7 +644,7 @@ func TestGetLowestPriority(t *testing.T) {
 //
 // 	return armfrontdoor.CustomRule{
 // 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-// 		PriorityS:        Int32ToPointer(1),
+// 		PriorityS:        int32Ptr(1),
 // 		EnabledState:    "Enabled",
 // 		RuleType:        "MatchRule",
 // 		MatchConditions: &mcSet,
@@ -676,7 +676,7 @@ func TestGetLowestPriority(t *testing.T) {
 //
 // 	return armfrontdoor.CustomRule{
 // 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-// 		PriorityS:        Int32ToPointer(1),
+// 		PriorityS:        int32Ptr(1),
 // 		EnabledState:    "Enabled",
 // 		RuleType:        "MatchRule",
 // 		MatchConditions: &mcSet,
@@ -708,7 +708,7 @@ func TestGetLowestPriority(t *testing.T) {
 //	mcSet := []armfrontdoor.MatchCondition{mc1, mc2}
 //	return armfrontdoor.CustomRule{
 //		Name:            toPtr("CustomRuleWithDefaultDeny"),
-//		PriorityS:        Int32ToPointer(1),
+//		PriorityS:        int32Ptr(1),
 //		EnabledState:    "Enabled",
 //		RuleType:        "MatchRule",
 //		MatchConditions: &mcSet,

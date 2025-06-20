@@ -77,7 +77,7 @@ func TestCustomRuleHasDefaultDenyFive(t *testing.T) {
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-		Priority:        Int32ToPointer(1),
+		Priority:        int32Ptr(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
 		MatchConditions: mcSet,
@@ -103,7 +103,7 @@ func TestCustomRuleHasDefaultDenyOne(t *testing.T) {
 	atb := armfrontdoor.ActionTypeBlock
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-		Priority:        Int32ToPointer(1),
+		Priority:        int32Ptr(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
 		MatchConditions: mcSet1,
@@ -145,7 +145,7 @@ func TestCustomRuleHasDefaultDenyTwo(t *testing.T) {
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-		Priority:        Int32ToPointer(1),
+		Priority:        int32Ptr(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
 		MatchConditions: mcSet,
@@ -176,7 +176,7 @@ func TestCustomRuleHasDefaultDenyThree(t *testing.T) {
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-		Priority:        Int32ToPointer(1),
+		Priority:        int32Ptr(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
 		MatchConditions: mcSet,
@@ -203,7 +203,7 @@ func TestCustomRuleHasDefaultDenyFour(t *testing.T) {
 
 	dd := CustomRuleHasDefaultDeny(&armfrontdoor.CustomRule{
 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-		Priority:        Int32ToPointer(1),
+		Priority:        int32Ptr(1),
 		EnabledState:    &crese,
 		RuleType:        &crrtmr,
 		MatchConditions: mcSet,

@@ -32,13 +32,13 @@ func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleS
 		logrus.Debugf("%s | policy undefined", funcName)
 		return false, 0
 	case p.Properties == nil:
-		logrus.Debugf("%s | policy %s has no properties", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
 	case p.Properties.ManagedRules == nil:
-		logrus.Debugf("%s | policy %s has no managed rules", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no managed rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	case len(p.Properties.ManagedRules.ManagedRuleSets) == 0:
-		logrus.Debugf("%s | policy %s has no managed rule sets", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no managed rule sets", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
 		return true, len(p.Properties.ManagedRules.ManagedRuleSets)
@@ -86,13 +86,13 @@ func HasCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRu
 		logrus.Debugf("%s | policy undefined", funcName)
 		return false, 0
 	case p.Properties == nil:
-		logrus.Debugf("%s | policy %s has no properties", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
 	case p.Properties.CustomRules == nil:
-		logrus.Debugf("%s | policy %s has no custom rules", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	case len(p.Properties.CustomRules.Rules) == 0:
-		logrus.Debugf("%s | policy %s has no custom rules", dashIfEmptyString(p.Name), funcName)
+		logrus.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
 		return true, len(p.Properties.CustomRules.Rules)

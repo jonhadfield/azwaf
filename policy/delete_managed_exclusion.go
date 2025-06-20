@@ -54,7 +54,7 @@ func (input *DeleteCustomRulesCLIInput) ProcessCLIInput() (output DeleteCustomRu
 func (input *DeleteManagedRuleExclusionCLIInput) ParseConfig() (dmrei *DeleteManagedRuleExclusionInput, err error) {
 	var rsType, rsVersion string
 	if input.RuleSet != "" {
-		rsType, rsVersion, err = splitRuleSetName(input.RuleSet)
+		rsType, rsVersion, err = parseRuleSetName(input.RuleSet)
 		if err != nil {
 			return
 		}
@@ -129,7 +129,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 				continue
 			}
 
-			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, dashIfEmptyString(existingManagedRuleGroupOverride.RuleGroupName))
+			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
 
 			var strippedManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride
 
@@ -151,12 +151,12 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 				funcName,
 				preNumRuleGroupOverrides-postNumRuleGroupOverrides,
 				dcri.Scope,
-				dashIfEmptyString(existingManagedRuleSet.RuleSetType),
-				dashIfEmptyString(existingManagedRuleSet.RuleSetVersion))
+				valueOrDash(existingManagedRuleSet.RuleSetType),
+				valueOrDash(existingManagedRuleSet.RuleSetVersion))
 		}
 	case strings.EqualFold(dcri.Scope, ScopeRule):
 		for _, existingManagedRuleGroupOverride := range existingManagedRuleSet.RuleGroupOverrides {
-			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, dashIfEmptyString(existingManagedRuleGroupOverride.RuleGroupName))
+			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
 
 			var strippedManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride
 
@@ -178,8 +178,8 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 				funcName,
 				preNumRuleGroupOverrides-postNumRuleGroupOverrides,
 				dcri.Scope,
-				dashIfEmptyString(existingManagedRuleSet.RuleSetType),
-				dashIfEmptyString(existingManagedRuleSet.RuleSetVersion))
+				valueOrDash(existingManagedRuleSet.RuleSetType),
+				valueOrDash(existingManagedRuleSet.RuleSetVersion))
 		}
 	default:
 		return nil, fmt.Errorf("%s - %s %s", funcName, errScopeInvalid, dcri.Scope)
@@ -195,8 +195,8 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 		logrus.Infof("%s | removed %d exclusions from ruleset %s_%s",
 			funcName,
 			preExclusionCount-postExclusionCount,
-			dashIfEmptyString(existingManagedRuleSet.RuleSetType),
-			dashIfEmptyString(existingManagedRuleSet.RuleSetVersion))
+			valueOrDash(existingManagedRuleSet.RuleSetType),
+			valueOrDash(existingManagedRuleSet.RuleSetVersion))
 	}
 
 	return
@@ -270,9 +270,9 @@ type matchManagedRuleGroupOverrideExclusionInput struct {
 func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideExclusionInput) (match bool) {
 	funcName := GetFunctionName()
 
-	logrus.Tracef("comparing my input.Variable: %s with %v", input.variable, dashIfEmptyString(input.existingManagedRuleExclusion.MatchVariable))
-	logrus.Tracef("comparing my input.Operator: %s with %v", input.operator, dashIfEmptyString(input.existingManagedRuleExclusion.SelectorMatchOperator))
-	logrus.Tracef("comparing my input.Selector: %s with %s", input.selector, dashIfEmptyString(input.existingManagedRuleExclusion.Selector))
+	logrus.Tracef("comparing my input.Variable: %s with %v", input.variable, valueOrDash(input.existingManagedRuleExclusion.MatchVariable))
+	logrus.Tracef("comparing my input.Operator: %s with %v", input.operator, valueOrDash(input.existingManagedRuleExclusion.SelectorMatchOperator))
+	logrus.Tracef("comparing my input.Selector: %s with %s", input.selector, valueOrDash(input.existingManagedRuleExclusion.Selector))
 
 	if input.existingManagedRuleExclusion.MatchVariable == nil || input.variable != *input.existingManagedRuleExclusion.MatchVariable {
 		return false
