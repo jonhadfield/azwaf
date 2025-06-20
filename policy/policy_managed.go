@@ -563,6 +563,9 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 	}
 
 	matchingDefinitions, err := getDefinitionsMatchingGroupName(s, getPolicyOutput.Policy, ruleGroup, *matchingRuleSet.RuleSetType, *matchingRuleSet.RuleSetVersion)
+	if err != nil {
+		return err
+	}
 
 	ruleGroupEx := getRuleGroupExclusionsFromRuleSet(ruleGroup, matchingRuleSet)
 
@@ -758,7 +761,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 		return
 	}
 
-	if s.FrontDoorsManagedRuleSetDefinitions != nil && len(s.FrontDoorsManagedRuleSetDefinitions) != 0 {
+	if len(s.FrontDoorsManagedRuleSetDefinitions) != 0 {
 		logrus.Debugf("returning cached rule set definitions")
 		return s.FrontDoorsManagedRuleSetDefinitions, nil
 	}

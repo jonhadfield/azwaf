@@ -44,13 +44,17 @@ func compare(original interface{}, updated []byte) (differencesFound bool, err e
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(f1)
+	defer func() {
+		_ = os.Remove(f1)
+	}()
 
 	f2, err := writeTempFile(newJSON)
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(f2)
+	defer func() {
+		_ = os.Remove(f2)
+	}()
 
 	exitCode, err := runDiff(diffBinary, f1, f2)
 	if err != nil {

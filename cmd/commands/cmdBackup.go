@@ -1,7 +1,7 @@
 package commands
 
 import (
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
 )
 
@@ -18,8 +18,8 @@ func CmdBackup(versionOutput string) *cli.Command {
 		Action: func(c *cli.Context) error {
 			input := c.Args().Slice()
 
-			config := BackupPoliciesInput{
-				BaseCLIInput: BaseCLIInput{
+			config := policy.BackupPoliciesInput{
+				BaseCLIInput: policy.BaseCLIInput{
 					AppVersion:     versionOutput,
 					AutoBackup:     c.Bool(FlagAutoBackup),
 					Debug:          c.Bool("debug"),
@@ -35,7 +35,7 @@ func CmdBackup(versionOutput string) *cli.Command {
 				FailFast:                 c.Bool("fail-fast"),
 			}
 
-			return BackupPolicies(&config)
+			return policy.BackupPolicies(&config)
 		},
 	}
 }
