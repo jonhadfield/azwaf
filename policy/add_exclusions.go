@@ -53,7 +53,7 @@ func (input *AddManagedRuleExclusionCLIInput) ParseConfig() (amrei *AddManagedRu
 	var rsType, rsVersion string
 
 	if input.RuleSet != "" {
-		rsType, rsVersion, err = splitRuleSetName(input.RuleSet)
+		rsType, rsVersion, err = parseRuleSetName(input.RuleSet)
 
 		if err != nil {
 			return
@@ -211,8 +211,8 @@ func addManagedRuleExclusion(input *AddManagedRuleExclusionInput) error {
 
 		logrus.Debugf("%s | walking ruleset %s_%s",
 			funcName,
-			dashIfEmptyString(input.RuleSets[x].RuleSetType),
-			dashIfEmptyString(input.RuleSets[x].RuleSetVersion))
+			valueOrDash(input.RuleSets[x].RuleSetType),
+			valueOrDash(input.RuleSets[x].RuleSetVersion))
 
 		err = addToManagedRuleSet(input, input.RuleSets[x])
 		if err == nil {
@@ -268,7 +268,7 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 				continue
 			}
 
-			logrus.Debugf("%s | RuleGroupOverride: %s", funcName, dashIfEmptyString(mrgo.RuleGroupName))
+			logrus.Debugf("%s | RuleGroupOverride: %s", funcName, valueOrDash(mrgo.RuleGroupName))
 
 			ruleGroupFound = true
 

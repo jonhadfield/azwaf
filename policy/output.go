@@ -308,11 +308,11 @@ func appendCustomRuleRows(table *simpletable.Table, cr *armfrontdoor.CustomRule,
 		}
 
 		table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-			{Text: dashIfEmptyString(mc.MatchVariable)},
-			{Text: dashIfEmptyString(mc.Selector)},
+			{Text: valueOrDash(mc.MatchVariable)},
+			{Text: valueOrDash(mc.Selector)},
 			{Text: strconv.FormatBool(*mc.NegateCondition)},
-			{Text: dashIfEmptyString(dashIfEmptyString(mc.Operator))},
-			{Text: dashIfEmptyString(transformsOutput.String())},
+			{Text: valueOrDash(valueOrDash(mc.Operator))},
+			{Text: valueOrDash(transformsOutput.String())},
 			{Text: wrapMatchValues(mc.MatchValue, showFull)},
 			{Text: ""},
 		})
@@ -432,11 +432,11 @@ func getManagedRule(in getManagedRuleInput) (mro getManagedRuleOutput) {
 			for _, rule := range rgo.Rules {
 				if rule.RuleID != nil && *rule.RuleID == in.ruleID {
 					return getManagedRuleOutput{
-						managedRuleGroup:      dashIfEmptyString(rgo.RuleGroupName),
+						managedRuleGroup:      valueOrDash(rgo.RuleGroupName),
 						managedRuleOverride:   rule,
-						managedRuleGroupName:  dashIfEmptyString(rgo.RuleGroupName),
-						managedRuleSetType:    dashIfEmptyString(mrs.RuleSetType),
-						managedRuleSetVersion: dashIfEmptyString(*mrs.RuleSetVersion),
+						managedRuleGroupName:  valueOrDash(rgo.RuleGroupName),
+						managedRuleSetType:    valueOrDash(mrs.RuleSetType),
+						managedRuleSetVersion: valueOrDash(*mrs.RuleSetVersion),
 					}
 				}
 			}
@@ -1142,8 +1142,8 @@ func getDefaultRuleSet(policy *armfrontdoor.WebApplicationFirewallPolicy) *armfr
 	return nil
 }
 
-// dashIfEmptyString returns the string value (or value pointed to) or a hyphen if the pointer is nil or value empty
-func dashIfEmptyString(val interface{}) string {
+// valueOrDash returns the string value (or value pointed to) or a hyphen if the pointer is nil or value empty
+func valueOrDash(val interface{}) string {
 	switch v := val.(type) {
 	case nil:
 		return "-"

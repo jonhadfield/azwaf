@@ -56,7 +56,7 @@ func actionStringToActionType(action string) (at armfrontdoor.ActionType, err er
 	}
 }
 
-func deRefStrs(strPs []*string) (strs []string) {
+func dereferenceStrings(strPs []*string) (strs []string) {
 	for x := range strPs {
 		strs = append(strs, *strPs[x])
 	}
@@ -64,11 +64,11 @@ func deRefStrs(strPs []*string) (strs []string) {
 	return
 }
 
-func Int32ToPointer(i int32) (p *int32) {
+func int32Ptr(i int32) (p *int32) {
 	return &i
 }
 
-func splitRuleSetName(rsName string) (rsType, rsVersion string, err error) {
+func parseRuleSetName(rsName string) (rsType, rsVersion string, err error) {
 	funcName := helpers.GetFunctionName()
 	if rsName == "" {
 		err = fmt.Errorf("%s - rule set name missing", funcName)

@@ -78,7 +78,7 @@ func containsStr(items interface{}, str string) bool {
 
 	switch v := items.(type) {
 	case []*string:
-		strs = deRefStrs(v)
+		strs = dereferenceStrings(v)
 	default:
 		logrus.Errorf("unhandled type for comparison %s", reflect.TypeOf(items).String())
 	}
