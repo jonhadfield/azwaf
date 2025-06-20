@@ -5,7 +5,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdList() *cli.Command {
@@ -26,7 +26,7 @@ func CmdList() *cli.Command {
 						return fmt.Errorf("subscription-id required")
 					}
 
-					return ListFrontDoors(c.String(FlagSubscriptionID))
+					return policy.ListFrontDoors(c.String(FlagSubscriptionID))
 				},
 			},
 			{
@@ -35,10 +35,10 @@ func CmdList() *cli.Command {
 				Aliases: []string{"p"},
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "full", Aliases: []string{"f"}, Usage: "include resource id in output"},
-					&cli.IntFlag{Name: "top", Aliases: []string{"max"}, Usage: "number of policies to list", Value: MaxPoliciesToFetch},
+					&cli.IntFlag{Name: "top", Aliases: []string{"max"}, Usage: "number of policies to list", Value: policy.MaxPoliciesToFetch},
 				},
 				Action: func(c *cli.Context) error {
-					input := ListPoliciesInput{
+					input := policy.ListPoliciesInput{
 						SubscriptionID: c.String(FlagSubscriptionID),
 						Full:           c.Bool("full"),
 						Max:            c.Int("top"),
@@ -51,7 +51,7 @@ func CmdList() *cli.Command {
 						return err
 					}
 
-					return ListPolicies(input)
+					return policy.ListPolicies(input)
 				},
 			},
 		},

@@ -1165,7 +1165,6 @@ type genCustomRuleFromMatchConditionsInput struct {
 	priority                   int32
 	action                     *armfrontdoor.ActionType
 	groupBy                    []*armfrontdoor.GroupByVariable
-	enabled                    *armfrontdoor.CustomRuleEnabledState
 	namePrefix                 string
 	ruleType                   *armfrontdoor.RuleType
 	rateLimitDurationInMinutes *int32

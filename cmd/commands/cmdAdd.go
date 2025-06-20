@@ -6,7 +6,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdAdd(appVersion string) *cli.Command {
@@ -20,7 +20,7 @@ func CmdAdd(appVersion string) *cli.Command {
 			{
 				Name:        "exclusion",
 				UsageText:   "azwaf add exclusion [ --rule-set | --rule-group | --rule-id ] --variable=x --operator=x --selector=x [ <policy id> | <policy hash> ]",
-				Description: fmt.Sprintf("add a managed rule exclusion to a rule, rule group, or rule set\n\nMatch Variables: %s\nMatch Operators: %s", strings.Join(ValidRuleExclusionMatchVariables[:], ", "), strings.Join(ValidRuleExclusionMatchOperators[:], ", ")),
+				Description: fmt.Sprintf("add a managed rule exclusion to a rule, rule group, or rule set\n\nMatch Variables: %s\nMatch Operators: %s", strings.Join(policy.ValidRuleExclusionMatchVariables[:], ", "), strings.Join(policy.ValidRuleExclusionMatchOperators[:], ", ")),
 				Aliases:     []string{"managed"},
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -70,8 +70,8 @@ func CmdAdd(appVersion string) *cli.Command {
 						return fmt.Errorf("missing policy id / hash")
 					}
 
-					addManagedRuleExclusionCLIInput := AddManagedRuleExclusionCLIInput{
-						BaseCLIInput: BaseCLIInput{
+					addManagedRuleExclusionCLIInput := policy.AddManagedRuleExclusionCLIInput{
+						BaseCLIInput: policy.BaseCLIInput{
 							AppVersion:     appVersion,
 							AutoBackup:     c.Bool(FlagAutoBackup),
 							Debug:          c.Bool("debug"),
@@ -94,7 +94,7 @@ func CmdAdd(appVersion string) *cli.Command {
 					addManagedRuleExclusionCLIInput.AutoBackup = c.Bool(FlagAutoBackup)
 					addManagedRuleExclusionCLIInput.AppVersion = appVersion
 
-					return AddManagedRuleExclusion(&addManagedRuleExclusionCLIInput)
+					return policy.AddManagedRuleExclusion(&addManagedRuleExclusionCLIInput)
 				},
 			},
 		},

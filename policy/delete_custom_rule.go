@@ -31,20 +31,12 @@ func customRuleMatchesNameOrPriority(mi customRuleMatchesNameOrPriorityInput, cr
 
 	// check where a priority was provided (name match isn't set)
 	if mi.prioritySet {
-		if int32(mi.priority) != *cr.Priority {
-			return true
-		}
-
-		return false
+		return int32(mi.priority) != *cr.Priority
 	}
 
 	// if regex provided then test against name
 	if mi.nameMatch != nil {
-		if !mi.nameMatch.MatchString(*cr.Name) {
-			return true
-		}
-
-		return false
+		return !mi.nameMatch.MatchString(*cr.Name)
 	}
 
 	// shouldn't have any other scenarios

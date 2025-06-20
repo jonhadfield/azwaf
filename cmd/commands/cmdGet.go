@@ -1,7 +1,7 @@
 package commands
 
 import (
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
 )
 
@@ -21,7 +21,7 @@ func CmdGet() *cli.Command {
 					// get custom rule match-value field using format "<policy id>|<rule-name>"
 					input := c.Args().First()
 
-					return PrintPolicy(input, c.String(FlagSubscriptionID), c.String(FlagConfig))
+					return policy.PrintPolicy(input, c.String(FlagSubscriptionID), c.String(FlagConfig))
 				},
 			},
 			{
@@ -35,7 +35,7 @@ func CmdGet() *cli.Command {
 					// get custom rule match-value field using format "<policy id>|<rule-name>"
 					input := c.Args().First()
 
-					return PrintPolicyCustomRule(c.String(FlagSubscriptionID), input, c.String(FlagConfig))
+					return policy.PrintPolicyCustomRule(c.String(FlagSubscriptionID), input, c.String(FlagConfig))
 				},
 			},
 		},

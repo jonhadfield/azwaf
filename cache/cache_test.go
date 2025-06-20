@@ -21,7 +21,7 @@ func newTestSession(t *testing.T) *session.Session {
 
 func TestWriteRead(t *testing.T) {
 	s := newTestSession(t)
-	defer s.Cache.Close()
+	defer func() { require.NoError(t, s.Cache.Close()) }()
 
 	require.NoError(t, Write(s, "k", "v"))
 
@@ -32,7 +32,7 @@ func TestWriteRead(t *testing.T) {
 
 func TestReadMissing(t *testing.T) {
 	s := newTestSession(t)
-	defer s.Cache.Close()
+	defer func() { require.NoError(t, s.Cache.Close()) }()
 
 	v, err := Read(s, "missing")
 	require.NoError(t, err)
