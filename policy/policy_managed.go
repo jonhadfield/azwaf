@@ -360,7 +360,7 @@ func ShowExclusions(in *ShowExclusionsCLIInput) error {
 
 		var rsVersion string
 
-		rsType, rsVersion, err = splitRuleSetName(in.RuleSet)
+		rsType, rsVersion, err = parseRuleSetName(in.RuleSet)
 		if err != nil {
 			return err
 		}
@@ -454,12 +454,12 @@ func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.Ma
 //
 // 	OutputManagedRuleExclusions(&OutputManagedRuleInput{
 // 		Policy:                  getPolicyOutput.Policy,
-// 		PolicyName:              dashIfEmptyString(getPolicyOutput.Policy.Name),
-// 		PolicyType:              dashIfEmptyString(getPolicyOutput.Policy.Type),
-// 		PolicyProvisioningState: dashIfEmptyString(getPolicyOutput.Policy.Properties.ProvisioningState),
+// 		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
+// 		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
+// 		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
 // 		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-// 		PolicyEnabledState:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-// 		PolicySettingsMode:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
+// 		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
+// 		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
 // 		RuleGroupExclusions:     ruleGroupEx,
 // 		RuleSetExclusions:       ruleSetEx,
 // 		Rule:                    gmro.managedRuleOverride,
@@ -518,12 +518,12 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 
 	OutputManagedRuleExclusions(&OutputManagedRuleInput{
 		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              dashIfEmptyString(getPolicyOutput.Policy.Name),
-		PolicyType:              dashIfEmptyString(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: dashIfEmptyString(getPolicyOutput.Policy.Properties.ProvisioningState),
+		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
+		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
+		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
 		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
+		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
+		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
 		RuleGroupExclusions:     ruleGroupEx,
 		RuleSetExclusions:       ruleSetEx,
 		Rule:                    gmro.managedRuleOverride,
@@ -568,12 +568,12 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 
 	OutputManagedRuleGroupExclusions(&OutputManagedRuleInput{
 		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              dashIfEmptyString(getPolicyOutput.Policy.Name),
-		PolicyType:              dashIfEmptyString(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: dashIfEmptyString(getPolicyOutput.Policy.Properties.ProvisioningState),
+		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
+		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
+		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
 		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
+		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
+		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
 		RuleGroupExclusions:     ruleGroupEx,
 		RuleSetExclusions:       matchingRuleSet.Exclusions,
 		RuleSetDefinition:       matchingDefinitions.RuleSetDefinition,
@@ -717,12 +717,12 @@ func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID c
 
 	OutputManagedRuleSetExclusions(&OutputManagedRuleInput{
 		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              dashIfEmptyString(getPolicyOutput.Policy.Name),
-		PolicyType:              dashIfEmptyString(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: dashIfEmptyString(getPolicyOutput.Policy.Properties.ProvisioningState),
+		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
+		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
+		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
 		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      dashIfEmptyString(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
+		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
+		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
 		RuleSetExclusions:       matchingRuleSet.Exclusions,
 		RuleSetDefinition:       matchingDefinitions.RuleSetDefinition,
 		RuleGroupDefinition:     matchingDefinitions.RuleGroupDefinition,
@@ -815,9 +815,9 @@ func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusion
 	}
 
 	return "", fmt.Errorf(fmt.Sprintf("failed to determine scope based on input: RuleSet %s RuleGroup %s RuleId %s",
-		dashIfEmptyString(input.RuleSetType),
-		dashIfEmptyString(input.RuleGroup),
-		dashIfEmptyString(input.RuleID)), funcName)
+		valueOrDash(input.RuleSetType),
+		valueOrDash(input.RuleGroup),
+		valueOrDash(input.RuleID)), funcName)
 }
 
 // GetAddManagedRuleExclusionProcessScope returns the scope for deletion of Managed rule exclusions
@@ -856,10 +856,10 @@ func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) 
 
 	return "unhandled",
 		fmt.Errorf(fmt.Sprintf("failed to determine scope based on input: RuleSet %s_%s RuleGroup %s RuleId %s",
-			dashIfEmptyString(ruleSetType),
-			dashIfEmptyString(ruleSetVersion),
-			dashIfEmptyString(ruleGroup),
-			dashIfEmptyString(ruleID)), funcName)
+			valueOrDash(ruleSetType),
+			valueOrDash(ruleSetVersion),
+			valueOrDash(ruleGroup),
+			valueOrDash(ruleID)), funcName)
 }
 
 func IsValidExclusionRuleVariable(v armfrontdoor.ManagedRuleExclusionMatchVariable, ci bool) bool {
