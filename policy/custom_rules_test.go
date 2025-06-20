@@ -270,9 +270,9 @@ func TestTryNetStrToPrefix(t *testing.T) {
 	p, err = tryNetStrToPrefix("0.0.0.0/0")
 	require.NoError(t, err)
 	require.Equal(t, "0.0.0.0/0", p.String())
-	p, err = tryNetStrToPrefix("1.2.3.256/32")
+	_, err = tryNetStrToPrefix("1.2.3.256/32")
 	require.Error(t, err)
-	p, err = tryNetStrToPrefix("0.63.63.3.3/32")
+	_, err = tryNetStrToPrefix("0.63.63.3.3/32")
 	require.Error(t, err)
 }
 

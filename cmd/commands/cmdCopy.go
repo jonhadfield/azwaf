@@ -1,7 +1,7 @@
 package commands
 
 import (
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
 )
 
@@ -21,8 +21,8 @@ func CmdCopy(versionOutput string) *cli.Command {
 			&cli.BoolFlag{Name: "async", Usage: "push resulting policy without waiting for completion", Aliases: []string{"a"}},
 		},
 		Action: func(c *cli.Context) error {
-			copyRulesInput := CopyRulesInput{
-				BaseCLIInput: BaseCLIInput{
+			copyRulesInput := policy.CopyRulesInput{
+				BaseCLIInput: policy.BaseCLIInput{
 					AppVersion:     versionOutput,
 					AutoBackup:     c.Bool(FlagAutoBackup),
 					Debug:          c.Bool("debug"),
@@ -39,7 +39,7 @@ func CmdCopy(versionOutput string) *cli.Command {
 				Async:            c.Bool("async"),
 			}
 
-			return CopyRules(copyRulesInput)
+			return policy.CopyRules(copyRulesInput)
 		},
 	}
 }

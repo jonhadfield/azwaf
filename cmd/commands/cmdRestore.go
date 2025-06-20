@@ -5,7 +5,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	. "github.com/jonhadfield/azwaf/policy"
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdRestore(versionOutput string) *cli.Command {
@@ -28,11 +28,11 @@ func CmdRestore(versionOutput string) *cli.Command {
 				// nolint:errcheck
 				_ = cli.ShowSubcommandHelp(c)
 
-				return fmt.Errorf("%s - backup paths are required", GetFunctionName())
+				return fmt.Errorf("%s - backup paths are required", policy.GetFunctionName())
 			}
 
-			input := &RestorePoliciesInput{
-				BaseCLIInput: BaseCLIInput{
+			input := &policy.RestorePoliciesInput{
+				BaseCLIInput: policy.BaseCLIInput{
 					AppVersion:     versionOutput,
 					AutoBackup:     c.Bool(FlagAutoBackup),
 					Debug:          c.Bool("debug"),
@@ -51,7 +51,7 @@ func CmdRestore(versionOutput string) *cli.Command {
 				FailFast:         c.Bool("fail-fast"),
 			}
 
-			return RestorePolicies(input)
+			return policy.RestorePolicies(input)
 		},
 	}
 }
