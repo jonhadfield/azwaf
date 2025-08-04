@@ -302,7 +302,7 @@ func getDefinitionMatchingExistingRuleSets(input *getDefinitionsMatchingExisting
 			ruleSetVersion: input.ruleSetVersion,
 		})
 		if err != nil {
-			logrus.Errorf(err.Error())
+			logrus.Error(err.Error())
 		}
 
 		if match {
