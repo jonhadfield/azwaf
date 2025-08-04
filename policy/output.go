@@ -485,7 +485,7 @@ func ruleGroupRows(cfg armfrontdoor.ManagedRuleSet, rgd *armfrontdoor.ManagedRul
 		{Text: ""},
 		{Text: ""},
 		{Text: rowRGExclusions},
-		{Text: color.Bold.Sprintf(*rgd.RuleGroupName)},
+		{Text: color.Bold.Sprint(*rgd.RuleGroupName)},
 	})
 
 	for _, rg := range rgd.Rules {

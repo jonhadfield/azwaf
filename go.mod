@@ -1,6 +1,6 @@
 module github.com/jonhadfield/azwaf
 
-go 1.22.4
+go 1.24.3
 
 require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
@@ -12,7 +12,6 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/alexeyco/simpletable v1.0.0
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
-	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.5.4
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/jonhadfield/findexec v0.0.0-20190902195615-78db24cd4e77
@@ -44,6 +43,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.12 // indirect

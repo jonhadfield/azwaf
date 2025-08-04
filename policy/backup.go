@@ -1,7 +1,7 @@
 package policy
 
 import (
-        "context"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -17,13 +17,13 @@ import (
 
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
-        terminal "golang.org/x/term"
+	terminal "golang.org/x/term"
 )
 
 const (
-       blockBlobUploadBlockSize = 4 * 1024 * 1024
-       blockBlobParallelism     = 16
-       defaultTerminalWidth     = 80
+	blockBlobUploadBlockSize = 4 * 1024 * 1024
+	blockBlobParallelism     = 16
+	defaultTerminalWidth     = 80
 )
 
 // BackupPoliciesInput are the arguments provided to the BackupPolicies function.
@@ -158,7 +158,7 @@ func BackupPolicy(p *WrappedPolicy, containerURL *azblob.ContainerURL, failFast,
 		}
 
 		if len(statusOutput) == width {
-			fmt.Printf(statusOutput[0:width-3] + "   \r")
+			fmt.Print(statusOutput[0:width-3] + "   \r")
 		} else {
 			fmt.Print(statusOutput)
 		}
@@ -185,10 +185,10 @@ func BackupPolicy(p *WrappedPolicy, containerURL *azblob.ContainerURL, failFast,
 			logrus.Infof("uploading file with blob name: %s\n", fName)
 		}
 
-               _, oerr = azblob.UploadBufferToBlockBlob(ctx, pj, blobURL, azblob.UploadToBlockBlobOptions{
-                       BlockSize:   blockBlobUploadBlockSize,
-                       Parallelism: blockBlobParallelism,
-               })
+		_, oerr = azblob.UploadBufferToBlockBlob(ctx, pj, blobURL, azblob.UploadToBlockBlobOptions{
+			BlockSize:   blockBlobUploadBlockSize,
+			Parallelism: blockBlobParallelism,
+		})
 		if oerr != nil {
 			return oerr
 		}
@@ -256,10 +256,10 @@ func backupPolicies(policies []WrappedPolicy, containerURL *azblob.ContainerURL,
 func PadToWidth(input, char string, inputLengthOverride int, trimToWidth bool) string {
 	lines := strings.Split(strings.TrimSuffix(input, "\n"), "\n")
 
-       width, _, err := terminal.GetSize(int(os.Stdout.Fd()))
-       if err != nil || width == -1 {
-               width = defaultTerminalWidth
-       }
+	width, _, err := terminal.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width == -1 {
+		width = defaultTerminalWidth
+	}
 
 	for i, line := range lines {
 		length := len(line)
