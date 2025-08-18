@@ -172,6 +172,12 @@ func (s *Session) GetClientCredential() error {
 	funcName := helpers.GetFunctionName()
 	startTime := time.Now()
 
+	// Check if we already have a credential
+	if s.ClientCredential != nil {
+		logrus.Infof("%s | Reusing existing credential", funcName)
+		return nil
+	}
+
 	logrus.Infof("%s | Starting Azure credential retrieval", funcName)
 
 	// Check if we're running in Azure
@@ -218,11 +224,11 @@ func (s *Session) GetClientCredential() error {
 	}
 
 	// Check if Azure CLI is available before trying it
-	_, azErr := exec.LookPath("az")
+	azPath, azErr := exec.LookPath("az")
 	if azErr == nil {
 		// Try Azure CLI credential
 		cliStartTime := time.Now()
-		logrus.Infof("%s | Azure CLI binary found, trying Azure CLI credential...", funcName)
+		logrus.Infof("%s | Azure CLI binary found at %s, trying Azure CLI credential...", funcName, azPath)
 		cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
 		cliDuration := time.Since(cliStartTime)
 		
@@ -234,9 +240,9 @@ func (s *Session) GetClientCredential() error {
 			logrus.Infof("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
 			return nil
 		}
-		logrus.Debugf("%s | Azure CLI credential not available after %v: %v", funcName, cliDuration, cliErr)
+		logrus.Errorf("%s | Azure CLI credential failed after %v: %v", funcName, cliDuration, cliErr)
 	} else {
-		logrus.Infof("%s | Azure CLI binary not found on PATH, skipping Azure CLI credential", funcName)
+		logrus.Infof("%s | Azure CLI binary not found on PATH (error: %v), skipping Azure CLI credential", funcName, azErr)
 	}
 
 	// We've tried all the credential methods individually
