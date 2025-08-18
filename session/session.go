@@ -180,11 +180,27 @@ func (s *Session) GetClientCredential() error {
 
 	logrus.Infof("%s | Starting Azure credential retrieval", funcName)
 
-	// Check if we're running in Azure
-	inAzure := os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
-		os.Getenv("IDENTITY_ENDPOINT") != "" || // Azure Functions/Container Instances
-		os.Getenv("IMDS_ENDPOINT") != "" || // Azure VM/VMSS
-		os.Getenv("ACC_CLOUD") == "AZURE" // Azure Cloud Shell
+	// Check if we're running in Azure or if managed identity is explicitly requested
+	// Allow forcing managed identity with AZURE_USE_MANAGED_IDENTITY=true
+	forceManagedIdentity := os.Getenv("AZURE_USE_MANAGED_IDENTITY") == "true"
+	
+	inAzure := forceManagedIdentity ||
+		os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
+		os.Getenv("IDENTITY_ENDPOINT") != "" || // Azure Functions/Container Instances  
+		os.Getenv("IMDS_ENDPOINT") != "" || // Azure VM/VMSS with specific endpoint
+		os.Getenv("MSI_ENDPOINT") != "" || // Legacy MSI endpoint
+		os.Getenv("ACC_CLOUD") == "AZURE" || // Azure Cloud Shell
+		os.Getenv("AZURESUBSCRIPTION_CLIENT_ID") != "" || // Azure DevOps
+		os.Getenv("AZURE_RESOURCE_GROUP") != "" // Common Azure environment indicator
+	
+	// Additional check: see if we can detect Azure VM by checking for Azure-specific paths
+	if !inAzure {
+		// Check if we're on an Azure VM by looking for Azure agent
+		if _, err := os.Stat("/var/lib/waagent"); err == nil {
+			inAzure = true
+			logrus.Debugf("%s | Detected Azure VM via waagent directory", funcName)
+		}
+	}
 
 	// Try environment credential first (fastest - reads from env vars)
 	envStartTime := time.Now()
@@ -206,7 +222,11 @@ func (s *Session) GetClientCredential() error {
 	if inAzure {
 		// Try managed identity (second fastest)
 		miStartTime := time.Now()
-		logrus.Infof("%s | Detected Azure environment, trying managed identity credential...", funcName)
+		if forceManagedIdentity {
+			logrus.Infof("%s | AZURE_USE_MANAGED_IDENTITY=true, forcing managed identity credential...", funcName)
+		} else {
+			logrus.Infof("%s | Detected Azure environment, trying managed identity credential...", funcName)
+		}
 		miCred, miErr := azidentity.NewManagedIdentityCredential(nil)
 		miDuration := time.Since(miStartTime)
 		
@@ -218,9 +238,10 @@ func (s *Session) GetClientCredential() error {
 			logrus.Infof("%s | Successfully retrieved credential via managed identity (total: %v)", funcName, totalDuration)
 			return nil
 		}
-		logrus.Debugf("%s | Managed identity not available after %v: %v", funcName, miDuration, miErr)
+		logrus.Errorf("%s | Managed identity failed after %v: %v", funcName, miDuration, miErr)
 	} else {
-		logrus.Infof("%s | Not running in Azure environment, skipping managed identity credential", funcName)
+		logrus.Infof("%s | Azure environment not detected, skipping managed identity credential", funcName)
+		logrus.Debugf("%s | To force managed identity, set AZURE_USE_MANAGED_IDENTITY=true", funcName)
 	}
 
 	// Check if Azure CLI is available before trying it
