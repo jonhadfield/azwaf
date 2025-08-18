@@ -367,6 +367,7 @@ func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePr
 		namePrefix:  prefix,
 		customRules: p.Properties.CustomRules.Rules,
 		ruleType:    ruleType,
+		action:      action,
 	})
 	if err != nil {
 		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
