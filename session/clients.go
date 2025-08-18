@@ -3,7 +3,10 @@ package session
 import (
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -46,6 +49,9 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 
 func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	funcName := helpers.GetFunctionName()
+	startTime := time.Now()
+
+	logrus.Infof("%s | Starting GetFrontDoorPoliciesClient for subscription: %s", funcName, subID)
 
 	if s == nil {
 		return errors.New("session is nil")
@@ -56,26 +62,52 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	}
 
 	if s.FrontDoorPoliciesClients[subID] != nil {
-		logrus.Debugf("%s | re-using arm front door policies client for subscription: %s", funcName, subID)
-
+		logrus.Infof("%s | Re-using existing client (took: %v)", funcName, time.Since(startTime))
 		return nil
 	}
 
-	logrus.Debugf("%s | creating new policies client for subscription: %s", funcName, subID)
+	logrus.Infof("%s | Creating new policies client for subscription: %s", funcName, subID)
 
 	if s.ClientCredential == nil {
+		credStartTime := time.Now()
+		logrus.Infof("%s | Getting client credentials...", funcName)
 		err = s.GetClientCredential()
+		credDuration := time.Since(credStartTime)
+		logrus.Infof("%s | Client credential retrieval took: %v", funcName, credDuration)
 		if err != nil {
+			logrus.Errorf("%s | Failed to get client credentials: %v", funcName, err)
 			return
 		}
 	}
 
-	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.ClientCredential, nil)
+	clientCreateStartTime := time.Now()
+	logrus.Infof("%s | Creating Azure Frontdoor client with optimized settings...", funcName)
+	
+	// Create client options with custom retry and timeout settings
+	clientOptions := &arm.ClientOptions{
+		ClientOptions: policy.ClientOptions{
+			Retry: policy.RetryOptions{
+				MaxRetries:    3,
+				RetryDelay:    time.Second,
+				MaxRetryDelay: time.Second * 30,
+			},
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: "azwaf",
+			},
+		},
+	}
+	
+	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.ClientCredential, clientOptions)
+	clientCreateDuration := time.Since(clientCreateStartTime)
+	
 	if merr != nil {
+		logrus.Errorf("%s | Failed to create client after %v: %s", funcName, clientCreateDuration, merr.Error())
 		return fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	s.FrontDoorPoliciesClients[subID] = frontDoorPoliciesClient
+	totalDuration := time.Since(startTime)
+	logrus.Infof("%s | Successfully created client in %v (client creation: %v)", funcName, totalDuration, clientCreateDuration)
 
 	return
 }

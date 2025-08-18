@@ -5,11 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
-	"go4.org/netipx"
 	"log"
 	"net/netip"
 	"os"
@@ -18,6 +13,12 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/session"
+	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 )
 
 type filterCustomRulesInput struct {
@@ -336,7 +337,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 		return nil, fmt.Errorf("failed to get networks to remove: %s", err)
 	}
 
-	p, originalPolicy, existingPositiveNets, _, err := loadPolicyNets(s, input.RID, input.MatchPrefix, input.Action)
+	p, originalPolicy, existingPositiveNets, _, err := loadPolicyNets(s, input.RID, input.MatchPrefix, input.Action, input.RuleType)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +351,7 @@ func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyR
 	return results, nil
 }
 
-func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePrefix, action *armfrontdoor.ActionType) (*armfrontdoor.WebApplicationFirewallPolicy, armfrontdoor.WebApplicationFirewallPolicy, []netip.Prefix, []netip.Prefix, error) {
+func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePrefix, action *armfrontdoor.ActionType, ruleType *armfrontdoor.RuleType) (*armfrontdoor.WebApplicationFirewallPolicy, armfrontdoor.WebApplicationFirewallPolicy, []netip.Prefix, []netip.Prefix, error) {
 	p, err := GetRawPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 	if err != nil {
 		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("failed to get policy: %w", err)
@@ -365,6 +366,7 @@ func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePr
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		namePrefix:  prefix,
 		customRules: p.Properties.CustomRules.Rules,
+		ruleType:    ruleType,
 	})
 	if err != nil {
 		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
