@@ -64,7 +64,7 @@ const (
 	MaxMatchValuesOutput = 9
 
 	// policyGetTimeout specifies how long to wait when fetching a policy
-	policyGetTimeout = 30 * time.Second
+	policyGetTimeout = 120 * time.Second
 )
 
 const (
@@ -304,8 +304,16 @@ func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) 
 
 func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
 	funcName := GetFunctionName()
+	startTime := time.Now()
 
+	logrus.Infof("%s | Starting GetRawPolicy for %s/%s/%s", funcName, subscription, resourceGroup, name)
+
+	// Time client initialization
+	clientStartTime := time.Now()
 	err := s.GetFrontDoorPoliciesClient(subscription)
+	clientDuration := time.Since(clientStartTime)
+	logrus.Infof("%s | Client initialization took: %v", funcName, clientDuration)
+	
 	if err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
@@ -326,11 +334,23 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 
 	options := armfrontdoor.PoliciesClientGetOptions{}
 
+	// Time the actual API call
+	apiStartTime := time.Now()
+	logrus.Infof("%s | Making API call to Azure (timeout: %v)", funcName, policyGetTimeout)
+	
 	pcg, merr := s.FrontDoorPoliciesClients[subscription].Get(ctx, resourceGroup, name, &options)
+	
+	apiDuration := time.Since(apiStartTime)
+	totalDuration := time.Since(startTime)
+	
+	logrus.Infof("%s | API call completed in: %v (total time: %v)", funcName, apiDuration, totalDuration)
+	
 	if merr != nil {
+		logrus.Errorf("%s | API call failed after %v: %s", funcName, apiDuration, merr.Error())
 		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
+	logrus.Infof("%s | Successfully retrieved policy in %v", funcName, totalDuration)
 	return &pcg.WebApplicationFirewallPolicy, nil
 }
 

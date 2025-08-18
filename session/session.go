@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -168,32 +169,80 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 
 func (s *Session) GetClientCredential() error {
 	funcName := helpers.GetFunctionName()
+	startTime := time.Now()
 
-	logrus.Debugf("getting Azure API credential")
+	logrus.Infof("%s | Starting Azure credential retrieval", funcName)
 
-	managed, err := azidentity.NewManagedIdentityCredential(nil)
-	if err == nil {
-		logrus.Debugf("%s | retrieved credential via managed identity", funcName)
+	// Check if we're running in Azure
+	inAzure := os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
+		os.Getenv("IDENTITY_ENDPOINT") != "" || // Azure Functions/Container Instances
+		os.Getenv("IMDS_ENDPOINT") != "" || // Azure VM/VMSS
+		os.Getenv("ACC_CLOUD") == "AZURE" // Azure Cloud Shell
 
-		s.ClientCredential, err = azidentity.NewChainedTokenCredential([]azcore.TokenCredential{managed}, nil)
-		if err == nil {
-			s.InitialiseCache()
-
-			return nil
-		}
-	}
-
-	logrus.Debugf("failed to get credential via managed identity so trying default")
-
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err == nil {
-		logrus.Debugf("%s | retrieved credential", funcName)
-
-		s.ClientCredential = cred
+	// Try environment credential first (fastest - reads from env vars)
+	envStartTime := time.Now()
+	logrus.Infof("%s | Trying environment credential first...", funcName)
+	envCred, envErr := azidentity.NewEnvironmentCredential(nil)
+	envDuration := time.Since(envStartTime)
+	
+	if envErr == nil {
+		logrus.Infof("%s | Environment credential created in %v", funcName, envDuration)
+		s.ClientCredential = envCred
 		s.InitialiseCache()
-
+		totalDuration := time.Since(startTime)
+		logrus.Infof("%s | Successfully retrieved credential via environment (total: %v)", funcName, totalDuration)
 		return nil
 	}
+	logrus.Debugf("%s | Environment credential not available after %v: %v", funcName, envDuration, envErr)
 
-	return fmt.Errorf("%s | authorization failed: %s", err.Error(), funcName)
+	// Only try managed identity if we detect we're running in Azure
+	if inAzure {
+		// Try managed identity (second fastest)
+		miStartTime := time.Now()
+		logrus.Infof("%s | Detected Azure environment, trying managed identity credential...", funcName)
+		miCred, miErr := azidentity.NewManagedIdentityCredential(nil)
+		miDuration := time.Since(miStartTime)
+		
+		if miErr == nil {
+			logrus.Infof("%s | Managed identity credential created in %v", funcName, miDuration)
+			s.ClientCredential = miCred
+			s.InitialiseCache()
+			totalDuration := time.Since(startTime)
+			logrus.Infof("%s | Successfully retrieved credential via managed identity (total: %v)", funcName, totalDuration)
+			return nil
+		}
+		logrus.Debugf("%s | Managed identity not available after %v: %v", funcName, miDuration, miErr)
+	} else {
+		logrus.Infof("%s | Not running in Azure environment, skipping managed identity credential", funcName)
+	}
+
+	// Try Azure CLI credential
+	cliStartTime := time.Now()
+	logrus.Infof("%s | Trying Azure CLI credential...", funcName)
+	cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
+	cliDuration := time.Since(cliStartTime)
+	
+	if cliErr == nil {
+		logrus.Infof("%s | Azure CLI credential created in %v", funcName, cliDuration)
+		s.ClientCredential = cliCred
+		s.InitialiseCache()
+		totalDuration := time.Since(startTime)
+		logrus.Infof("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
+		return nil
+	}
+	logrus.Debugf("%s | Azure CLI credential not available after %v: %v", funcName, cliDuration, cliErr)
+
+	// We've tried all the credential methods individually
+	// Don't use DefaultAzureCredential as it would retry managed identity and cause hangs
+	totalDuration := time.Since(startTime)
+	logrus.Errorf("%s | All credential methods failed after %v", funcName, totalDuration)
+	
+	errorMsg := fmt.Sprintf("%s | No valid Azure credentials found after %v. Please authenticate using one of:\n", funcName, totalDuration)
+	errorMsg += "  1. Environment variables (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)\n"
+	errorMsg += "  2. Azure CLI (run 'az login')\n"
+	if inAzure {
+		errorMsg += "  3. Managed Identity (when running in Azure)\n"
+	}
+	
+	return fmt.Errorf(errorMsg)
 }
