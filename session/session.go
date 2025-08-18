@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -216,21 +217,27 @@ func (s *Session) GetClientCredential() error {
 		logrus.Infof("%s | Not running in Azure environment, skipping managed identity credential", funcName)
 	}
 
-	// Try Azure CLI credential
-	cliStartTime := time.Now()
-	logrus.Infof("%s | Trying Azure CLI credential...", funcName)
-	cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
-	cliDuration := time.Since(cliStartTime)
-	
-	if cliErr == nil {
-		logrus.Infof("%s | Azure CLI credential created in %v", funcName, cliDuration)
-		s.ClientCredential = cliCred
-		s.InitialiseCache()
-		totalDuration := time.Since(startTime)
-		logrus.Infof("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
-		return nil
+	// Check if Azure CLI is available before trying it
+	_, azErr := exec.LookPath("az")
+	if azErr == nil {
+		// Try Azure CLI credential
+		cliStartTime := time.Now()
+		logrus.Infof("%s | Azure CLI binary found, trying Azure CLI credential...", funcName)
+		cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
+		cliDuration := time.Since(cliStartTime)
+		
+		if cliErr == nil {
+			logrus.Infof("%s | Azure CLI credential created in %v", funcName, cliDuration)
+			s.ClientCredential = cliCred
+			s.InitialiseCache()
+			totalDuration := time.Since(startTime)
+			logrus.Infof("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
+			return nil
+		}
+		logrus.Debugf("%s | Azure CLI credential not available after %v: %v", funcName, cliDuration, cliErr)
+	} else {
+		logrus.Infof("%s | Azure CLI binary not found on PATH, skipping Azure CLI credential", funcName)
 	}
-	logrus.Debugf("%s | Azure CLI credential not available after %v: %v", funcName, cliDuration, cliErr)
 
 	// We've tried all the credential methods individually
 	// Don't use DefaultAzureCredential as it would retry managed identity and cause hangs
