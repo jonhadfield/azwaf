@@ -180,19 +180,29 @@ func (s *Session) GetClientCredential() error {
 
 	logrus.Infof("%s | Starting Azure credential retrieval", funcName)
 
-	// Check if we're running in Azure or if managed identity is explicitly requested
-	// Allow forcing managed identity with AZURE_USE_MANAGED_IDENTITY=true
+	// Check if managed identity is explicitly requested
 	forceManagedIdentity := os.Getenv("AZURE_USE_MANAGED_IDENTITY") == "true"
-	
-	inAzure := forceManagedIdentity ||
-		os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
-		os.Getenv("IDENTITY_ENDPOINT") != "" || // Azure Functions/Container Instances  
+
+	// Log environment variables being checked for diagnostics
+	logrus.Debugf("%s | Checking Azure environment indicators:", funcName)
+	logrus.Debugf("%s |   IDENTITY_ENDPOINT: %q", funcName, os.Getenv("IDENTITY_ENDPOINT"))
+	logrus.Debugf("%s |   IDENTITY_HEADER: %q", funcName, os.Getenv("IDENTITY_HEADER"))
+	logrus.Debugf("%s |   IMDS_ENDPOINT: %q", funcName, os.Getenv("IMDS_ENDPOINT"))
+	logrus.Debugf("%s |   MSI_ENDPOINT: %q", funcName, os.Getenv("MSI_ENDPOINT"))
+	logrus.Debugf("%s |   WEBSITE_INSTANCE_ID: %q", funcName, os.Getenv("WEBSITE_INSTANCE_ID"))
+	logrus.Debugf("%s |   CONTAINER_APP_NAME: %q", funcName, os.Getenv("CONTAINER_APP_NAME"))
+
+	// Check if we're running in Azure by looking for various environment indicators
+	inAzure := os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
+		os.Getenv("IDENTITY_ENDPOINT") != "" || // Azure Functions/Container Instances (ACI)
 		os.Getenv("IMDS_ENDPOINT") != "" || // Azure VM/VMSS with specific endpoint
 		os.Getenv("MSI_ENDPOINT") != "" || // Legacy MSI endpoint
 		os.Getenv("ACC_CLOUD") == "AZURE" || // Azure Cloud Shell
 		os.Getenv("AZURESUBSCRIPTION_CLIENT_ID") != "" || // Azure DevOps
-		os.Getenv("AZURE_RESOURCE_GROUP") != "" // Common Azure environment indicator
-	
+		os.Getenv("AZURE_RESOURCE_GROUP") != "" || // Common Azure environment indicator
+		os.Getenv("CONTAINER_APP_NAME") != "" || // Azure Container Apps
+		os.Getenv("KUBERNETES_SERVICE_HOST") != "" // Azure Kubernetes Service (AKS)
+
 	// Additional check: see if we can detect Azure VM by checking for Azure-specific paths
 	if !inAzure {
 		// Check if we're on an Azure VM by looking for Azure agent
@@ -201,6 +211,14 @@ func (s *Session) GetClientCredential() error {
 			logrus.Debugf("%s | Detected Azure VM via waagent directory", funcName)
 		}
 	}
+
+	// Allow forcing managed identity even if Azure environment not detected
+	if forceManagedIdentity {
+		inAzure = true
+		logrus.Infof("%s | AZURE_USE_MANAGED_IDENTITY=true, will attempt managed identity", funcName)
+	}
+
+	logrus.Debugf("%s | Azure environment detected: %v", funcName, inAzure)
 
 	// Try environment credential first (fastest - reads from env vars)
 	envStartTime := time.Now()
