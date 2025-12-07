@@ -20,6 +20,19 @@ A powerful command-line tool for managing Azure Web Application Firewall (WAF) p
 - **Caching**: BuntDB-based caching for improved performance
 - **Aliases**: Use short names instead of full Azure resource IDs
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Authentication](#authentication)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+
 ## Installation
 
 ### Prerequisites
@@ -86,9 +99,22 @@ Override the config file path with `--config`:
 azwaf --config /path/to/config.yaml list policies
 ```
 
+## Quick Start
+
+```bash
+# Set required environment variable
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+
+# List all WAF policies
+azwaf list policies
+
+# Show detailed policy information
+azwaf show policy <policy-id>
+```
+
 ## Usage
 
-### List Policies
+### List Resources
 
 ```bash
 # List all WAF policies in the subscription
@@ -139,10 +165,15 @@ azwaf copy policy --source prod-waf --destination staging-waf --managed-rules-on
 
 ### Custom Rules Management
 
-Custom rules are automatically assigned priorities based on their action type:
-- **Log rules**: 1000-1999
-- **Allow rules**: 3000-3999
-- **Block rules**: 5000-5999
+`azwaf` automatically assigns rule priorities based on action type to ensure proper evaluation order:
+
+| Action | Priority Range | Purpose |
+|--------|----------------|---------|
+| Log | 1000-1999 | Observability without blocking |
+| Allow | 3000-3999 | Explicit permits (bypass blocks) |
+| Block | 5000-5999 | Security enforcement |
+
+**Priority Assignment**: Rules are automatically assigned the next available priority in their range. Lower numbers evaluate first.
 
 ```bash
 # Add a custom rule to block an IP address
@@ -170,33 +201,43 @@ azwaf delete custom-rule prod-waf --name "BlockMaliciousIP"
 
 ```bash
 # Add exclusions to a managed ruleset
-azwaf add exclusions prod-waf \
-  --ruleset-type "Microsoft_DefaultRuleSet" \
-  --ruleset-version "2.1" \
+azwaf add exclusion prod-waf \
+  --rule-set "Microsoft_DefaultRuleSet" \
   --match-variable "RequestHeaderNames" \
   --selector "User-Agent" \
   --operator "Equals"
 
-# Delete managed ruleset exclusions
-azwaf delete managed-exclusion prod-waf \
-  --ruleset-type "Microsoft_DefaultRuleSet" \
-  --ruleset-version "2.1"
+# Add exclusion to specific rule group
+azwaf add exclusion prod-waf \
+  --rule-group "PROTOCOL-ENFORCEMENT" \
+  --match-variable "RequestCookieNames" \
+  --selector "session" \
+  --operator "StartsWith"
+
+# Add exclusion to specific rule ID
+azwaf add exclusion prod-waf \
+  --rule-id "942100" \
+  --match-variable "QueryStringArgNames" \
+  --selector "search" \
+  --operator "Equals"
 ```
 
-### Block Rules
+### Quick Block Commands
 
-Quick commands to block specific patterns:
+Convenience commands to quickly block common threat patterns:
 
 ```bash
-# Block IP addresses
+# Block specific IP addresses
 azwaf add block prod-waf --ip "192.168.1.100,10.0.0.50"
 
-# Block request URIs
+# Block request URIs (paths)
 azwaf add block prod-waf --uri "/admin,/wp-admin"
 
 # Block user agents
 azwaf add block prod-waf --user-agent "BadBot,MaliciousScanner"
 ```
+
+**Note**: These commands create custom block rules with appropriate priorities (5000-5999 range).
 
 ### Compare Policies
 
@@ -253,12 +294,18 @@ azwaf/
 3. **Resource ID Abstraction**: Uses aliases from config file to map short names to full Azure resource IDs
 4. **Custom Rule Priorities**: Enforces ordering to ensure proper rule evaluation
 
-### Important Limits
+### Azure WAF Limits
 
-- Max custom rules per policy: 90
-- Max IP match values per rule: 600
-- Max policies to fetch: 200
-- Max Front Doors to fetch: 100
+These limits are enforced by Azure Front Door WAF service:
+
+| Resource | Limit | Notes |
+|----------|-------|-------|
+| Custom rules per policy | 90 | Hard limit enforced by Azure |
+| IP match values per rule | 600 | Per match condition |
+| Policies per fetch | 200 | Tool optimization limit |
+| Front Doors per fetch | 100 | Tool optimization limit |
+
+For more details, see [Azure Front Door limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-standard-and-premium-tier-service-limits).
 
 ## Development
 
@@ -297,24 +344,49 @@ make critic
 make ci
 ```
 
-### Testing Approach
+### Testing Strategy
 
-- **Unit tests**: Use mocked Azure clients for fast, isolated testing
-- **Integration tests**: Require real Azure credentials, gated with build tags
-- **Test data**: Sample policies and IP lists in `policy/testdata/`
+The project uses a multi-layered testing approach:
+
+- **Unit tests**: Mocked Azure clients for fast, isolated component testing
+- **Integration tests**: Real Azure credentials required, gated with build tags for optional execution
+- **Test fixtures**: Sample policies and IP lists in `policy/testdata/` for reproducible testing
+- **Coverage tracking**: Automated coverage reports generated via `make coverage`
 
 ## Authentication
 
-`azwaf` supports standard Azure authentication methods:
+`azwaf` supports all standard Azure SDK authentication methods, tried in the following order:
 
-1. **Azure CLI**: Run `az login` before using azwaf
-2. **Managed Identity**: Automatically detected when running on Azure resources
-3. **Service Principal**: Set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID`
-4. **Environment Variables**: Standard Azure SDK environment variables
+### 1. Environment Variables (Recommended for Automation)
+
+```bash
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_CLIENT_ID="your-client-id"
+export AZURE_CLIENT_SECRET="your-client-secret"
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+```
+
+### 2. Azure CLI (Recommended for Interactive Use)
+
+```bash
+az login
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+azwaf list policies
+```
+
+### 3. Managed Identity (For Azure Resources)
+
+Automatically detected when running on Azure VMs, App Service, Azure Functions, etc. No additional configuration required beyond setting `AZURE_SUBSCRIPTION_ID`.
+
+### 4. Other Methods
+
+The tool supports additional Azure SDK authentication methods including Azure Developer CLI (`azd`), workload identity, and more. See the [Azure Identity documentation](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) for details.
 
 ## Troubleshooting
 
 ### Enable Debug Logging
+
+For detailed operation logs and API call tracing:
 
 ```bash
 export AZWAF_LOG=debug
@@ -323,19 +395,44 @@ azwaf list policies
 
 ### Common Issues
 
-**Authentication Errors**
-- Ensure `AZURE_SUBSCRIPTION_ID` is set
-- Verify Azure credentials are configured (`az login` or environment variables)
-- Check subscription access permissions
+#### Authentication Errors
 
-**Policy Not Found**
-- Verify the policy exists: `azwaf list policies`
-- Check alias configuration in `~/.config/azwaf/config.yaml`
-- Use full resource ID instead of alias
+**Symptoms**: "authentication failed" or "unauthorized" errors
 
-**Rate Limiting**
-- The tool implements caching to reduce API calls
-- Clear cache if stale: Remove `~/.cache/azwaf/` directory
+**Solutions**:
+- Ensure `AZURE_SUBSCRIPTION_ID` is set: `echo $AZURE_SUBSCRIPTION_ID`
+- Verify Azure credentials are configured: `az account show` or check environment variables
+- Confirm subscription access: `az account list --query "[].id"`
+- Check required permissions: Contributor or WAF Policy Contributor role on subscription/resource group
+
+#### Policy Not Found
+
+**Symptoms**: "policy not found" or "resource does not exist"
+
+**Solutions**:
+- List available policies: `azwaf list policies`
+- Verify alias configuration in `~/.config/azwaf/config.yaml`
+- Try using full resource ID instead of alias
+- Confirm policy is in the correct subscription
+
+#### Cache Issues
+
+**Symptoms**: Stale data or outdated policy information
+
+**Solutions**:
+- Clear cache directory: `rm -rf ~/.cache/azwaf/`
+- Cache automatically expires after 15 minutes
+- Use `--no-cache` flag (if available) to bypass cache
+
+#### Performance Issues
+
+**Symptoms**: Slow API responses or timeouts
+
+**Solutions**:
+- Enable caching to reduce API calls
+- Check Azure service health: https://status.azure.com
+- Reduce concurrent operations if hitting rate limits
+- Use specific policy IDs instead of listing all policies
 
 ## Contributing
 
@@ -362,10 +459,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For issues, questions, or feature requests, please [open an issue](https://github.com/jonhadfield/azwaf/issues) on GitHub.
 
+## Related Projects
+
+- [Azure Front Door Documentation](https://learn.microsoft.com/en-us/azure/frontdoor/)
+- [Azure WAF Documentation](https://learn.microsoft.com/en-us/azure/web-application-firewall/)
+- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go)
+
 ## Acknowledgments
 
 Built with:
-- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go)
-- [urfave/cli](https://github.com/urfave/cli) for CLI framework
-- [BuntDB](https://github.com/tidwall/buntdb) for caching
-- [logrus](https://github.com/sirupsen/logrus) for logging
+- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) - Azure resource management
+- [urfave/cli](https://github.com/urfave/cli) - CLI framework
+- [BuntDB](https://github.com/tidwall/buntdb) - Embedded key/value database for caching
+- [logrus](https://github.com/sirupsen/logrus) - Structured logging
+- [simpletable](https://github.com/alexeyco/simpletable) - Table formatting for output
+- [jsondiff](https://github.com/wI2L/jsondiff) - JSON comparison for policy diffs
