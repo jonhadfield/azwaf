@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +12,7 @@ import (
 	"github.com/jonhadfield/azwaf/config"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
-	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
 	"github.com/jonhadfield/azwaf/session"
 	"github.com/sirupsen/logrus"
@@ -90,7 +89,8 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 
 	logrus.Debugf("%s | retrieved %d policies", funcName, len(o.Policies))
 
-	var containerURL azblob.ContainerURL
+	var blobClient *azblob.Client
+	var containerName string
 
 	if in.StorageAccountResourceID != "" {
 		sari := config.ParseResourceID(in.StorageAccountResourceID)
@@ -116,23 +116,28 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 			return fmt.Errorf("invalid credentials with error: %s", oerr.Error())
 		}
 
-		p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
-
-		var cu *url.URL
-
-		cu, oerr = url.Parse(in.ContainerURL)
+		// Modern SDK: Create service client and extract container name from URL
+		// ContainerURL format: https://storageaccount.blob.core.windows.net/containername
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", sari.Name)
+		blobClient, oerr = azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
 		if oerr != nil {
-			return oerr
+			return fmt.Errorf("failed to create blob client: %s", oerr.Error())
 		}
 
-		containerURL = azblob.NewContainerURL(*cu, p)
+		// Extract container name from ContainerURL
+		// Parse the URL and get the path component (should be /containername)
+		parts, oerr := azblob.ParseURL(in.ContainerURL)
+		if oerr != nil {
+			return fmt.Errorf("failed to parse container URL: %s", oerr.Error())
+		}
+		containerName = parts.ContainerName
 	}
 
-	return backupPolicies(o.Policies, &containerURL, in.FailFast, in.Quiet, in.Path)
+	return backupPolicies(o.Policies, blobClient, containerName, in.FailFast, in.Quiet, in.Path)
 }
 
 // BackupPolicy takes a WrappedPolicy as input and creates a json file that can later be restored
-func BackupPolicy(p *WrappedPolicy, containerURL *azblob.ContainerURL, failFast, quiet bool, path string) (err error) {
+func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
 	funcName := GetFunctionName()
 	now := time.Now().UTC()
 	dateString := now.UTC().Format("20060102150405")
@@ -176,18 +181,17 @@ func BackupPolicy(p *WrappedPolicy, containerURL *azblob.ContainerURL, failFast,
 	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
 
 	// write to storage account
-	if containerURL != nil && containerURL.String() != "" {
+	if blobClient != nil {
 		ctx := context.Background()
-
-		blobURL := containerURL.NewBlockBlobURL(fName)
 
 		if !quiet {
 			logrus.Infof("uploading file with blob name: %s\n", fName)
 		}
 
-		_, oerr = azblob.UploadBufferToBlockBlob(ctx, pj, blobURL, azblob.UploadToBlockBlobOptions{
+		// Modern SDK: Upload blob directly using the service client with container name and blob name
+		_, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
 			BlockSize:   blockBlobUploadBlockSize,
-			Parallelism: blockBlobParallelism,
+			Concurrency: blockBlobParallelism,
 		})
 		if oerr != nil {
 			return oerr
@@ -241,9 +245,9 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 }
 
 // backupPolicies accepts a list of WrappedPolicys and calls BackupPolicy with each
-func backupPolicies(policies []WrappedPolicy, containerURL *azblob.ContainerURL, failFast, quiet bool, path string) (err error) {
+func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
 	for x := range policies {
-		err = BackupPolicy(&policies[x], containerURL, failFast, quiet, path)
+		err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path)
 
 		if failFast {
 			return
