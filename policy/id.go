@@ -10,9 +10,9 @@ import (
 const ridHashLength = 8
 
 func IsRIDHash(s string) bool {
-    if len(s) != ridHashLength {
-        return false
-    }
+	if len(s) != ridHashLength {
+		return false
+	}
 
 	hashExp := regexp.MustCompile(`[a-f\d]{8}`)
 

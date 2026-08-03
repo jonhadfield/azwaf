@@ -98,98 +98,141 @@ func (i *RestorePoliciesInput) Validate() error {
 	// check target policy if specified
 	if i.TargetPolicy != "" {
 		if ValidateResourceID(i.TargetPolicy, false) != nil {
-			return fmt.Errorf(fmt.Sprintf("target policy '%s' is invalid", i.TargetPolicy), funcName)
+			return fmt.Errorf("%s - target policy '%s' is invalid", funcName, i.TargetPolicy)
 		}
 	}
 
 	return nil
 }
 
-// RestorePolicies loads existing backup(s) from files and then adds/overwrites based on user's choices
-func RestorePolicies(i *RestorePoliciesInput) (err error) {
+// RestorePolicies loads existing backup(s) from files and then adds/overwrites
+// based on the user's choices. Both Front Door and Application Gateway WAF
+// backup files can be present in the supplied paths; each backup is dispatched
+// to the matching API based on its embedded WAFType field (or the resource
+// type of an explicit --target).
+func RestorePolicies(i *RestorePoliciesInput) error {
 	funcName := GetFunctionName()
 
-	if err = i.Validate(); err != nil {
+	if err := i.Validate(); err != nil {
 		return err
 	}
 
 	s := session.New()
 	s.AppVersion = i.AppVersion
 
-	if oerr := i.Validate(); oerr != nil {
-		return oerr
-	}
-
-	// load policies from path
 	logrus.Debugf("%s | loading paths %s", strings.Join(i.BackupsPaths, ", "), funcName)
 
-	wps, oerr := LoadBackupsFromPaths(i.BackupsPaths)
-	if oerr != nil {
-		return oerr
+	loaded, err := LoadAllBackupsFromPaths(i.BackupsPaths)
+	if err != nil {
+		return err
 	}
 
-	if len(wps) == 0 {
-		return fmt.Errorf(fmt.Sprintf("no backup files could be found in paths: %s", strings.Join(i.BackupsPaths, ", ")), funcName)
+	total := len(loaded.FrontDoor) + len(loaded.AppGW)
+	if total == 0 {
+		return fmt.Errorf("%s - no backup files could be found in paths: %s", funcName, strings.Join(i.BackupsPaths, ", "))
 	}
+
+	if i.TargetPolicy != "" && total > 1 {
+		return fmt.Errorf("%s - restoring more than one backup to a single policy doesn't make sense", funcName)
+	}
+
+	// if a target was specified, validate it matches the type of the loaded backup
+	if i.TargetPolicy != "" {
+		targetType := WAFTypeFromResourceID(i.TargetPolicy)
+
+		if !IsRIDHash(i.TargetPolicy) {
+			if targetType == WAFTypeAppGW && len(loaded.AppGW) == 0 {
+				return fmt.Errorf("%s - target is an Application Gateway WAF policy but the loaded backup is for Front Door", funcName)
+			}
+
+			if targetType == WAFTypeFrontDoor && len(loaded.FrontDoor) == 0 {
+				return fmt.Errorf("%s - target is a Front Door WAF policy but the loaded backup is for Application Gateway", funcName)
+			}
+		}
+	}
+
+	if len(loaded.FrontDoor) > 0 {
+		// pass a copy: restoreFrontDoorBackups writes resolved hashes and
+		// backup-derived targets into TargetPolicy, and those must not leak
+		// into the AppGW branch below
+		fdInput := *i
+		if err := restoreFrontDoorBackups(s, &fdInput, loaded.FrontDoor); err != nil {
+			return err
+		}
+	}
+
+	if len(loaded.AppGW) > 0 {
+		if err := restoreAppGWBackups(s, i, loaded.AppGW); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// restoreFrontDoorBackups encapsulates the original RestorePolicies behaviour
+// for Front Door WAF backups; it has been extracted so the AppGW path can sit
+// alongside it. It mutates i.TargetPolicy, so callers must pass a copy of the
+// input if they use it afterwards.
+func restoreFrontDoorBackups(s *session.Session, i *RestorePoliciesInput, wps []WrappedPolicy) error {
+	funcName := GetFunctionName()
+
+	explicitTarget := i.TargetPolicy != ""
 
 	if i.TargetPolicy != "" {
-		// ensure only single backup file loaded if targeting a policy
-		if len(wps) > 1 {
-			return fmt.Errorf("%s - restoring more than one backup to a single policy doesn't make sense", funcName)
-		}
-
 		if IsRIDHash(i.TargetPolicy) {
-			i.TargetPolicy, err = GetPolicyRIDByHash(nil, i.SubscriptionID, i.TargetPolicy)
+			resolved, err := GetPolicyRIDByHash(nil, i.SubscriptionID, i.TargetPolicy)
 			if err != nil {
 				return err
 			}
+
+			i.TargetPolicy = resolved
 		}
 	} else {
-		// if no target policy specified, then retrieve from backup
 		i.TargetPolicy = wps[0].PolicyID
 		logrus.Debugf("retrieved target id from backup: %s", i.TargetPolicy)
 	}
 
-	// restore loaded backups
 	policies, err := CompilePoliciesToRestore(s, wps, i)
 	if err != nil {
-		return
+		return err
 	}
 
-	if len(policies) > 0 {
-		// if target policy specified, there can be only one
-		if i.TargetPolicy != "" {
-			var rIDs []config.ResourceID
+	if len(policies) == 0 {
+		return nil
+	}
 
-			rIDs, err = ConvertToResourceIDs([]string{i.TargetPolicy}, i.SubscriptionID)
-			if err != nil {
-				return
-			}
-
-			policies[0].updated.SubscriptionID = rIDs[0].SubscriptionID
-			policies[0].updated.ResourceGroup = rIDs[0].ResourceGroup
-			policies[0].updated.Name = rIDs[0].Name
+	// only retarget when the user explicitly supplied --target: when the
+	// target was derived from the first backup, every compiled policy
+	// already carries that identity, making this override redundant
+	if explicitTarget {
+		rIDs, err := ConvertToResourceIDs([]string{i.TargetPolicy}, i.SubscriptionID)
+		if err != nil {
+			return err
 		}
 
-		for x := range policies {
-			err = ProcessPolicyChanges(&ProcessPolicyChangesInput{
-				Session:          s,
-				PolicyName:       policies[x].updated.Name,
-				SubscriptionID:   policies[x].updated.SubscriptionID,
-				ResourceGroup:    policies[x].updated.ResourceGroup,
-				ShowDiff:         i.ShowDiff,
-				PolicyPostChange: policies[x].updated.Policy,
-				DryRun:           i.DryRun,
-				Backup:           i.AutoBackup,
-				Debug:            i.Debug,
-			})
-			if err != nil {
-				return
-			}
+		policies[0].updated.SubscriptionID = rIDs[0].SubscriptionID
+		policies[0].updated.ResourceGroup = rIDs[0].ResourceGroup
+		policies[0].updated.Name = rIDs[0].Name
+	}
+
+	for x := range policies {
+		if err := ProcessPolicyChanges(&ProcessPolicyChangesInput{
+			Session:          s,
+			PolicyName:       policies[x].updated.Name,
+			SubscriptionID:   policies[x].updated.SubscriptionID,
+			ResourceGroup:    policies[x].updated.ResourceGroup,
+			ShowDiff:         i.ShowDiff,
+			PolicyPostChange: policies[x].updated.Policy,
+			DryRun:           i.DryRun,
+			Backup:           i.AutoBackup,
+			Debug:            i.Debug,
+		}); err != nil {
+			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
-	return
+	return nil
 }
 
 type restorePair struct {
@@ -245,7 +288,11 @@ func shouldRestore(foundExisting bool, matched WrappedPolicy, backup WrappedPoli
 	}
 
 	switch {
-	case i.TargetPolicy != "" && i.DryRun:
+	// dry runs against an existing policy proceed without prompting. The
+	// foundExisting alternative matters for AppGW restores, which never
+	// derive a TargetPolicy from the backup; without it a no-target dry run
+	// would block on the interactive confirmation below.
+	case i.DryRun && (i.TargetPolicy != "" || foundExisting):
 		logrus.Debug("dry run only")
 		return true, nil
 	case i.TargetPolicy != "" && !foundExisting:

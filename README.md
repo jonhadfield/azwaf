@@ -1,476 +1,530 @@
 # azwaf
 
-A powerful command-line tool for managing Azure Web Application Firewall (WAF) policies on Azure Front Door.
+A focused command-line client for managing Azure **Front Door WAF** policies — list, inspect, copy, back up, restore, and tame managed-ruleset exclusions, all without wrestling the Azure portal. **Backup and restore** also support **Azure Application Gateway WAF** policies.
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/jonhadfield/azwaf)](https://golang.org)
 [![License](https://img.shields.io/github/license/jonhadfield/azwaf)](LICENSE)
 
-## Overview
+---
 
-`azwaf` provides a comprehensive CLI for listing, inspecting, and updating Azure Front Door WAF policies. It simplifies complex WAF management tasks with features like policy backup/restore, rule copying between policies, custom rule management, and managed ruleset exclusions.
+## Why azwaf?
 
-### Key Features
+WAF policies are notoriously fiddly to manage at scale: dozens of custom rules, sprawling managed-ruleset exclusions, no good way to diff two policies or roll one back. `azwaf` gives you a small, predictable CLI for the operations you actually do day-to-day. The bulk of the feature surface targets **Azure Front Door WAF** policies; `backup` and `restore` additionally support **Azure Application Gateway WAF** policies:
 
-- **Policy Management**: List, show, copy, and delete WAF policies
-- **Backup & Restore**: Save and restore complete policy configurations with metadata
-- **Custom Rules**: Add, update, and delete custom rules with priority enforcement
-- **Managed Rulesets**: Configure managed ruleset exclusions and settings
-- **Rule Blocking**: Block IP addresses, request URIs, and user agents
-- **Comparison**: Compare policies to identify configuration differences
-- **Caching**: BuntDB-based caching for improved performance
-- **Aliases**: Use short names instead of full Azure resource IDs
+- 🔎 **Inspect** — read policies and exclusions in a tabular form a human can scan *(Front Door)*
+- 📦 **Backup / restore** — snapshot policies to disk or Azure Blob Storage and restore them, in full or rule-by-rule *(Front Door **and** Application Gateway)*
+- 🧬 **Copy** — clone custom rules and/or managed-ruleset config from one policy onto another, with optional diff and dry-run *(Front Door)*
+- 🧹 **Surgically delete** — remove a custom rule (by name regex or priority) or a managed-rule exclusion
+- 🛡️ **Add exclusions** — at rule-set, rule-group, or rule-id scope
+- 🪪 **Friendly aliases** — refer to policies by short names from a config file, or by short content hashes
+- 🧠 **Sanity checks** — flag *shadowed* exclusions where a wider scope already covers a narrower one
+
+Built on the modern Azure SDK for Go, with cached lookups via [BuntDB](https://github.com/tidwall/buntdb) so repeated commands feel instant.
+
+---
 
 ## Table of Contents
 
-- [Overview](#overview)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [Architecture](#architecture)
-- [Development](#development)
 - [Authentication](#authentication)
+- [Quick Start](#quick-start)
+- [Command Reference](#command-reference)
+  - [Global flags](#global-flags)
+  - [`list`](#list)
+  - [`show`](#show)
+  - [`get`](#get)
+  - [`add exclusion`](#add-exclusion)
+  - [`delete`](#delete)
+  - [`backup`](#backup)
+  - [`restore`](#restore)
+  - [`copy`](#copy)
+- [Policy Aliases & Hashes](#policy-aliases--hashes)
+- [Architecture](#architecture)
+- [Limits](#limits)
+- [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Installation
 
 ### Prerequisites
 
-- Go 1.24+ (for building from source)
-- Azure subscription with Front Door WAF policies
-- Azure credentials configured (Azure CLI, Managed Identity, or Service Principal)
+- Go **1.24+** (only required to build from source)
+- An Azure subscription with one or more Front Door or Application Gateway WAF policies
+- Azure credentials available via Azure CLI, environment variables, managed identity, or another mechanism the [Azure Identity for Go](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) chain supports
 
-### Build from Source
+### Build from source
 
 ```bash
-# Clone the repository
 git clone https://github.com/jonhadfield/azwaf.git
 cd azwaf
 
-# Build the binary
-make build
-
-# Install to system (macOS)
-make mac-install
-
-# Install to system (Linux)
-make linux-install
+make build           # produces .local_dist/azwaf
+make mac-install     # installs to /usr/local/bin (macOS)
+make linux-install   # installs to /usr/local/bin (Linux)
 ```
 
-The compiled binary will be available at `.local_dist/azwaf`.
-
-### Build for Multiple Platforms
+### Cross-compile
 
 ```bash
-# Build for all supported platforms
-make build-all
-
-# Build for Linux only
-make build-linux
+make build-all       # darwin/amd64, linux/amd64, linux/arm, linux/arm64, *bsd/amd64
+make build-linux     # linux/amd64 only
 ```
+
+---
 
 ## Configuration
 
-### Environment Variables
+### Environment variables
 
-- `AZURE_SUBSCRIPTION_ID` **(required)**: Azure subscription ID containing your WAF policies
-- `AZWAF_LOG`: Set to `debug` for verbose logging (default: `info`)
-- Standard Azure authentication variables:
-  - `AZURE_CLIENT_ID`
-  - `AZURE_CLIENT_SECRET`
-  - `AZURE_TENANT_ID`
+| Variable | Purpose |
+| --- | --- |
+| `AZURE_SUBSCRIPTION_ID` | Subscription containing your WAF policies. Most commands need this (or `--subscription-id`). |
+| `AZWAF_LOG` | Set to `debug` for verbose output. Default `info`. |
+| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Service-principal auth (one of several supported flows). |
 
-### Configuration File
+### Config file
 
-The application looks for a configuration file at `~/.config/azwaf/config.yaml`. This file stores policy aliases for easier reference.
-
-**Example config.yaml:**
+`azwaf` looks for `~/.config/azwaf/config.yaml` by default. The file currently holds a single map: short aliases for full policy resource IDs.
 
 ```yaml
 policy_aliases:
-  prod-waf: /subscriptions/abc-123/resourceGroups/prod-rg/providers/Microsoft.Network/FrontDoorWebApplicationFirewallPolicies/prod-policy
-  staging-waf: /subscriptions/abc-123/resourceGroups/staging-rg/providers/Microsoft.Network/FrontDoorWebApplicationFirewallPolicies/staging-policy
+  prod-waf:    /subscriptions/abc-123/resourceGroups/prod-rg/providers/Microsoft.Network/FrontDoorWebApplicationFirewallPolicies/prod-policy
+  staging-waf: /subscriptions/abc-123/resourceGroups/stg-rg/providers/Microsoft.Network/FrontDoorWebApplicationFirewallPolicies/stg-policy
 ```
 
-Override the config file path with `--config`:
+Override the path with `--config /path/to/config.yaml`.
 
-```bash
-azwaf --config /path/to/config.yaml list policies
+### Working directory
+
+`azwaf` keeps cache and auto-backups under `~/.azwaf/`:
+
 ```
+~/.azwaf/
+├── cache/cache.db    # BuntDB cache for resource-id ↔ hash lookups
+└── backups/          # auto-backups written before mutating commands
+```
+
+---
+
+## Authentication
+
+`azwaf` uses [`azidentity.NewDefaultAzureCredential`](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity), so any of the following work:
+
+1. **Azure CLI** — `az login`, then run `azwaf` (great for interactive use)
+2. **Environment variables** — set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (great for CI/automation)
+3. **Managed identity** — when running on an Azure VM, App Service, Container App, AKS, etc.
+4. **Workload identity, Azure Developer CLI (`azd`), and other SDK-supported flows**
+
+The role assigned to your principal needs read/write on the WAF policies you intend to operate on — Front Door WAF policies, Application Gateway WAF policies, or both (`Contributor`, or a more scoped custom role).
+
+---
 
 ## Quick Start
 
 ```bash
-# Set required environment variable
-export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_SUBSCRIPTION_ID="your-sub-id"
 
-# List all WAF policies
+# Discover what's there
 azwaf list policies
-
-# Show detailed policy information
-azwaf show policy <policy-id>
-```
-
-## Usage
-
-### List Resources
-
-```bash
-# List all WAF policies in the subscription
-azwaf list policies
-
-# List all Front Doors in the subscription
 azwaf list frontdoors
-```
 
-### Show Policy Details
-
-```bash
-# Show policy details using full resource ID
-azwaf show policy <policy-id>
-
-# Show policy using alias (from config file)
+# Inspect a policy (use the short hash printed by `list policies`, an alias, or the full resource ID)
 azwaf show policy prod-waf
+azwaf show policy prod-waf --custom-only --stats
 
-# Show policy in JSON format
-azwaf show policy prod-waf --format json
+# Look at managed-ruleset exclusions, including ones that shadow narrower scopes
+azwaf show managed-rule-exclusions prod-waf --shadows
 ```
 
-### Backup & Restore
+---
+
+## Command Reference
+
+### Global flags
+
+These are accepted by every command:
+
+| Flag | Aliases | Default | Description |
+| --- | --- | --- | --- |
+| `--subscription-id` | `-s`, `--subscription` | `$AZURE_SUBSCRIPTION_ID` | Target subscription |
+| `--config` | | `~/.config/azwaf/config.yaml` | Config file path |
+| `--quiet` | | `false` | Suppress non-essential output |
+| `--auto-backup` | | `true` | Auto-snapshot the policy to `~/.azwaf/backups/` before any mutation |
+
+---
+
+### `list`
+
+List Front Doors and policies in the subscription.
 
 ```bash
-# Backup a policy to file
-azwaf backup policy prod-waf --output prod-waf-backup.json
+azwaf list policies                  # short hashes + names
+azwaf list policies --full           # include full resource IDs
+azwaf list policies --top 50         # cap results (default 200)
 
-# Restore a policy from backup
-azwaf restore policy --input prod-waf-backup.json
-
-# Restore to a different policy
-azwaf restore policy --input backup.json --target staging-waf
+azwaf list frontdoors                # Front Doors and the policies they reference
 ```
 
-### Copy Policies
+Aliases: `list policies` ↔ `list p`, `list frontdoors` ↔ `list f`.
+
+---
+
+### `show`
+
+#### `show policy`
+
+Render a policy as readable tables.
 
 ```bash
-# Copy entire policy from source to destination
-azwaf copy policy --source prod-waf --destination staging-waf
-
-# Copy only custom rules
-azwaf copy policy --source prod-waf --destination staging-waf --custom-rules-only
-
-# Copy only managed rulesets
-azwaf copy policy --source prod-waf --destination staging-waf --managed-rules-only
+azwaf show policy prod-waf
+azwaf show policy prod-waf --custom-only        # only custom rules
+azwaf show policy prod-waf --managed-only       # only managed rulesets
+azwaf show policy prod-waf --show-full          # show all match conditions (no truncation)
+azwaf show policy prod-waf --stats              # rule counts and summary stats
+azwaf show policy prod-waf --shadows            # highlight rules that shadow each other
 ```
 
-### Custom Rules Management
+#### `show managed-rule-exclusions`
 
-`azwaf` automatically assigns rule priorities based on action type to ensure proper evaluation order:
-
-| Action | Priority Range | Purpose |
-|--------|----------------|---------|
-| Log | 1000-1999 | Observability without blocking |
-| Allow | 3000-3999 | Explicit permits (bypass blocks) |
-| Block | 5000-5999 | Security enforcement |
-
-**Priority Assignment**: Rules are automatically assigned the next available priority in their range. Lower numbers evaluate first.
+Inspect exclusions across rule-set / rule-group / rule scope.
 
 ```bash
-# Add a custom rule to block an IP address
-azwaf add custom-rule prod-waf \
-  --name "BlockMaliciousIP" \
-  --action Block \
-  --rule-type MatchRule \
-  --match-variable RemoteAddr \
-  --operator IPMatch \
-  --match-values "192.168.1.100,10.0.0.50"
-
-# Add a rate limit rule
-azwaf add custom-rule prod-waf \
-  --name "RateLimit" \
-  --action Block \
-  --rule-type RateLimitRule \
-  --rate-limit-threshold 100 \
-  --rate-limit-duration-minutes 1
-
-# Delete a custom rule
-azwaf delete custom-rule prod-waf --name "BlockMaliciousIP"
+azwaf show managed-rule-exclusions prod-waf
+azwaf show managed-rule-exclusions prod-waf --rule-set Microsoft_DefaultRuleSet_2.1
+azwaf show managed-rule-exclusions prod-waf --rule-group SQLI
+azwaf show managed-rule-exclusions prod-waf --rule-id 942100
+azwaf show managed-rule-exclusions prod-waf --shadows   # exclusions made redundant by a wider scope
 ```
 
-### Managed Ruleset Exclusions
+Aliases: `m`, `managed`, `exclusions`, `exclusion`.
+
+---
+
+### `get`
+
+Print the raw policy payload — useful when piping into `jq`, diffing, or inspecting a specific custom rule.
 
 ```bash
-# Add exclusions to a managed ruleset
+azwaf get policy prod-waf | jq '.properties.customRules.rules[].name'
+
+# Custom-rule format is "<policy>|<rule-name>"
+azwaf get custom-rule "prod-waf|BlockBadActor"
+azwaf get custom-rule "prod-waf|BlockBadActor" --output rule.json
+```
+
+Aliases: `get policy` ↔ `get p`, `get custom-rule` ↔ `get c`.
+
+---
+
+### `add exclusion`
+
+Add a managed-rule exclusion at rule-set, rule-group, or rule-id scope. Pick **one** of `--rule-set`, `--rule-group`, `--rule-id`.
+
+| Flag | Aliases | Required | Description |
+| --- | --- | --- | --- |
+| `--match-variable` | `-v`, `--variable` | yes | One of `RequestCookieNames`, `RequestHeaderNames`, `QueryStringArgNames`, `RequestBodyPostArgNames`, `RequestBodyJsonArgNames` |
+| `--match-operator` | `-o`, `--operator` | yes | One of `Contains`, `EndsWith`, `Equals`, `EqualsAny`, `StartsWith` |
+| `--match-selector` | `-s`, `--selector` | yes | The selector value (e.g. cookie or header name) |
+| `--rule-set` | `-r` | one of three | Format: `<type>_<version>`, e.g. `Microsoft_DefaultRuleSet_2.1` |
+| `--rule-group` | `-g` | one of three | E.g. `SQLI` |
+| `--rule-id` | `-i` | one of three | E.g. `942100` |
+| `--dry-run` | `-d` | no | Compute changes but do not push |
+| `--show-diff` | | no | Print a diff between the current and proposed policy |
+
+```bash
+# Exclude the User-Agent header from a whole rule-set
 azwaf add exclusion prod-waf \
-  --rule-set "Microsoft_DefaultRuleSet" \
-  --match-variable "RequestHeaderNames" \
-  --selector "User-Agent" \
-  --operator "Equals"
+  --rule-set Microsoft_DefaultRuleSet_2.1 \
+  --variable RequestHeaderNames \
+  --operator Equals \
+  --selector User-Agent
 
-# Add exclusion to specific rule group
+# Exclude session cookies from a single rule, dry-run with diff
 azwaf add exclusion prod-waf \
-  --rule-group "PROTOCOL-ENFORCEMENT" \
-  --match-variable "RequestCookieNames" \
-  --selector "session" \
-  --operator "StartsWith"
-
-# Add exclusion to specific rule ID
-azwaf add exclusion prod-waf \
-  --rule-id "942100" \
-  --match-variable "QueryStringArgNames" \
-  --selector "search" \
-  --operator "Equals"
+  --rule-id 942100 \
+  --variable RequestCookieNames \
+  --operator StartsWith \
+  --selector session \
+  --dry-run --show-diff
 ```
 
-### Quick Block Commands
+---
 
-Convenience commands to quickly block common threat patterns:
+### `delete`
+
+#### `delete custom-rule`
+
+Delete custom rules by **name** (regex) or **priority**. At least one is required.
 
 ```bash
-# Block specific IP addresses
-azwaf add block prod-waf --ip "192.168.1.100,10.0.0.50"
-
-# Block request URIs (paths)
-azwaf add block prod-waf --uri "/admin,/wp-admin"
-
-# Block user agents
-azwaf add block prod-waf --user-agent "BadBot,MaliciousScanner"
+azwaf delete custom-rule prod-waf --name "^Block.*"        # regex match
+azwaf delete custom-rule prod-waf --priority 5100
+azwaf delete custom-rule prod-waf --name "Tmp_.*" --dry-run
 ```
 
-**Note**: These commands create custom block rules with appropriate priorities (5000-5999 range).
+Aliases: `c`, `cr`.
 
-### Compare Policies
+#### `delete managed-rule-exclusion`
+
+Mirror of `add exclusion` — same scope and match flags, same `--dry-run` / `--show-diff`.
 
 ```bash
-# Compare two policies and show differences
-azwaf compare --source prod-waf --destination staging-waf
-
-# Output comparison in JSON format
-azwaf compare --source prod-waf --destination staging-waf --format json
+azwaf delete managed-rule-exclusion prod-waf \
+  --rule-set Microsoft_DefaultRuleSet_2.1 \
+  --variable RequestHeaderNames \
+  --operator Equals \
+  --selector User-Agent \
+  --show-diff
 ```
 
-### Delete Policy
+Aliases: `m`, `mre`, `exclusion`.
+
+---
+
+### `backup`
+
+Snapshot one or more policies to disk and/or Azure Blob Storage. Policy IDs (or hashes / aliases) are positional arguments. Both **Front Door** and **Application Gateway** WAF policies are supported; the resource type embedded in each resource ID determines which API the policy is fetched from. Running with no positional arguments backs up every WAF policy of either type in the subscription.
 
 ```bash
-# Delete a WAF policy (with confirmation prompt)
-azwaf delete policy prod-waf
+# All Front Door + Application Gateway WAF policies in the subscription
+azwaf backup --path ./backups/
 
-# Force delete without confirmation
-azwaf delete policy prod-waf --force
+# Mix and match — pass full resource IDs for either type, or use FD aliases
+azwaf backup prod-waf \
+  /subscriptions/abc-123/resourceGroups/agw-rg/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/prod-agw \
+  --path ./backups/
+
+# Push to a Blob container (alongside or instead of local disk)
+azwaf backup prod-waf \
+  --container-url https://myacc.blob.core.windows.net/waf-backups
+
+# Or via storage-account resource ID (azwaf will resolve it)
+azwaf backup prod-waf \
+  --storage-account-id /subscriptions/.../storageAccounts/myacc
+
+azwaf backup prod-waf staging-waf --path ./backups/ --fail-fast
 ```
+
+| Flag | Aliases | Description |
+| --- | --- | --- |
+| `--path` | `-p` | Local directory for backup files |
+| `--container-url` | `-c` | Blob container URL to upload to |
+| `--storage-account-id` | `-s` | Storage-account resource ID (alternative to `--container-url`) |
+| `--fail-fast` | `-f` | Stop on the first error rather than continuing |
+
+> Mutating commands also create an auto-backup under `~/.azwaf/backups/` unless `--auto-backup=false` is set.
+
+> Each backup file embeds a `WAFType` field (`FrontDoor` or `ApplicationGateway`) so `restore` can dispatch to the right API. Backup files produced by older versions of `azwaf` (no `WAFType` field) are treated as Front Door for backward compatibility.
+
+---
+
+### `restore`
+
+Restore one or more backup files. Backup paths are positional. Both **Front Door** and **Application Gateway** WAF backups are accepted — each file's embedded `WAFType` field decides which API the restore is pushed through. You can mix backups of either type in a single invocation.
+
+```bash
+# Restore each backup, recreating the policy in its original resource group
+azwaf restore ./backups/prod-waf-2026-05-04.json
+
+# Restore custom rules only, on top of an existing target policy
+azwaf restore ./backups/prod-waf-2026-05-04.json \
+  --target staging-waf --custom-rules
+
+# Restore managed-rule config only
+azwaf restore ./backups/prod-waf-2026-05-04.json \
+  --target staging-waf --managed-rules --show-diff
+
+# Restore an Application Gateway WAF backup onto an existing AppGW WAF policy
+azwaf restore ./backups/prod-agw-2026-05-04.json \
+  --target /subscriptions/abc-123/resourceGroups/agw-rg/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/staging-agw \
+  --show-diff
+
+# Recreate into a different resource group, no prompt
+azwaf restore ./backups/*.json --resource-group restored-rg --force
+```
+
+| Flag | Aliases | Description |
+| --- | --- | --- |
+| `--target` | `-t` | Restore on top of an existing target policy instead of recreating |
+| `--resource-group` | `-r` | RG to restore new policies into (when not using `--target`) |
+| `--custom-rules` | `--custom`, `-c` | Restore only custom rules |
+| `--managed-rules` | `--managed`, `-m` | Restore only managed-ruleset config |
+| `--show-diff` | `-s` | Show the diff before applying |
+| `--dry-run` | `-d` | Compute the result but do not push |
+| `--force` | | Skip the confirmation prompt |
+| `--fail-fast` | `-f` | Stop on the first error |
+
+> When `--target` is used with an Application Gateway WAF backup, the target must be a full Azure resource ID — short hashes are Front Door-only (the hash cache is populated from `list policies`, which only enumerates Front Door WAFs).
+
+---
+
+### `copy`
+
+Copy custom and/or managed rules from one policy onto another. Both `--source` and `--target` are required. Hashes can be used when both policies are in the current subscription.
+
+```bash
+azwaf copy --source prod-waf --target staging-waf
+azwaf copy --source prod-waf --target staging-waf --custom-rules --show-diff
+azwaf copy --source prod-waf --target staging-waf --managed-rules --dry-run
+azwaf copy --source prod-waf --target dr-waf --async
+```
+
+| Flag | Aliases | Description |
+| --- | --- | --- |
+| `--source` | `-s`, `--src` | Source policy resource ID, alias, or hash |
+| `--target` | `-t` | Target policy resource ID, alias, or hash |
+| `--custom-rules` | `--custom`, `-c` | Copy only custom rules |
+| `--managed-rules` | `--managed`, `-m` | Copy only managed-ruleset config |
+| `--show-diff` | `--show`, `--diff` | Show the diff before applying |
+| `--dry-run` | `-d` | Generate the policy but do not push |
+| `--async` | `-a` | Push without waiting for completion |
+
+> Default behaviour copies **both** custom and managed rules. Use the flags above to scope it down.
+
+---
+
+## Policy Aliases & Hashes
+
+You can refer to a policy in three ways:
+
+1. **Full resource ID** — `/subscriptions/.../FrontDoorWebApplicationFirewallPolicies/prod-policy`
+2. **Alias** — a short name from `~/.config/azwaf/config.yaml` (e.g. `prod-waf`)
+3. **Hash** — the short string printed in `azwaf list policies`. Hashes are scoped to the current subscription, so `--subscription-id` (or `AZURE_SUBSCRIPTION_ID`) must be set when using them.
+
+---
 
 ## Architecture
-
-### Project Structure
 
 ```
 azwaf/
 ├── cmd/
-│   ├── azwaf/           # Main entry point
-│   └── commands/        # CLI command implementations
-├── policy/              # Core WAF policy logic
-│   ├── policy.go        # Main types and interfaces
-│   ├── custom_rules.go  # Custom rule management
-│   ├── policy_managed.go # Managed ruleset operations
-│   ├── backup.go        # Backup functionality
-│   ├── restore.go       # Restore functionality
-│   ├── data.go          # Data structures and marshaling
-│   └── output.go        # CLI output formatting
-├── session/             # Azure authentication and client management
-│   ├── session.go       # Session handling
-│   ├── clients.go       # Azure SDK client initialization
-│   └── config.go        # Session configuration
-├── config/              # Application configuration
-│   ├── config.go        # Config file parsing
-│   └── constants.go     # Application-wide constants
-├── cache/               # BuntDB caching for API responses
-└── helpers/             # Shared utility functions
+│   ├── azwaf/             # main(), CLI bootstrap
+│   └── commands/          # urfave/cli subcommands (add, backup, copy, …)
+├── policy/                # core WAF logic
+│   ├── policy.go          # types, fetch helpers, hashmap (Front Door)
+│   ├── custom_rules.go    # custom-rule manipulation
+│   ├── policy_managed.go  # managed-ruleset & exclusion handling
+│   ├── add_exclusions.go  # add managed-rule exclusion flow
+│   ├── delete_*.go        # delete custom rule / managed exclusion
+│   ├── backup.go          # local + blob backups (FD + AppGW)
+│   ├── restore.go         # restore flows (dispatches FD vs AppGW)
+│   ├── appgw.go           # Application Gateway WAF SDK wrappers
+│   ├── appgw_restore.go   # AppGW restore pipeline
+│   ├── copy.go            # cross-policy copy
+│   ├── compare.go         # diff helper used by --show-diff
+│   ├── show.go / output.go / stats.go  # CLI rendering
+│   └── frontdoor.go       # Front Door listing
+├── session/               # azidentity + Azure SDK clients + cache wiring
+├── config/                # config.yaml parsing, resource-ID parsing
+├── cache/                 # BuntDB-backed caching (resource-id hash map, etc.)
+└── helpers/               # shared utilities
 ```
 
-### Key Design Patterns
+### Design notes
 
-1. **Session-based Architecture**: All Azure operations go through a centralized session that manages authentication and caching
-2. **Policy Wrapper Pattern**: Policies are wrapped with metadata (`WrappedPolicy`) for backup/restore operations
-3. **Resource ID Abstraction**: Uses aliases from config file to map short names to full Azure resource IDs
-4. **Custom Rule Priorities**: Enforces ordering to ensure proper rule evaluation
+- **Session is the seam.** Every Azure-touching code path runs through a `*session.Session` that owns credentials, the SDK clients, and the cache. Tests mock at this boundary.
+- **Wrapped policies.** `WrappedPolicy` (Front Door) and `WrappedAppGWPolicy` (Application Gateway) decorate the SDK types with metadata (subscription, resource group, name, hashes, `WAFType`) so backup/restore/copy stay unambiguous about *which* policy a payload belongs to.
+- **WAF type discrimination.** `BackupPolicies` partitions inbound resource IDs into Front Door and Application Gateway lists by inspecting the resource type segment of each ID. `RestorePolicies` peeks at every backup file's `WAFType` field and routes it to the matching restore pipeline.
+- **Hash-based shorthand.** A subscription-scoped hash map (`WAFResourceIDHashMap`) lets the CLI accept short hashes in place of full resource IDs.
+- **Diffing via `diff(1)`.** `--show-diff` shells out to the system `diff` for human-readable output rather than a custom JSON differ.
 
-### Azure WAF Limits
+---
 
-These limits are enforced by Azure Front Door WAF service:
+## Limits
 
-| Resource | Limit | Notes |
-|----------|-------|-------|
-| Custom rules per policy | 90 | Hard limit enforced by Azure |
-| IP match values per rule | 600 | Per match condition |
-| Policies per fetch | 200 | Tool optimization limit |
-| Front Doors per fetch | 100 | Tool optimization limit |
+The limits below apply to Front Door WAF policies. Application Gateway WAF policies are subject to a separate set of Azure limits — `azwaf` does not enforce or surface them.
 
-For more details, see [Azure Front Door limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-standard-and-premium-tier-service-limits).
+| Resource | Limit | Source |
+| --- | --- | --- |
+| Custom rules per policy | **90** | Azure hard limit |
+| IP-match values per rule | **600** | Azure hard limit |
+| Conditions per custom rule | **10** | Azure hard limit |
+| Exclusions per scope | **100** (warns at 95) | Azure hard limit |
+| Policies fetched per `list policies` | **200** (configurable via `--top`) | Tool default |
+| Front Doors fetched per `list frontdoors` | **100** | Tool default |
+
+See [Azure Front Door service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-standard-and-premium-tier-service-limits) for the Front Door upstream specifics, and [Application Gateway service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#application-gateway-limits) for Application Gateway.
+
+---
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Run unit tests with coverage
-make test
-
-# Run integration tests (requires Azure credentials)
-make test.integration
-
-# Generate and view coverage report
-make coverage
-
-# Run a specific test
-go test -v ./policy -run TestSpecificFunction
+make fmt              # goimports + gofumpt
+make lint             # golangci-lint
+make test             # unit tests with coverage
+make test.integration # integration tests (require live Azure creds)
+make coverage         # opens HTML coverage report
+make ci               # lint + test (run before pushing)
+make gosec            # security scanner
+make critic           # gocritic
 ```
 
-### Code Quality
+Unit tests mock the Azure SDK clients. Integration tests sit behind build tags and need a real subscription. Test fixtures (sample policies, IP lists) live in `policy/testdata/`.
 
-```bash
-# Format code
-make fmt
-
-# Run linter
-make lint
-
-# Run security analysis
-make gosec
-
-# Run code critic
-make critic
-
-# Run all checks (pre-commit)
-make ci
-```
-
-### Testing Strategy
-
-The project uses a multi-layered testing approach:
-
-- **Unit tests**: Mocked Azure clients for fast, isolated component testing
-- **Integration tests**: Real Azure credentials required, gated with build tags for optional execution
-- **Test fixtures**: Sample policies and IP lists in `policy/testdata/` for reproducible testing
-- **Coverage tracking**: Automated coverage reports generated via `make coverage`
-
-## Authentication
-
-`azwaf` supports all standard Azure SDK authentication methods, tried in the following order:
-
-### 1. Environment Variables (Recommended for Automation)
-
-```bash
-export AZURE_TENANT_ID="your-tenant-id"
-export AZURE_CLIENT_ID="your-client-id"
-export AZURE_CLIENT_SECRET="your-client-secret"
-export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-```
-
-### 2. Azure CLI (Recommended for Interactive Use)
-
-```bash
-az login
-export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-azwaf list policies
-```
-
-### 3. Managed Identity (For Azure Resources)
-
-Automatically detected when running on Azure VMs, App Service, Azure Functions, etc. No additional configuration required beyond setting `AZURE_SUBSCRIPTION_ID`.
-
-### 4. Other Methods
-
-The tool supports additional Azure SDK authentication methods including Azure Developer CLI (`azd`), workload identity, and more. See the [Azure Identity documentation](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) for details.
+---
 
 ## Troubleshooting
 
-### Enable Debug Logging
-
-For detailed operation logs and API call tracing:
+**Verbose logs**
 
 ```bash
-export AZWAF_LOG=debug
-azwaf list policies
+AZWAF_LOG=debug azwaf list policies
 ```
 
-### Common Issues
+**“subscription-id required” / auth errors**
 
-#### Authentication Errors
+```bash
+echo $AZURE_SUBSCRIPTION_ID         # is it set?
+az account show                     # is the CLI logged in?
+az account list --query "[].id"     # do you have access?
+```
 
-**Symptoms**: "authentication failed" or "unauthorized" errors
+Make sure your principal has at least `Contributor` (or equivalent custom role) on the policies you’re touching.
 
-**Solutions**:
-- Ensure `AZURE_SUBSCRIPTION_ID` is set: `echo $AZURE_SUBSCRIPTION_ID`
-- Verify Azure credentials are configured: `az account show` or check environment variables
-- Confirm subscription access: `az account list --query "[].id"`
-- Check required permissions: Contributor or WAF Policy Contributor role on subscription/resource group
+**Stale or weird cached lookups**
 
-#### Policy Not Found
+The cache lives at `~/.azwaf/cache/cache.db` and stores resource-id ↔ hash mappings. If the contents of your subscription have changed and `azwaf` looks confused, clearing it is safe:
 
-**Symptoms**: "policy not found" or "resource does not exist"
+```bash
+rm -rf ~/.azwaf/cache/
+```
 
-**Solutions**:
-- List available policies: `azwaf list policies`
-- Verify alias configuration in `~/.config/azwaf/config.yaml`
-- Try using full resource ID instead of alias
-- Confirm policy is in the correct subscription
+**Hash not found**
 
-#### Cache Issues
+Hashes are scoped to a subscription. Confirm `--subscription-id` (or `AZURE_SUBSCRIPTION_ID`) matches the subscription where the policy lives, or pass the alias / full resource ID instead.
 
-**Symptoms**: Stale data or outdated policy information
-
-**Solutions**:
-- Clear cache directory: `rm -rf ~/.cache/azwaf/`
-- Cache automatically expires after 15 minutes
-- Use `--no-cache` flag (if available) to bypass cache
-
-#### Performance Issues
-
-**Symptoms**: Slow API responses or timeouts
-
-**Solutions**:
-- Enable caching to reduce API calls
-- Check Azure service health: https://status.azure.com
-- Reduce concurrent operations if hitting rate limits
-- Use specific policy IDs instead of listing all policies
+---
 
 ## Contributing
 
-Contributions are welcome! Please:
+Pull requests welcome. Please:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork and create a feature branch (`git checkout -b feature/your-thing`)
+2. Add tests for any new behaviour
+3. Run `make ci` before pushing
+4. Open a PR with a description of the change and its motivation
 
-### Development Guidelines
+Issues and feature requests: <https://github.com/jonhadfield/azwaf/issues>.
 
-- Follow Go best practices and idioms
-- Add unit tests for new functionality
-- Update documentation for user-facing changes
-- Run `make ci` before committing to ensure code quality
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
-## Support
+---
 
-For issues, questions, or feature requests, please [open an issue](https://github.com/jonhadfield/azwaf/issues) on GitHub.
+## Built with
 
-## Related Projects
-
-- [Azure Front Door Documentation](https://learn.microsoft.com/en-us/azure/frontdoor/)
-- [Azure WAF Documentation](https://learn.microsoft.com/en-us/azure/web-application-firewall/)
-- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go)
-
-## Acknowledgments
-
-Built with:
-- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) - Azure resource management
-- [urfave/cli](https://github.com/urfave/cli) - CLI framework
-- [BuntDB](https://github.com/tidwall/buntdb) - Embedded key/value database for caching
-- [logrus](https://github.com/sirupsen/logrus) - Structured logging
-- [simpletable](https://github.com/alexeyco/simpletable) - Table formatting for output
-- [jsondiff](https://github.com/wI2L/jsondiff) - JSON comparison for policy diffs
+- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) — `armfrontdoor`, `armnetwork`, `armresources`, `azidentity`
+- [urfave/cli](https://github.com/urfave/cli) — CLI framework
+- [BuntDB](https://github.com/tidwall/buntdb) — embedded key/value cache
+- [logrus](https://github.com/sirupsen/logrus) + [nested-logrus-formatter](https://github.com/antonfisher/nested-logrus-formatter) — logging
+- [simpletable](https://github.com/alexeyco/simpletable) — table rendering
+- [jsondiff](https://github.com/wI2L/jsondiff) — structured JSON diffing

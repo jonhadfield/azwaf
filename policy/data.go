@@ -274,3 +274,119 @@ func LoadBackupsFromPath(rootPath string) ([]WrappedPolicy, error) {
 
 	return wps, nil
 }
+
+// LoadedBackups separates loaded backup files by WAF type.
+type LoadedBackups struct {
+	FrontDoor []WrappedPolicy
+	AppGW     []WrappedAppGWPolicy
+}
+
+// wafTypePeek is used to identify the WAF type of a backup file before fully
+// unmarshaling it into the correct concrete type.
+type wafTypePeek struct {
+	WAFType string `json:"WAFType"`
+}
+
+// LoadAllBackupsFromPaths walks each path (file or directory) and loads every
+// JSON backup it finds, dispatching each file to either the FrontDoor or AppGW
+// type based on the WAFType field embedded in the backup. Backups produced by
+// older versions of azwaf have no WAFType and are treated as FrontDoor.
+func LoadAllBackupsFromPaths(paths []string) (LoadedBackups, error) {
+	funcName := GetFunctionName()
+
+	if len(paths) == 0 {
+		return LoadedBackups{}, fmt.Errorf("%s - no paths provided", funcName)
+	}
+
+	var out LoadedBackups
+
+	for _, p := range paths {
+		got, err := loadAllBackupsFromPath(p)
+		if err != nil {
+			return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+		}
+
+		out.FrontDoor = append(out.FrontDoor, got.FrontDoor...)
+		out.AppGW = append(out.AppGW, got.AppGW...)
+	}
+
+	logrus.Debugf("loaded %d FrontDoor and %d AppGW policy backups", len(out.FrontDoor), len(out.AppGW))
+
+	return out, nil
+}
+
+func loadAllBackupsFromPath(rootPath string) (LoadedBackups, error) {
+	funcName := GetFunctionName()
+
+	info, err := os.Stat(rootPath)
+	if err != nil {
+		return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+	}
+
+	if !info.IsDir() {
+		if !strings.EqualFold(filepath.Ext(info.Name()), ".json") {
+			return LoadedBackups{}, fmt.Errorf("%s - %s is not a json file", funcName, rootPath)
+		}
+
+		return loadBackupFile(rootPath)
+	}
+
+	files, err := os.ReadDir(rootPath)
+	if err != nil {
+		return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+	}
+
+	var out LoadedBackups
+
+	for _, f := range files {
+		if f.IsDir() || !strings.EqualFold(filepath.Ext(f.Name()), ".json") {
+			continue
+		}
+
+		got, err := loadBackupFile(filepath.Join(rootPath, f.Name()))
+		if err != nil {
+			return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+		}
+
+		out.FrontDoor = append(out.FrontDoor, got.FrontDoor...)
+		out.AppGW = append(out.AppGW, got.AppGW...)
+	}
+
+	return out, nil
+}
+
+func loadBackupFile(path string) (LoadedBackups, error) {
+	funcName := GetFunctionName()
+	logrus.Debugf("%s | loading file %s", funcName, path)
+
+	// #nosec
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+	}
+
+	var peek wafTypePeek
+	if err := json.Unmarshal(data, &peek); err != nil {
+		return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+	}
+
+	if peek.WAFType == WAFTypeAppGW {
+		wp, err := LoadWrappedAppGWPolicyFromFile(data)
+		if err != nil {
+			return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+		}
+
+		return LoadedBackups{AppGW: []WrappedAppGWPolicy{wp}}, nil
+	}
+
+	var wp WrappedPolicy
+	if err := json.Unmarshal(data, &wp); err != nil {
+		return LoadedBackups{}, fmt.Errorf("%s - %w", funcName, err)
+	}
+
+	if wp.Policy.Properties == nil {
+		return LoadedBackups{}, fmt.Errorf("%s - wrapped policy is invalid", funcName)
+	}
+
+	return LoadedBackups{FrontDoor: []WrappedPolicy{wp}}, nil
+}
