@@ -1,8 +1,6 @@
 module github.com/jonhadfield/azwaf
 
-go 1.24.0
-
-toolchain go1.24.4
+go 1.25.0
 
 require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
@@ -26,7 +24,7 @@ require (
 	github.com/wI2L/jsondiff v0.7.0
 	github.com/ztrue/tracerr v0.4.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/term v0.37.0
+	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -63,8 +61,8 @@ require (
 	github.com/tidwall/tinyqueue v0.1.1 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 )
