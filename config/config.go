@@ -21,6 +21,7 @@ func ParseResourceID(rawID string) ResourceID {
 		SubscriptionID: components[2],
 		ResourceGroup:  components[4],
 		Provider:       components[6],
+		ResourceType:   components[7],
 		Name:           components[8],
 		Raw:            rawID,
 	}
@@ -45,6 +46,7 @@ type ResourceID struct {
 	SubscriptionID string
 	ResourceGroup  string
 	Provider       string
+	ResourceType   string
 	Name           string
 	Raw            string
 }

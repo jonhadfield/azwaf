@@ -48,7 +48,11 @@ func (in *BackupPoliciesInput) Validate() error {
 	return nil
 }
 
-// BackupPolicies retrieves policies within a subscription and writes them, with meta-data, to individual json files
+// BackupPolicies retrieves policies within a subscription and writes them, with meta-data, to individual json files.
+// Both Azure Front Door and Azure Application Gateway WAF policies are
+// supported; the resource type embedded in each resource id determines which
+// API the policy is fetched from. When no resource ids are supplied, every WAF
+// policy of either type within the subscription is backed up.
 func BackupPolicies(in *BackupPoliciesInput) error {
 	funcName := GetFunctionName()
 
@@ -77,17 +81,63 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 			funcName)
 	}
 
-	o, err := GetWrappedPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
-		SubscriptionID:    in.SubscriptionID,
-		AppVersion:        in.AppVersion,
-		FilterResourceIDs: in.RIDs,
-		Config:            in.ConfigPath,
-	})
-	if err != nil {
-		return err
+	fdRIDs, appgwRIDs := partitionRIDsByWAFType(in.RIDs)
+
+	var (
+		fdPolicies    []WrappedPolicy
+		appgwPolicies []WrappedAppGWPolicy
+		err           error
+	)
+
+	switch {
+	case len(in.RIDs) == 0:
+		// no filter: fetch every FD and every AppGW WAF policy in the subscription
+		var fd GetWrappedPoliciesOutput
+		fd, err = GetWrappedPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
+			SubscriptionID: in.SubscriptionID,
+			AppVersion:     in.AppVersion,
+			Config:         in.ConfigPath,
+		})
+		if err != nil {
+			return err
+		}
+		fdPolicies = fd.Policies
+
+		appgwPolicies, err = GetWrappedAppGWPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
+			SubscriptionID: in.SubscriptionID,
+			AppVersion:     in.AppVersion,
+		})
+		if err != nil {
+			return err
+		}
+	default:
+		if len(fdRIDs) > 0 {
+			var fd GetWrappedPoliciesOutput
+			fd, err = GetWrappedPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
+				SubscriptionID:    in.SubscriptionID,
+				AppVersion:        in.AppVersion,
+				FilterResourceIDs: fdRIDs,
+				Config:            in.ConfigPath,
+			})
+			if err != nil {
+				return err
+			}
+			fdPolicies = fd.Policies
+		}
+
+		if len(appgwRIDs) > 0 {
+			appgwPolicies, err = GetWrappedAppGWPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
+				SubscriptionID:    in.SubscriptionID,
+				AppVersion:        in.AppVersion,
+				FilterResourceIDs: appgwRIDs,
+			})
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	logrus.Debugf("%s | retrieved %d policies", funcName, len(o.Policies))
+	logrus.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
 
 	var blobClient *azblob.Client
 	var containerName string
@@ -133,7 +183,28 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		containerName = parts.ContainerName
 	}
 
-	return backupPolicies(o.Policies, blobClient, containerName, in.FailFast, in.Quiet, in.Path)
+	if err = backupPolicies(fdPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path); err != nil {
+		return err
+	}
+
+	return backupAppGWPolicies(appgwPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path)
+}
+
+// partitionRIDsByWAFType splits a mixed list of WAF resource ids into a Front
+// Door slice and an Application Gateway slice. Anything that does not parse as
+// AppGW falls into the FrontDoor slice — including resource id hashes which
+// are still resolved through the FrontDoor lookup path.
+func partitionRIDsByWAFType(rids []string) (fd, appgw []string) {
+	for _, r := range rids {
+		if WAFTypeFromResourceID(r) == WAFTypeAppGW {
+			appgw = append(appgw, r)
+			continue
+		}
+
+		fd = append(fd, r)
+	}
+
+	return fd, appgw
 }
 
 // BackupPolicy takes a WrappedPolicy as input and creates a json file that can later be restored
@@ -159,7 +230,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 
 		width, _, terr := terminal.GetSize(fd)
 		if terr != nil {
-			return fmt.Errorf(terr.Error(), funcName)
+			return fmt.Errorf("%s - %w", funcName, terr)
 		}
 
 		if len(statusOutput) == width {
@@ -175,7 +246,11 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 			return oerr
 		}
 
-		logrus.Error(err)
+		logrus.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
+
+		// nothing valid to write for this policy; skip it rather than
+		// uploading empty content
+		return nil
 	}
 
 	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
@@ -201,7 +276,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 	if path != "" {
 		err = writeBackupToFile(pj, cwd, fName, quiet, path)
 		if err != nil {
-			return fmt.Errorf(err.Error(), funcName)
+			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
@@ -247,14 +322,115 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 // backupPolicies accepts a list of WrappedPolicys and calls BackupPolicy with each
 func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
 	for x := range policies {
-		err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path)
+		// tag every newly produced backup with its WAF type so restore can
+		// dispatch correctly. Older files (without WAFType) default to FrontDoor.
+		if policies[x].WAFType == "" {
+			policies[x].WAFType = WAFTypeFrontDoor
+		}
 
-		if failFast {
-			return
+		// return only on error: previously this returned unconditionally under
+		// fail-fast, silently skipping every policy after the first
+		if err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
+			if failFast {
+				return err
+			}
+
+			logrus.Error(err)
 		}
 	}
 
-	return
+	return nil
+}
+
+// BackupAppGWPolicy is the AppGW analogue of BackupPolicy. It writes the
+// supplied WrappedAppGWPolicy as JSON to disk and/or Azure Blob Storage.
+func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
+	funcName := GetFunctionName()
+	now := time.Now().UTC()
+	dateString := now.UTC().Format("20060102150405")
+	p.Date = now
+
+	if p.WAFType == "" {
+		p.WAFType = WAFTypeAppGW
+	}
+
+	var cwd string
+
+	if !quiet {
+		var oerr error
+
+		cwd, oerr = os.Getwd()
+		if oerr != nil {
+			return oerr
+		}
+
+		msg := fmt.Sprintf("backing up AppGW Policy: %s", p.Name)
+		statusOutput := PadToWidth(msg, " ", 0, true)
+		fd := int(os.Stdout.Fd())
+
+		width, _, terr := terminal.GetSize(fd)
+		if terr != nil {
+			return fmt.Errorf("%s - %w", funcName, terr)
+		}
+
+		if len(statusOutput) == width {
+			fmt.Print(statusOutput[0:width-3] + "   \r")
+		} else {
+			fmt.Print(statusOutput)
+		}
+	}
+
+	pj, oerr := json.MarshalIndent(p, "", "    ")
+	if oerr != nil {
+		if failFast {
+			return oerr
+		}
+
+		logrus.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
+
+		// nothing valid to write for this policy; skip it rather than
+		// uploading empty content
+		return nil
+	}
+
+	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
+
+	if blobClient != nil {
+		ctx := context.Background()
+
+		if !quiet {
+			logrus.Infof("uploading file with blob name: %s\n", fName)
+		}
+
+		if _, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
+			BlockSize:   blockBlobUploadBlockSize,
+			Concurrency: blockBlobParallelism,
+		}); oerr != nil {
+			return oerr
+		}
+	}
+
+	if path != "" {
+		if err := writeBackupToFile(pj, cwd, fName, quiet, path); err != nil {
+			return fmt.Errorf("%s - %w", funcName, err)
+		}
+	}
+
+	return nil
+}
+
+func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
+	for x := range policies {
+		if err := BackupAppGWPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
+			if failFast {
+				return err
+			}
+
+			logrus.Error(err)
+		}
+	}
+
+	return nil
 }
 
 func PadToWidth(input, char string, inputLengthOverride int, trimToWidth bool) string {

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/jonhadfield/azwaf/helpers"
 	homedir "github.com/mitchellh/go-homedir"
@@ -30,6 +32,7 @@ type Session struct {
 	FrontDoorsClients                   map[string]*armfrontdoor.FrontDoorsClient
 	FrontDoorsManagedRuleSetsClients    map[string]*armfrontdoor.ManagedRuleSetsClient
 	FrontDoorsManagedRuleSetDefinitions []*armfrontdoor.ManagedRuleSetDefinition
+	AppGWPoliciesClients                map[string]*armnetwork.WebApplicationFirewallPoliciesClient
 	ResourcesClients                    map[string]*armresources.Client
 	WorkingDir                          string
 	BackupsDir                          string
@@ -225,7 +228,7 @@ func (s *Session) GetClientCredential() error {
 	logrus.Infof("%s | Trying environment credential first...", funcName)
 	envCred, envErr := azidentity.NewEnvironmentCredential(nil)
 	envDuration := time.Since(envStartTime)
-	
+
 	if envErr == nil {
 		logrus.Infof("%s | Environment credential created in %v", funcName, envDuration)
 		s.ClientCredential = envCred
@@ -247,7 +250,7 @@ func (s *Session) GetClientCredential() error {
 		}
 		miCred, miErr := azidentity.NewManagedIdentityCredential(nil)
 		miDuration := time.Since(miStartTime)
-		
+
 		if miErr == nil {
 			logrus.Infof("%s | Managed identity credential created in %v", funcName, miDuration)
 			s.ClientCredential = miCred
@@ -270,7 +273,7 @@ func (s *Session) GetClientCredential() error {
 		logrus.Infof("%s | Azure CLI binary found at %s, trying Azure CLI credential...", funcName, azPath)
 		cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
 		cliDuration := time.Since(cliStartTime)
-		
+
 		if cliErr == nil {
 			logrus.Infof("%s | Azure CLI credential created in %v", funcName, cliDuration)
 			s.ClientCredential = cliCred
@@ -288,13 +291,13 @@ func (s *Session) GetClientCredential() error {
 	// Don't use DefaultAzureCredential as it would retry managed identity and cause hangs
 	totalDuration := time.Since(startTime)
 	logrus.Errorf("%s | All credential methods failed after %v", funcName, totalDuration)
-	
+
 	errorMsg := fmt.Sprintf("%s | No valid Azure credentials found after %v. Please authenticate using one of:\n", funcName, totalDuration)
 	errorMsg += "  1. Environment variables (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)\n"
 	errorMsg += "  2. Azure CLI (run 'az login')\n"
 	if inAzure {
 		errorMsg += "  3. Managed Identity (when running in Azure)\n"
 	}
-	
-	return fmt.Errorf(errorMsg)
+
+	return errors.New(errorMsg)
 }

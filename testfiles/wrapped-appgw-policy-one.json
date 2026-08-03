@@ -1,0 +1,28 @@
+{
+    "Date": "2026-01-01T00:00:00Z",
+    "SubscriptionID": "00000000-0000-0000-0000-000000000000",
+    "ResourceGroup": "rg-one",
+    "Name": "appgw-policy-one",
+    "Policy": {
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-one/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/appgw-policy-one",
+        "name": "appgw-policy-one",
+        "location": "eastus",
+        "properties": {
+            "managedRules": {
+                "managedRuleSets": [
+                    {
+                        "ruleSetType": "OWASP",
+                        "ruleSetVersion": "3.2"
+                    }
+                ]
+            },
+            "policySettings": {
+                "state": "Enabled",
+                "mode": "Prevention"
+            }
+        }
+    },
+    "PolicyID": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-one/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/appgw-policy-one",
+    "AppVersion": "test",
+    "WAFType": "ApplicationGateway"
+}
