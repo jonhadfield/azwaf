@@ -99,16 +99,15 @@ func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, 
 
 	cacheEntry, err := cache.Read(s, WAFResourceIDHashMapName)
 	if err != nil {
-		return hashMap, fmt.Errorf(err.Error(), funcName)
+		return hashMap, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	if cacheEntry == "" {
 		return
 	}
 
-	jerr := json.Unmarshal([]byte(cacheEntry), &hashMap)
-	if jerr != nil {
-		err = fmt.Errorf(err.Error(), funcName)
+	if jerr := json.Unmarshal([]byte(cacheEntry), &hashMap); jerr != nil {
+		err = fmt.Errorf("%s - %w", funcName, jerr)
 	}
 
 	return
@@ -313,7 +312,7 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 	err := s.GetFrontDoorPoliciesClient(subscription)
 	clientDuration := time.Since(clientStartTime)
 	logrus.Infof("%s | Client initialization took: %v", funcName, clientDuration)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
@@ -337,14 +336,14 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 	// Time the actual API call
 	apiStartTime := time.Now()
 	logrus.Infof("%s | Making API call to Azure (timeout: %v)", funcName, policyGetTimeout)
-	
+
 	pcg, merr := s.FrontDoorPoliciesClients[subscription].Get(ctx, resourceGroup, name, &options)
-	
+
 	apiDuration := time.Since(apiStartTime)
 	totalDuration := time.Since(startTime)
-	
+
 	logrus.Infof("%s | API call completed in: %v (total time: %v)", funcName, apiDuration, totalDuration)
-	
+
 	if merr != nil {
 		logrus.Errorf("%s | API call failed after %v: %s", funcName, apiDuration, merr.Error())
 		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
@@ -553,6 +552,7 @@ type WrappedPolicy struct {
 	Policy         armfrontdoor.WebApplicationFirewallPolicy
 	PolicyID       string
 	AppVersion     string
+	WAFType        string `json:",omitempty"`
 }
 
 type WrappedManagedRuleSet struct {
@@ -596,37 +596,50 @@ func marshalPolicy(original interface{}) ([]byte, error) {
 	}
 }
 
+// patchPathInSection reports whether a JSON patch path is the section itself
+// or anything beneath it. The exact match matters: adding or removing an
+// entire section (e.g. a policy gaining customRules where it had none)
+// produces a single op at the section path with no trailing slash.
+func patchPathInSection(path, section string) bool {
+	return path == section || strings.HasPrefix(path, section+"/")
+}
+
 func calculatePatchStats(patch jsondiff.Patch) GeneratePolicyPatchOutput {
 	var output GeneratePolicyPatchOutput
 
 	output.TotalDifferences = len(patch)
+
+	const (
+		customRulesPath  = "/properties/customRules"
+		managedRulesPath = "/properties/managedRules"
+	)
 
 	for _, op := range patch {
 		logrus.Trace(op.String())
 
 		switch op.Type {
 		case "add":
-			if strings.HasPrefix(string(op.Path), "/properties/customRules/") {
+			if patchPathInSection(string(op.Path), customRulesPath) {
 				output.CustomRuleAdditions++
 			}
 
-			if strings.HasPrefix(string(op.Path), "/properties/managedRules/") {
+			if patchPathInSection(string(op.Path), managedRulesPath) {
 				output.ManagedRuleAdditions++
 			}
 		case "remove":
-			if strings.HasPrefix(string(op.Path), "/properties/customRules/") {
+			if patchPathInSection(string(op.Path), customRulesPath) {
 				output.CustomRuleRemovals++
 			}
 
-			if strings.HasPrefix(string(op.Path), "/properties/managedRules/") {
+			if patchPathInSection(string(op.Path), managedRulesPath) {
 				output.ManagedRuleRemovals++
 			}
 		case "replace":
-			if strings.HasPrefix(string(op.Path), "/properties/customRules/") {
+			if patchPathInSection(string(op.Path), customRulesPath) {
 				output.CustomRuleReplacements++
 			}
 
-			if strings.HasPrefix(string(op.Path), "/properties/managedRules/") {
+			if patchPathInSection(string(op.Path), managedRulesPath) {
 				output.ManagedRuleReplacements++
 			}
 		}
