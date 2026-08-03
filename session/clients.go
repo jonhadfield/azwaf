@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
 	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/sirupsen/logrus"
@@ -82,7 +83,7 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 
 	clientCreateStartTime := time.Now()
 	logrus.Infof("%s | Creating Azure Frontdoor client with optimized settings...", funcName)
-	
+
 	// Create client options with custom retry and timeout settings
 	clientOptions := &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
@@ -96,10 +97,10 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 			},
 		},
 	}
-	
+
 	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.ClientCredential, clientOptions)
 	clientCreateDuration := time.Since(clientCreateStartTime)
-	
+
 	if merr != nil {
 		logrus.Errorf("%s | Failed to create client after %v: %s", funcName, clientCreateDuration, merr.Error())
 		return fmt.Errorf("%s - %s", funcName, merr.Error())
@@ -110,6 +111,60 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	logrus.Infof("%s | Successfully created client in %v (client creation: %v)", funcName, totalDuration, clientCreateDuration)
 
 	return
+}
+
+// GetAppGWPoliciesClient creates (or returns a cached) Application Gateway WAF
+// policies client for the given subscription.
+func (s *Session) GetAppGWPoliciesClient(subID string) error {
+	funcName := helpers.GetFunctionName()
+
+	if s == nil {
+		return errors.New("session is nil")
+	}
+
+	if subID == "" {
+		return fmt.Errorf("%s - subscription id is mandatory", funcName)
+	}
+
+	if s.AppGWPoliciesClients == nil {
+		s.AppGWPoliciesClients = make(map[string]*armnetwork.WebApplicationFirewallPoliciesClient)
+	}
+
+	if s.AppGWPoliciesClients[subID] != nil {
+		logrus.Debugf("re-using application gateway waf policies client for subscription: %s", subID)
+
+		return nil
+	}
+
+	if s.ClientCredential == nil {
+		if err := s.GetClientCredential(); err != nil {
+			return err
+		}
+	}
+
+	logrus.Debugf("creating application gateway waf policies client for subscription: %s", subID)
+
+	clientOptions := &arm.ClientOptions{
+		ClientOptions: policy.ClientOptions{
+			Retry: policy.RetryOptions{
+				MaxRetries:    3,
+				RetryDelay:    time.Second,
+				MaxRetryDelay: time.Second * 30,
+			},
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: "azwaf",
+			},
+		},
+	}
+
+	c, merr := armnetwork.NewWebApplicationFirewallPoliciesClient(subID, s.ClientCredential, clientOptions)
+	if merr != nil {
+		return fmt.Errorf("%s - %s", funcName, merr.Error())
+	}
+
+	s.AppGWPoliciesClients[subID] = c
+
+	return nil
 }
 
 func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {

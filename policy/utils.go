@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
 	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/ztrue/tracerr"
@@ -33,6 +34,27 @@ func toJSON(i interface{}) (out string, err error) {
 		var j []byte
 
 		j, err = json.MarshalIndent(v.Policy, "", "  ")
+		if err != nil {
+			return "", tracerr.Wrap(err)
+		}
+
+		return string(j), nil
+	case armnetwork.WebApplicationFirewallPolicy:
+		j, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			return "", tracerr.Wrap(err)
+		}
+
+		return string(j), nil
+	case *armnetwork.WebApplicationFirewallPolicy:
+		j, err := json.MarshalIndent(*v, "", "  ")
+		if err != nil {
+			return "", tracerr.Wrap(err)
+		}
+
+		return string(j), nil
+	case WrappedAppGWPolicy:
+		j, err := json.MarshalIndent(v.Policy, "", "  ")
 		if err != nil {
 			return "", tracerr.Wrap(err)
 		}

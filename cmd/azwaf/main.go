@@ -70,7 +70,7 @@ func main() {
 		},
 	}
 	app.HelpName = ""
-	app.Description = "azwaf is a client for managing Azure Front Door WAF policies.\n\nwaf policy ids can be substituted for shorter \"hashes\" that can\nbe found by running: 'azwaf list policies'"
+	app.Description = "azwaf is a client for managing Azure WAF policies.\n\nFront Door WAF policies are supported across all commands. Application\nGateway WAF policies are supported by 'backup' and 'restore' only.\n\nwaf policy ids can be substituted for shorter \"hashes\" that can\nbe found by running: 'azwaf list policies'"
 	app.Usage = "azwaf [global options] command [command options] [arguments...]"
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
