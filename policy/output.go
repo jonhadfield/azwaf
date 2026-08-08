@@ -14,14 +14,15 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/alexeyco/simpletable"
 	"github.com/gookit/color"
 
-	"github.com/jonhadfield/azwaf/session"
 	"github.com/jonhadfield/findexec"
-	"github.com/sirupsen/logrus"
+
+	"github.com/jonhadfield/azwaf/session"
 )
 
 const (
@@ -48,7 +49,7 @@ func splitExtendedID(eid string) (string, string, error) {
 // GetRawPolicyCustomRuleByID returns a Custom rule matching the resource id.
 // The id is an extended resource id: <Policy>|<Custom rule name>.
 func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, customRuleName string) (armfrontdoor.CustomRule, error) {
-	logrus.Debugf("getting policy with id %s", policyID.Name)
+	logging.Debugf("getting policy with id %s", policyID.Name)
 
 	p, err := GetRawPolicy(s, policyID.SubscriptionID, policyID.ResourceGroup, policyID.Name)
 	if err != nil {
@@ -75,7 +76,10 @@ func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, 
 // PrintPolicyCustomRule outputs the Custom rule for a given resource.
 // The id is an extended resource id: <Policy>|<Custom rule name>.
 func PrintPolicyCustomRule(subscriptionID, extendedID, config string) error {
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	policyID, customRuleName, err := splitExtendedID(extendedID)
 	if err != nil {
@@ -110,7 +114,10 @@ func PrintPolicyCustomRule(subscriptionID, extendedID, config string) error {
 
 // PrintPolicy outputs the raw json Policy with the provided resource id.
 func PrintPolicy(policyID, subscriptionID, configPath string) error {
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	rid, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: subscriptionID,
@@ -203,7 +210,7 @@ func formatRuleEnabledState(enabledState, defaultState string) string {
 // formatRuleAction accepts a waf Policy's action type and returns a colored text representation
 func formatRuleAction(ruleAction interface{}) string {
 	if ruleAction == nil {
-		logrus.Debugf("rule action is nil\n")
+		logging.Debugf("rule action is nil\n")
 		return ""
 	}
 
@@ -219,7 +226,7 @@ func formatRuleAction(ruleAction interface{}) string {
 			action = string(*val)
 		}
 	default:
-		logrus.Errorf("unexpected action type '%s'", reflect.TypeOf(ruleAction))
+		logging.Errorf("unexpected action type '%s'", reflect.TypeOf(ruleAction))
 	}
 
 	switch strings.ToLower(action) {
@@ -237,7 +244,7 @@ func formatRuleAction(ruleAction interface{}) string {
 	case "":
 		return ""
 	default:
-		logrus.Errorf("unexpected rule action '%s'", action)
+		logging.Errorf("unexpected rule action '%s'", action)
 	}
 
 	return ""
@@ -252,7 +259,7 @@ func colourEnabledState(es string) string {
 		return color.Red.Sprint(es)
 	}
 
-	logrus.Errorf("unexpected enabled state '%s'", es)
+	logging.Errorf("unexpected enabled state '%s'", es)
 
 	return es
 }
@@ -292,14 +299,14 @@ func appendCustomRuleRows(table *simpletable.Table, cr *armfrontdoor.CustomRule,
 		for x, t := range mc.Transforms {
 			if x+1 == len(mc.Transforms) {
 				if _, err := transformsOutput.WriteString(string(*t)); err != nil {
-					logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+					logging.Errorf("builder failed to write string - err: %s", err.Error())
 				}
 
 				continue
 			}
 
 			if _, err := transformsOutput.WriteString(fmt.Sprintf("%s, ", string(*t))); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 		}
 
@@ -761,7 +768,7 @@ func outputPolicyRuleSetStats(statsList *[]RuleSetStatsOutput) {
 // formatPolicyProvisioningState accepts a waf Policy's provisioning state and returns a colored text representation
 func formatPolicyProvisioningState(provisioningState *string) string {
 	if provisioningState == nil {
-		logrus.Errorf("provisioning state isn't defined")
+		logging.Errorf("provisioning state isn't defined")
 		return "-"
 	}
 
@@ -793,14 +800,14 @@ func formatRequestBodyCheck(check *armfrontdoor.PolicyRequestBodyCheck) string {
 	case armfrontdoor.PolicyRequestBodyCheckDisabled:
 		return color.Red.Sprint(armfrontdoor.PolicyRequestBodyCheckDisabled)
 	default:
-		logrus.Debugf("unexpected policy request body check %s", *check)
+		logging.Debugf("unexpected policy request body check %s", *check)
 		return "-"
 	}
 }
 
 func formatCustomBlockResponseStatusCode(mode *int32) string {
 	if mode == nil {
-		logrus.Debugf("custom block response status code not defined")
+		logging.Debugf("custom block response status code not defined")
 		return "-"
 	}
 
@@ -817,7 +824,7 @@ func formatCustomBlockResponseBody(mode *string) string {
 
 func formatPolicyMode(mode *armfrontdoor.PolicyMode) string {
 	if mode == nil {
-		logrus.Errorf("policy mode not defined")
+		logging.Errorf("policy mode not defined")
 		return "-"
 	}
 
@@ -827,7 +834,7 @@ func formatPolicyMode(mode *armfrontdoor.PolicyMode) string {
 	case armfrontdoor.PolicyModeDetection:
 		return color.Yellow.Sprint(armfrontdoor.PolicyModeDetection)
 	default:
-		logrus.Errorf("unexpected policy mode '%s'", *mode)
+		logging.Errorf("unexpected policy mode '%s'", *mode)
 
 		return "-"
 	}
@@ -835,7 +842,7 @@ func formatPolicyMode(mode *armfrontdoor.PolicyMode) string {
 
 func formatPolicyEnabledState(enabledState *armfrontdoor.PolicyEnabledState) string {
 	if enabledState == nil {
-		logrus.Errorf("policy enabled state not defined")
+		logging.Errorf("policy enabled state not defined")
 		return "-"
 	}
 
@@ -845,7 +852,7 @@ func formatPolicyEnabledState(enabledState *armfrontdoor.PolicyEnabledState) str
 	case armfrontdoor.PolicyEnabledStateDisabled:
 		return color.Red.Sprint(armfrontdoor.PolicyEnabledStateEnabled)
 	default:
-		logrus.Errorf("unexpected policy enabled state '%s'", *enabledState)
+		logging.Errorf("unexpected policy enabled state '%s'", *enabledState)
 
 		return "-"
 	}
@@ -854,7 +861,7 @@ func formatPolicyEnabledState(enabledState *armfrontdoor.PolicyEnabledState) str
 // formatPolicyResourceState accepts a waf Policy's resource state and returns a colored text representation
 func formatPolicyResourceState(resourceState *armfrontdoor.PolicyResourceState) string {
 	if resourceState == nil {
-		logrus.Errorf("resource state not defined")
+		logging.Errorf("resource state not defined")
 		return "-"
 	}
 
@@ -874,7 +881,7 @@ func formatPolicyResourceState(resourceState *armfrontdoor.PolicyResourceState) 
 	case "":
 		return ""
 	default:
-		logrus.Errorf("unexpected provisioning state '%s'", *resourceState)
+		logging.Errorf("unexpected provisioning state '%s'", *resourceState)
 	}
 
 	return ""
@@ -1187,13 +1194,13 @@ func processMatchVal(s string) (result string, isURL, isIPv4, isIPv6, isGeo bool
 func handleGeoValue(builder *strings.Builder, val string, valsWritten *int) {
 	if *valsWritten == valsPerGeoLine {
 		if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-			logrus.Fatalf("builder failed to write output - err: %s", err.Error())
+			logging.Errorf("builder failed to write output - err: %s", err.Error())
 		}
 
 		*valsWritten = 0
 	} else {
 		if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-			logrus.Fatalf("builder failed to write output - err: %s", err.Error())
+			logging.Errorf("builder failed to write output - err: %s", err.Error())
 		}
 
 		(*valsWritten)++
@@ -1202,7 +1209,7 @@ func handleGeoValue(builder *strings.Builder, val string, valsWritten *int) {
 
 func handleURLValue(builder *strings.Builder, val string, prevType *string) {
 	if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-		logrus.Fatalf("builder failed to write string - %s", err.Error())
+		logging.Errorf("builder failed to write string - %s", err.Error())
 	}
 
 	*prevType = ""
@@ -1212,7 +1219,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 	switch *prevType {
 	case "":
 		if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-			logrus.Fatalf("builder failed to write string - %s", err.Error())
+			logging.Errorf("builder failed to write string - %s", err.Error())
 		}
 
 		(*valsWritten)++
@@ -1222,7 +1229,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 		switch {
 		case *valsWritten == 2:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - %s", err.Error())
+				logging.Errorf("builder failed to write string - %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1230,7 +1237,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - %s", err.Error())
+				logging.Errorf("builder failed to write string - %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1238,7 +1245,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		default:
 			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logrus.Fatalf("builder failed to write string - %s", err.Error())
+				logging.Errorf("builder failed to write string - %s", err.Error())
 			}
 
 			(*valsWritten)++
@@ -1249,7 +1256,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 		switch {
 		case *valsWritten == 2:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1257,7 +1264,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1265,7 +1272,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		default:
 			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			(*valsWritten)++
@@ -1273,7 +1280,7 @@ func handleIPv4Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = "ipv4"
 		}
 	default:
-		logrus.Errorf("unexpected prev type '%s'", *prevType)
+		logging.Errorf("unexpected prev type '%s'", *prevType)
 	}
 }
 
@@ -1281,7 +1288,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 	switch *prevType {
 	case "":
 		if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-			logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+			logging.Errorf("builder failed to write string - err: %s", err.Error())
 		}
 
 		(*valsWritten)++
@@ -1291,7 +1298,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 		switch {
 		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1299,7 +1306,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		case *valsWritten == 2:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1307,7 +1314,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		default:
 			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			(*valsWritten)++
@@ -1318,7 +1325,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 		switch {
 		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1326,7 +1333,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		case *valsWritten == 2:
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
@@ -1334,7 +1341,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = ""
 		default:
 			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			(*valsWritten)++
@@ -1342,7 +1349,7 @@ func handleIPv6Value(builder *strings.Builder, val string, prevType *string, val
 			*prevType = "ipv6"
 		}
 	default:
-		logrus.Errorf("unexpected prev type '%s'", *prevType)
+		logging.Errorf("unexpected prev type '%s'", *prevType)
 	}
 }
 
@@ -1379,11 +1386,11 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 		case isIPv6:
 			handleIPv6Value(&builder, val, &prevType, &valsWritten, prevLen, nextLen)
 		default:
-			logrus.Errorf("unknown type for %s", val)
+			logging.Errorf("unknown type for %s", val)
 		}
 		if i+1 == MaxMatchValuesOutput && !showFull {
 			if _, err := fmt.Fprintf(&builder, "... %d remaining", len(mvs)-(i+1)); err != nil {
-				logrus.Fatalf("builder failed to write string - err: %s", err.Error())
+				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 			break
 		}
@@ -1482,7 +1489,10 @@ type ListPoliciesInput struct {
 }
 
 func ListPolicies(in ListPoliciesInput) error {
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	o, err := GetAllPolicies(s, GetWrappedPoliciesInput{
 		SubscriptionID:    in.SubscriptionID,
@@ -1495,7 +1505,7 @@ func ListPolicies(in ListPoliciesInput) error {
 	}
 
 	if len(o) == 0 {
-		logrus.Infof("no policies found")
+		logging.Infof("no policies found")
 
 		return nil
 	}

@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 type DeleteManagedRuleExclusionCLIInput struct {
@@ -88,7 +88,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 	funcName := GetFunctionName()
 	// required when running tests without init
 	checkDebug(dcri.Debug)
-	logrus.Tracef("%s | scope: %s", funcName, dcri.Scope)
+	logging.Tracef("%s | scope: %s", funcName, dcri.Scope)
 
 	newMRS = &armfrontdoor.ManagedRuleSet{}
 	newMRS.RuleSetAction = existingManagedRuleSet.RuleSetAction
@@ -120,7 +120,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 
 	case strings.EqualFold(dcri.Scope, ScopeRuleGroup):
 		for _, existingManagedRuleGroupOverride := range existingManagedRuleSet.RuleGroupOverrides {
-			logrus.Tracef("%s | checking rule group %s against %s",
+			logging.Tracef("%s | checking rule group %s against %s",
 				funcName, dcri.RuleGroup, *existingManagedRuleGroupOverride.RuleGroupName)
 
 			if !strings.EqualFold(dcri.RuleGroup, *existingManagedRuleGroupOverride.RuleGroupName) {
@@ -129,7 +129,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 				continue
 			}
 
-			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
+			logging.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
 
 			var strippedManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride
 
@@ -147,7 +147,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 		postNumRuleGroupOverrides := len(newMRS.RuleGroupOverrides)
 
 		if preNumRuleGroupOverrides > postNumRuleGroupOverrides {
-			logrus.Debugf("%s | removed %d %s overrides from ruleset %s_%s",
+			logging.Debugf("%s | removed %d %s overrides from ruleset %s_%s",
 				funcName,
 				preNumRuleGroupOverrides-postNumRuleGroupOverrides,
 				dcri.Scope,
@@ -156,7 +156,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 		}
 	case strings.EqualFold(dcri.Scope, ScopeRule):
 		for _, existingManagedRuleGroupOverride := range existingManagedRuleSet.RuleGroupOverrides {
-			logrus.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
+			logging.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
 
 			var strippedManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride
 
@@ -174,7 +174,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 		postNumRuleGroupOverrides := len(newMRS.RuleGroupOverrides)
 
 		if preNumRuleGroupOverrides > postNumRuleGroupOverrides {
-			logrus.Debugf("%s | removed %d %s overrides from ruleset %s_%s",
+			logging.Debugf("%s | removed %d %s overrides from ruleset %s_%s",
 				funcName,
 				preNumRuleGroupOverrides-postNumRuleGroupOverrides,
 				dcri.Scope,
@@ -192,7 +192,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 	postExclusionCount := len(newMRS.Exclusions)
 
 	if preExclusionCount > postExclusionCount {
-		logrus.Infof("%s | removed %d exclusions from ruleset %s_%s",
+		logging.Infof("%s | removed %d exclusions from ruleset %s_%s",
 			funcName,
 			preExclusionCount-postExclusionCount,
 			valueOrDash(existingManagedRuleSet.RuleSetType),
@@ -215,7 +215,7 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 
 	// return if no exclusions to compare
 	if len(existingManagedRuleExclusions) == 0 {
-		logrus.Debug("no exclusions to compare")
+		logging.Debug("no exclusions to compare")
 		return existingManagedRuleExclusions
 	}
 
@@ -223,7 +223,7 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 	// TODO: use-case for this?
 	// if no exclusion value operator, variable, nor selector are provided, then remove them all
 	// if dcri.exclusionRuleOperator == "" && dcri.exclusionRuleSelector == "" && variable == "" {
-	//	logrus.Debugf("%s | no exclusion criteria provided so stripping all exclusions", funcName)
+	//	logging.Debugf("%s | no exclusion criteria provided so stripping all exclusions", funcName)
 	//
 	//	return
 	// }
@@ -239,7 +239,7 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 		})
 
 		if mRGOE {
-			logrus.Debugf("%s | match for exclusion variable: %s operator: %s selector: %s",
+			logging.Debugf("%s | match for exclusion variable: %s operator: %s selector: %s",
 				funcName,
 				*managedRuleExclusion.MatchVariable,
 				*managedRuleExclusion.SelectorMatchOperator,
@@ -248,7 +248,7 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 			continue
 		}
 
-		logrus.Tracef("%s | no match for exclusion %s %s %s",
+		logging.Tracef("%s | no match for exclusion %s %s %s",
 			funcName,
 			*managedRuleExclusion.MatchVariable,
 			*managedRuleExclusion.SelectorMatchOperator,
@@ -270,9 +270,9 @@ type matchManagedRuleGroupOverrideExclusionInput struct {
 func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideExclusionInput) (match bool) {
 	funcName := GetFunctionName()
 
-	logrus.Tracef("comparing my input.Variable: %s with %v", input.variable, valueOrDash(input.existingManagedRuleExclusion.MatchVariable))
-	logrus.Tracef("comparing my input.Operator: %s with %v", input.operator, valueOrDash(input.existingManagedRuleExclusion.SelectorMatchOperator))
-	logrus.Tracef("comparing my input.Selector: %s with %s", input.selector, valueOrDash(input.existingManagedRuleExclusion.Selector))
+	logging.Tracef("comparing my input.Variable: %s with %v", input.variable, valueOrDash(input.existingManagedRuleExclusion.MatchVariable))
+	logging.Tracef("comparing my input.Operator: %s with %v", input.operator, valueOrDash(input.existingManagedRuleExclusion.SelectorMatchOperator))
+	logging.Tracef("comparing my input.Selector: %s with %s", input.selector, valueOrDash(input.existingManagedRuleExclusion.Selector))
 
 	if input.existingManagedRuleExclusion.MatchVariable == nil || input.variable != *input.existingManagedRuleExclusion.MatchVariable {
 		return false
@@ -286,7 +286,7 @@ func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideE
 		return false
 	}
 
-	logrus.Debugf("%s | returning true", funcName)
+	logging.Debugf("%s | returning true", funcName)
 
 	return true
 }
@@ -306,14 +306,14 @@ func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingMan
 
 	// if no exclusion details were passed, return matching rule override with all exclusions removed
 	if dcri.ExclusionRuleSelector == "" && dcri.ExclusionRuleOperator == "" && dcri.ExclusionRuleVariable == "" {
-		logrus.Debugf("%s | no exclusion selector, operator, nor variable passed, so return matching rule without exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
+		logging.Debugf("%s | no exclusion selector, operator, nor variable passed, so return matching rule without exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
 		existingManagedRuleOverride.Exclusions = []*armfrontdoor.ManagedRuleExclusion{}
 
 		return existingManagedRuleOverride
 	}
 
 	// exclusions were passed, so remove any matching
-	logrus.Debugf("%s | exclusion selector, operator, and variable passed, so return matching rule stripped exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
+	logging.Debugf("%s | exclusion selector, operator, and variable passed, so return matching rule stripped exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
 
 	preExclusionCount := len(existingManagedRuleOverride.Exclusions)
 
@@ -321,7 +321,7 @@ func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingMan
 
 	// report if any exclusions have been removed
 	if preExclusionCount != len(existingManagedRuleOverride.Exclusions) {
-		logrus.Debugf("%s | removed %d exclusions from rule %s", funcName, preExclusionCount-len(existingManagedRuleOverride.Exclusions), *existingManagedRuleOverride.RuleID)
+		logging.Debugf("%s | removed %d exclusions from rule %s", funcName, preExclusionCount-len(existingManagedRuleOverride.Exclusions), *existingManagedRuleOverride.RuleID)
 	}
 
 	return existingManagedRuleOverride
@@ -345,7 +345,7 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 
 		preExclusionsCount := len(existingManagedRuleOverride.Exclusions)
 
-		logrus.Tracef(
+		logging.Tracef(
 			"%s | %s with %d exclusions",
 			funcName,
 			*existingManagedRuleOverride.RuleID,
@@ -364,7 +364,7 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 
 		postExclusionsCount := len(newManagedRuleOverride.Exclusions)
 		if preExclusionsCount > postExclusionsCount {
-			logrus.Infof(
+			logging.Infof(
 				"removing %d exclusions from override rule %s",
 				preExclusionsCount-postExclusionsCount,
 				*existingManagedRuleOverride.RuleID,
@@ -396,7 +396,7 @@ func stripManagedRuleGroupOverride(dcri *DeleteManagedRuleExclusionInput, existi
 
 		// report if we removed any
 		if len(newManagedRuleGroupOverrideExclusions) != len(existingManagedRuleGroupOverride.Exclusions) {
-			logrus.Debugf("%s | removed %d exclusions from %s", funcName, len(existingManagedRuleGroupOverride.Exclusions)-len(newManagedRuleGroupOverrideExclusions), *existingManagedRuleGroupOverride.RuleGroupName)
+			logging.Debugf("%s | removed %d exclusions from %s", funcName, len(existingManagedRuleGroupOverride.Exclusions)-len(newManagedRuleGroupOverrideExclusions), *existingManagedRuleGroupOverride.RuleGroupName)
 		}
 
 		newManagedRuleGroupOverride.Exclusions = newManagedRuleGroupOverrideExclusions
@@ -407,7 +407,7 @@ func stripManagedRuleGroupOverride(dcri *DeleteManagedRuleExclusionInput, existi
 		newManagedRuleGroupOverrideRules = stripManagedRuleGroupOverrideRules(dcri, existingManagedRuleGroupOverride.Rules)
 		// report if we removed any
 		if len(newManagedRuleGroupOverrideRules) != len(existingManagedRuleGroupOverride.Rules) {
-			logrus.Debugf("%s | removed %d group override rules from %s", funcName, len(existingManagedRuleGroupOverride.Rules)-len(newManagedRuleGroupOverrideRules), *existingManagedRuleGroupOverride.RuleGroupName)
+			logging.Debugf("%s | removed %d group override rules from %s", funcName, len(existingManagedRuleGroupOverride.Rules)-len(newManagedRuleGroupOverrideRules), *existingManagedRuleGroupOverride.RuleGroupName)
 		}
 
 		if err != nil {
@@ -433,7 +433,7 @@ func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *a
 	// walk through ruleset lists, building a new set based on user provided matches
 	for x := range existingMRSList.ManagedRuleSets {
 		// create a new Managed rule set that'll mirror the existing, minus the MREs
-		logrus.Debugf("stripping from ruleset %s_%s",
+		logging.Debugf("stripping from ruleset %s_%s",
 			*existingMRSList.ManagedRuleSets[x].RuleSetType,
 			*existingMRSList.ManagedRuleSets[x].RuleSetVersion)
 
@@ -445,7 +445,7 @@ func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *a
 		}
 
 		if strippedMRS == nil {
-			logrus.Errorf("%s | stripped Managed rule set %s_%s is nil", funcName, *existingMRSList.ManagedRuleSets[x].RuleSetType, *existingMRSList.ManagedRuleSets[x].RuleSetVersion)
+			logging.Errorf("%s | stripped Managed rule set %s_%s is nil", funcName, *existingMRSList.ManagedRuleSets[x].RuleSetType, *existingMRSList.ManagedRuleSets[x].RuleSetVersion)
 		}
 
 		newMRSList.ManagedRuleSets = append(newMRSList.ManagedRuleSets, strippedMRS)
@@ -460,7 +460,10 @@ func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *a
 }
 
 func DeleteManagedRuleExclusion(dmreci *DeleteManagedRuleExclusionCLIInput) (err error) {
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 	s.AppVersion = dmreci.AppVersion
 
 	policyID := dmreci.PolicyID
@@ -499,7 +502,7 @@ func DeleteManagedRuleExclusion(dmreci *DeleteManagedRuleExclusionCLIInput) (err
 
 	updatedMRSL, err := stripMatchingMREs(dmrei, p.Properties.ManagedRules)
 	if err != nil {
-		logrus.Error(err.Error())
+		logging.Error(err.Error())
 	}
 
 	p.Properties.ManagedRules = updatedMRSL
@@ -510,13 +513,13 @@ func DeleteManagedRuleExclusion(dmreci *DeleteManagedRuleExclusionCLIInput) (err
 	})
 
 	if patch.TotalDifferences == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return
 	}
 
 	if patch.CustomRuleChanges != 0 {
-		logrus.Errorf("unexpected custom rules changes. aborting")
+		logging.Errorf("unexpected custom rules changes. aborting")
 
 		return
 	}

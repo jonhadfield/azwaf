@@ -2,13 +2,15 @@ package policy
 
 import (
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
+	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 type customRuleMatchesNameOrPriorityInput struct {
@@ -39,8 +41,9 @@ func customRuleMatchesNameOrPriority(mi customRuleMatchesNameOrPriorityInput, cr
 		return !mi.nameMatch.MatchString(*cr.Name)
 	}
 
-	// shouldn't have any other scenarios
-	logrus.Fatal("called without name and priority")
+	// shouldn't have any other scenarios: log it, and keep the rule rather
+	// than deleting on an undefined match
+	logging.Error("custom rule matcher called without name and priority")
 
 	return false
 }
@@ -65,7 +68,7 @@ func stripCustomRulesMatchingNameOrPriority(prioritySet bool, priority int, name
 
 func checkDebug(d bool) {
 	if d {
-		logrus.SetLevel(logrus.DebugLevel)
+		logging.SetLevel(slog.LevelDebug)
 	}
 }
 
@@ -116,7 +119,7 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 	// generate slice of existing Custom rules that do NOT match the regex nor priority
 	ecrs := stripCustomRulesMatchingNameOrPriority(in.PrioritySet, in.Priority, in.NameMatch, in.Policy.Properties.CustomRules.Rules)
 	if len(ecrs) == preLen {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return modified, nil
 	}
@@ -137,7 +140,7 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 	}
 
 	if patch.TotalDifferences == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return
 	}
@@ -152,7 +155,10 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: cliInput.SubscriptionID,
@@ -193,7 +199,7 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 	}
 
 	if !modified {
-		logrus.Info("no change necessary")
+		logging.Info("no change necessary")
 
 		return
 	}

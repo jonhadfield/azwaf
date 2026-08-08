@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/jonhadfield/azwaf/config"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jonhadfield/azwaf/config"
 )
 
 func TestDeleteCustomRuleNoCustomRules(t *testing.T) {

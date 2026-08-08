@@ -4,9 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jonhadfield/azwaf/session"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/buntdb"
+
+	"github.com/jonhadfield/azwaf/session"
 )
 
 func newTestSession(t *testing.T) *session.Session {

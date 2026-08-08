@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	terminal "golang.org/x/term"
+
+	"github.com/jonhadfield/azwaf/session"
 )
 
 const (
@@ -28,6 +29,9 @@ const (
 // BackupPoliciesInput are the arguments provided to the BackupPolicies function.
 type BackupPoliciesInput struct {
 	BaseCLIInput
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session                  *session.Session
 	Path                     string
 	RIDs                     []string
 	StorageAccountResourceID string
@@ -60,7 +64,15 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		return err
 	}
 
-	s := session.New()
+	s := in.Session
+	if s == nil {
+		var serr error
+
+		s, serr = session.New()
+		if serr != nil {
+			return serr
+		}
+	}
 
 	// fail if only one of the storage account destination required parameters been defined
 	if (in.StorageAccountResourceID != "" && in.ContainerURL == "") || (in.StorageAccountResourceID == "" && in.ContainerURL != "") {
@@ -137,7 +149,7 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		}
 	}
 
-	logrus.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
+	logging.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
 
 	var blobClient *azblob.Client
 	var containerName string
@@ -214,6 +226,12 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 	dateString := now.UTC().Format("20060102150405")
 	p.Date = now
 
+	// tag every backup with its WAF type so restore can dispatch correctly.
+	// Older files (without WAFType) are treated as FrontDoor when loading.
+	if p.WAFType == "" {
+		p.WAFType = WAFTypeFrontDoor
+	}
+
 	var cwd string
 
 	if !quiet {
@@ -230,7 +248,9 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 
 		width, _, terr := terminal.GetSize(fd)
 		if terr != nil {
-			return fmt.Errorf("%s - %w", funcName, terr)
+			// stdout is not a terminal (piped output, tests): use a default
+			// width rather than failing the backup
+			width = defaultTerminalWidth
 		}
 
 		if len(statusOutput) == width {
@@ -246,7 +266,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 			return oerr
 		}
 
-		logrus.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
+		logging.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
 
 		// nothing valid to write for this policy; skip it rather than
 		// uploading empty content
@@ -260,7 +280,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 		ctx := context.Background()
 
 		if !quiet {
-			logrus.Infof("uploading file with blob name: %s\n", fName)
+			logging.Infof("uploading file with blob name: %s\n", fName)
 		}
 
 		// Modern SDK: Upload blob directly using the service client with container name and blob name
@@ -313,7 +333,7 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 			op = "./" + op
 		}
 
-		logrus.Infof("backup written to: %s", op)
+		logging.Infof("backup written to: %s", op)
 	}
 
 	return
@@ -322,12 +342,6 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 // backupPolicies accepts a list of WrappedPolicys and calls BackupPolicy with each
 func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
 	for x := range policies {
-		// tag every newly produced backup with its WAF type so restore can
-		// dispatch correctly. Older files (without WAFType) default to FrontDoor.
-		if policies[x].WAFType == "" {
-			policies[x].WAFType = WAFTypeFrontDoor
-		}
-
 		// return only on error: previously this returned unconditionally under
 		// fail-fast, silently skipping every policy after the first
 		if err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
@@ -335,7 +349,7 @@ func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, contain
 				return err
 			}
 
-			logrus.Error(err)
+			logging.Error(err)
 		}
 	}
 
@@ -370,7 +384,9 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 
 		width, _, terr := terminal.GetSize(fd)
 		if terr != nil {
-			return fmt.Errorf("%s - %w", funcName, terr)
+			// stdout is not a terminal (piped output, tests): use a default
+			// width rather than failing the backup
+			width = defaultTerminalWidth
 		}
 
 		if len(statusOutput) == width {
@@ -386,7 +402,7 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 			return oerr
 		}
 
-		logrus.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
+		logging.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
 
 		// nothing valid to write for this policy; skip it rather than
 		// uploading empty content
@@ -399,7 +415,7 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 		ctx := context.Background()
 
 		if !quiet {
-			logrus.Infof("uploading file with blob name: %s\n", fName)
+			logging.Infof("uploading file with blob name: %s\n", fName)
 		}
 
 		if _, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
@@ -426,7 +442,7 @@ func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Clien
 				return err
 			}
 
-			logrus.Error(err)
+			logging.Error(err)
 		}
 	}
 

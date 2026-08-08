@@ -1,13 +1,15 @@
 package policy
 
 import (
+	"log/slog"
 	"regexp"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func int32ptr(i int) *int32 {
@@ -405,7 +407,7 @@ func TestStripManagedRuleOverrideExckusionsPositiveMatch(t *testing.T) {
 //	newMRS = &armfrontdoor.ManagedRuleSet{}
 //	// get stripped RuleGroupOverrides
 //	for _, existingManagedRuleGroupOverride := range RuleSets.RuleGroupOverrides {
-//		logrus.Debugf("RuleGroupOverride: %s", *existingManagedRuleGroupOverride.RuleGroupName)
+//		logging.Debugf("RuleGroupOverride: %s", *existingManagedRuleGroupOverride.RuleGroupName)
 //		var strippedManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride
 //		strippedManagedRuleGroupOverride, err = stripManagedRuleGroupOverride(dcri, existingManagedRuleGroupOverride)
 //		if err != nil {
@@ -415,7 +417,7 @@ func TestStripManagedRuleOverrideExckusionsPositiveMatch(t *testing.T) {
 //		newMRS.RuleGroupOverrides = append(newMRS.RuleGroupOverrides, strippedManagedRuleGroupOverride)
 //	}
 //
-//	logrus.Debugf("stripFromManagedRuleSet | started with %d rule group overrides and returning %d for ruleset %s_%s", len(RuleSets.RuleGroupOverrides), len(newMRS.RuleGroupOverrides), *RuleSets.RuleSetType, *RuleSets.RuleSetVersion)
+//	logging.Debugf("stripFromManagedRuleSet | started with %d rule group overrides and returning %d for ruleset %s_%s", len(RuleSets.RuleGroupOverrides), len(newMRS.RuleGroupOverrides), *RuleSets.RuleSetType, *RuleSets.RuleSetVersion)
 //
 //	// if only rule set passed then process ruleset exclusions
 //	if GetDeleteManagedRuleExclusionProcessScope(dcri) == ScopeRuleSet {
@@ -435,7 +437,7 @@ func TestStripManagedRuleOverrideExckusionsPositiveMatch(t *testing.T) {
 //	newMRS.RuleSetType = RuleSets.RuleSetType
 //	newMRS.RuleSetVersion = RuleSets.RuleSetVersion
 //
-//	logrus.Debugf("stripFromManagedRuleSet | started with %d rule group Managed exclusions and returning %d for ruleset %s_%s", len(RuleSets.Exclusions), len(newMRS.Exclusions), *RuleSets.RuleSetType, *RuleSets.RuleSetVersion)
+//	logging.Debugf("stripFromManagedRuleSet | started with %d rule group Managed exclusions and returning %d for ruleset %s_%s", len(RuleSets.Exclusions), len(newMRS.Exclusions), *RuleSets.RuleSetType, *RuleSets.RuleSetVersion)
 //
 //	return
 // }
@@ -702,7 +704,7 @@ func TestStripFromManagedRuleSet(t *testing.T) {
 }
 
 func TestStripExclusionFromManagedRuleSet(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	mrs := getTestRuleSetOne()
 
@@ -835,7 +837,7 @@ func TestStripFromManagedRuleGroupTwo(t *testing.T) {
 func TestStripExclusionAtScopeRuleSet(t *testing.T) {
 	mrs := getTestRuleSetOne()
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	dcri := &DeleteManagedRuleExclusionInput{
 		ExclusionRuleOperator: "StartsWith",
@@ -862,7 +864,7 @@ func TestStripExclusionAtScopeRuleSet(t *testing.T) {
 func TestStripExclusionAtScopeRuleSetNoMatches(t *testing.T) {
 	mrs := getTestRuleSetOne()
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	dcri := &DeleteManagedRuleExclusionInput{
 		ExclusionRuleOperator: "StartsWith",
@@ -897,7 +899,7 @@ func TestStripExclusionAtScopeRuleSetNoMatches(t *testing.T) {
 func TestStripExclusionAtScopeRuleGroup(t *testing.T) {
 	mrs := getTestRuleSetOne()
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	dcri := &DeleteManagedRuleExclusionInput{
 		ExclusionRuleOperator: "EndsWith",
@@ -945,7 +947,7 @@ func TestStripExclusionAtScopeRuleGroup(t *testing.T) {
 func TestRuleGroupScopeDoesntApplyToRuleScope(t *testing.T) {
 	mrs := getTestRuleSetOne()
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	dcri := &DeleteManagedRuleExclusionInput{
 		ExclusionRuleOperator: "EndsWith",

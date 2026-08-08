@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 // AddManagedRuleExclusionInput defines the exclusion to add to a managed rule set
@@ -54,7 +54,6 @@ func (input *AddManagedRuleExclusionCLIInput) ParseConfig() (amrei *AddManagedRu
 
 	if input.RuleSet != "" {
 		rsType, rsVersion, err = parseRuleSetName(input.RuleSet)
-
 		if err != nil {
 			return
 		}
@@ -118,7 +117,10 @@ func (input *GetPolicyInput) GetPolicy() (output GetPolicyOutput, err error) {
 func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err error) {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: cliInput.SubscriptionID,
@@ -152,7 +154,7 @@ func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err err
 		return
 	}
 
-	logrus.Debugf("%s | store copy of policy %s for later comparison", funcName, *original.Name)
+	logging.Debugf("%s | store copy of policy %s for later comparison", funcName, *original.Name)
 
 	amrei.RuleSets = getPolicyOutput.Policy.Properties.ManagedRules.ManagedRuleSets
 	amrei.PolicyResourceID = policyID
@@ -173,13 +175,13 @@ func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err err
 	}
 
 	if patch.TotalDifferences == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return
 	}
 
 	if patch.CustomRuleChanges != 0 {
-		logrus.Errorf("unexpected custom rules changes. aborting")
+		logging.Errorf("unexpected custom rules changes. aborting")
 
 		return
 	}
@@ -209,7 +211,7 @@ func addManagedRuleExclusion(input *AddManagedRuleExclusionInput) error {
 			continue
 		}
 
-		logrus.Debugf("%s | walking ruleset %s_%s",
+		logging.Debugf("%s | walking ruleset %s_%s",
 			funcName,
 			valueOrDash(input.RuleSets[x].RuleSetType),
 			valueOrDash(input.RuleSets[x].RuleSetVersion))
@@ -241,7 +243,7 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 	funcName := GetFunctionName()
 	// required when running tests without init
 	checkDebug(input.Debug)
-	logrus.Tracef("%s | scope: %s", funcName, input.Scope)
+	logging.Tracef("%s | scope: %s", funcName, input.Scope)
 
 	switch {
 	case input.Scope == "":
@@ -261,14 +263,14 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 		var ruleGroupFound bool
 
 		for _, mrgo := range mrs.RuleGroupOverrides {
-			logrus.Tracef("%s | comparing %s with %s", funcName, *mrgo.RuleGroupName, input.RuleGroup)
+			logging.Tracef("%s | comparing %s with %s", funcName, *mrgo.RuleGroupName, input.RuleGroup)
 
 			if strings.EqualFold(input.Scope, ScopeRuleGroup) && !strings.EqualFold(*mrgo.RuleGroupName, input.RuleGroup) {
 				// if we're adding to a rulegroup and it doesn't match, then continue
 				continue
 			}
 
-			logrus.Debugf("%s | RuleGroupOverride: %s", funcName, valueOrDash(mrgo.RuleGroupName))
+			logging.Debugf("%s | RuleGroupOverride: %s", funcName, valueOrDash(mrgo.RuleGroupName))
 
 			ruleGroupFound = true
 
@@ -336,7 +338,7 @@ func addManagedRuleGroupOverrideRuleExclusions(input *addManagedRuleGroupOverrid
 
 			// if we have a match, then check if proposed exclusion already exists before adding
 			if managedRule != nil && *managedRule.RuleID == input.ruleID {
-				logrus.Debugf("%s | matched rule id %s", funcName, input.ruleID)
+				logging.Debugf("%s | matched rule id %s", funcName, input.ruleID)
 
 				return appendExclusion(appendExclusionInput{
 					appendScope:           ScopeRuleGroup,
@@ -354,7 +356,7 @@ func addManagedRuleGroupOverrideRuleExclusions(input *addManagedRuleGroupOverrid
 
 	var groupName string
 
-	logrus.Debugf("%s | looking for rule %s in rule set definition %s_%s", funcName, input.ruleID, *input.ruleSet.RuleSetType, *input.ruleSet.RuleSetVersion)
+	logging.Debugf("%s | looking for rule %s in rule set definition %s_%s", funcName, input.ruleID, *input.ruleSet.RuleSetType, *input.ruleSet.RuleSetVersion)
 
 	if ruleDefinition, groupName, err = getRuleDefinition(&getRuleDefinitionInput{
 		session:            input.session,
@@ -402,7 +404,7 @@ func addManagedRuleGroupOverrideRuleExclusions(input *addManagedRuleGroupOverrid
 	}
 
 	// add group if missing
-	logrus.Debugf("rule group override not found in existing policy so adding with definition")
+	logging.Debugf("rule group override not found in existing policy so adding with definition")
 
 	input.ruleSet.RuleGroupOverrides = append(input.ruleSet.RuleGroupOverrides, &armfrontdoor.ManagedRuleGroupOverride{
 		RuleGroupName: &groupName,
@@ -462,12 +464,12 @@ func getRuleDefinition(in *getRuleDefinitionInput) (ruleDef *armfrontdoor.Manage
 
 		// if rule set doesn't match then continue
 		if *rsd.Properties.RuleSetType != *in.ruleSetType || *rsd.Properties.RuleSetVersion != *in.ruleSetVersion {
-			logrus.Tracef("%s | %s_%s no match for %s_%s", funcName, *rsd.Properties.RuleSetType, *rsd.Properties.RuleSetVersion, *in.ruleSetType, *in.ruleSetVersion)
+			logging.Tracef("%s | %s_%s no match for %s_%s", funcName, *rsd.Properties.RuleSetType, *rsd.Properties.RuleSetVersion, *in.ruleSetType, *in.ruleSetVersion)
 
 			continue
 		}
 
-		logrus.Tracef("%s | calling getDefinitionMatchingExistingRuleSet with rule set %s_%s and rule %s", funcName, *in.ruleSetType, *in.ruleSetVersion, in.ruleID)
+		logging.Tracef("%s | calling getDefinitionMatchingExistingRuleSet with rule set %s_%s and rule %s", funcName, *in.ruleSetType, *in.ruleSetVersion, in.ruleID)
 
 		match, matchingDefinition, err = getDefinitionMatchingExistingRuleSet(&getDefinitionsMatchingExistingRuleSetInput{
 			scope:          ScopeRule,
@@ -523,7 +525,7 @@ func appendExclusion(input appendExclusionInput) error {
 	}
 
 	// it doesn't exist, so add to list of exclusions
-	logrus.Debugf("%s - exclusion not found so adding", funcName)
+	logging.Debugf("%s - exclusion not found so adding", funcName)
 
 	ruleVar := input.matchVariable
 	ruleOp := input.matchOperator

@@ -2,8 +2,14 @@ package policy
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 )
+
+// confirmInput is the source of interactive confirmation responses. It exists
+// so tests can script answers; production always reads stdin.
+var confirmInput io.Reader = os.Stdin
 
 func Confirm(item, request string) bool {
 	fmt.Println(item)
@@ -11,7 +17,7 @@ func Confirm(item, request string) bool {
 
 	var s string
 
-	if _, err := fmt.Scanln(&s); err != nil {
+	if _, err := fmt.Fscanln(confirmInput, &s); err != nil {
 		return false
 	}
 

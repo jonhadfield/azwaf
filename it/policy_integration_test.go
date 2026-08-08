@@ -4,6 +4,7 @@ package it_test
 
 import (
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net/netip"
 	"os"
@@ -13,11 +14,12 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/policy"
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 
 	_ "github.com/Azure/azure-sdk-for-go/profiles/latest/frontdoor/mgmt/frontdoor"
 )
@@ -31,7 +33,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	subscriptionId = os.Getenv("AZWAF_TEST_SUBSCRIPTION_ID")
 
@@ -40,7 +42,7 @@ func TestMain(m *testing.M) {
 	if tpi != "" {
 		testSinglePolicyId = config.ParseResourceID(tpi)
 		if testSinglePolicyId.Name == "" {
-			logrus.Fatalf("failed to parse policy id: %s", tpi)
+			logging.Errorf("failed to parse policy id: %s", tpi)
 			os.Exit(1)
 		}
 	}
@@ -57,8 +59,11 @@ func TestGetPolicy(t *testing.T) {
 		t.Skipf("AZWAF_TEST_POLICY_ID not set")
 	}
 
+	s, err := session.New()
+	require.NoError(t, err)
+
 	gpi := policy.GetPolicyInput{
-		Session:  session.New(),
+		Session:  s,
 		PolicyID: testSinglePolicyId,
 	}
 
@@ -79,7 +84,9 @@ func TestDeleteCustomRuleByPriority(t *testing.T) {
 		t.Skipf("AZWAF_TEST_POLICY_ID not set")
 	}
 
-	s := session.New()
+	s, err := session.New()
+	require.NoError(t, err)
+
 	p, err := getTestPolicy(s)
 	require.NoError(t, err)
 
@@ -111,7 +118,9 @@ func TestUpdateCustomRulesPrefixes(t *testing.T) {
 		t.Skipf("AZWAF_TEST_POLICY_ID not set")
 	}
 
-	s := session.New()
+	s, err := session.New()
+	require.NoError(t, err)
+
 	p, err := getTestPolicy(s)
 	require.NoError(t, err)
 
@@ -164,7 +173,8 @@ func TestGetRuleSetDefinitionsMatchingPolicy(t *testing.T) {
 	p, err := policy.LoadPolicyFromFile("../policy/testdata/test-policy-one.json")
 	require.NoError(t, err)
 
-	s := session.New()
+	s, err := session.New()
+	require.NoError(t, err)
 
 	// override policy id to use test subscription id that's checked by the function we're testing
 	rid := config.ParseResourceID(*p.ID)
