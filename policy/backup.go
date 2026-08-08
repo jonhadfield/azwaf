@@ -28,6 +28,9 @@ const (
 // BackupPoliciesInput are the arguments provided to the BackupPolicies function.
 type BackupPoliciesInput struct {
 	BaseCLIInput
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session                  *session.Session
 	Path                     string
 	RIDs                     []string
 	StorageAccountResourceID string
@@ -60,7 +63,10 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		return err
 	}
 
-	s := session.New()
+	s := in.Session
+	if s == nil {
+		s = session.New()
+	}
 
 	// fail if only one of the storage account destination required parameters been defined
 	if (in.StorageAccountResourceID != "" && in.ContainerURL == "") || (in.StorageAccountResourceID == "" && in.ContainerURL != "") {
@@ -214,6 +220,12 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 	dateString := now.UTC().Format("20060102150405")
 	p.Date = now
 
+	// tag every backup with its WAF type so restore can dispatch correctly.
+	// Older files (without WAFType) are treated as FrontDoor when loading.
+	if p.WAFType == "" {
+		p.WAFType = WAFTypeFrontDoor
+	}
+
 	var cwd string
 
 	if !quiet {
@@ -230,7 +242,9 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 
 		width, _, terr := terminal.GetSize(fd)
 		if terr != nil {
-			return fmt.Errorf("%s - %w", funcName, terr)
+			// stdout is not a terminal (piped output, tests): use a default
+			// width rather than failing the backup
+			width = defaultTerminalWidth
 		}
 
 		if len(statusOutput) == width {
@@ -322,12 +336,6 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 // backupPolicies accepts a list of WrappedPolicys and calls BackupPolicy with each
 func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
 	for x := range policies {
-		// tag every newly produced backup with its WAF type so restore can
-		// dispatch correctly. Older files (without WAFType) default to FrontDoor.
-		if policies[x].WAFType == "" {
-			policies[x].WAFType = WAFTypeFrontDoor
-		}
-
 		// return only on error: previously this returned unconditionally under
 		// fail-fast, silently skipping every policy after the first
 		if err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
@@ -370,7 +378,9 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 
 		width, _, terr := terminal.GetSize(fd)
 		if terr != nil {
-			return fmt.Errorf("%s - %w", funcName, terr)
+			// stdout is not a terminal (piped output, tests): use a default
+			// width rather than failing the backup
+			width = defaultTerminalWidth
 		}
 
 		if len(statusOutput) == width {
