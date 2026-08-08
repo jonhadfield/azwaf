@@ -6,8 +6,8 @@ import (
 )
 
 func TestGetFunctionName(t *testing.T) {
-	// GetFunctionName is expected to return the name of itself when called
-	require.Equal(t, "helpers.GetFunctionName", GetFunctionName())
+	// GetFunctionName returns the name of the function that calls it
+	require.Equal(t, "helpers.TestGetFunctionName", GetFunctionName())
 }
 
 func callParent() string { return GetParentFunctionName() }
