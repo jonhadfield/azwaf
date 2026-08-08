@@ -13,6 +13,9 @@ import (
 
 type RestorePoliciesInput struct {
 	BaseCLIInput
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session          *session.Session
 	BackupsPaths     []string
 	CustomRulesOnly  bool
 	ManagedRulesOnly bool
@@ -117,7 +120,11 @@ func RestorePolicies(i *RestorePoliciesInput) error {
 		return err
 	}
 
-	s := session.New()
+	s := i.Session
+	if s == nil {
+		s = session.New()
+	}
+
 	s.AppVersion = i.AppVersion
 
 	logrus.Debugf("%s | loading paths %s", strings.Join(i.BackupsPaths, ", "), funcName)
