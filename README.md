@@ -84,7 +84,7 @@ make build-linux     # linux/amd64 only
 | Variable | Purpose |
 | --- | --- |
 | `AZURE_SUBSCRIPTION_ID` | Subscription containing your WAF policies. Most commands need this (or `--subscription-id`). |
-| `AZWAF_LOG` | Set to `debug` for verbose output. Default `info`. |
+| `AZWAF_LOG` | Log level: `trace`, `debug`, `info`, `warn`, or `error`. Default `info`. When azwaf is embedded as a library it logs at `warn` and above only, to its own logger — see the `logging` package to adjust. |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Service-principal auth (one of several supported flows). |
 
 ### Config file
@@ -525,6 +525,6 @@ MIT — see [LICENSE](LICENSE).
 - [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) — `armfrontdoor`, `armnetwork`, `armresources`, `azidentity`
 - [urfave/cli](https://github.com/urfave/cli) — CLI framework
 - [BuntDB](https://github.com/tidwall/buntdb) — embedded key/value cache
-- [logrus](https://github.com/sirupsen/logrus) + [nested-logrus-formatter](https://github.com/antonfisher/nested-logrus-formatter) — logging
+- standard library [log/slog](https://pkg.go.dev/log/slog) — logging (azwaf's own logger instance; silent at default level when embedded as a library)
 - [simpletable](https://github.com/alexeyco/simpletable) — table rendering
 - [jsondiff](https://github.com/wI2L/jsondiff) — structured JSON diffing

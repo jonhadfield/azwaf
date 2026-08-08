@@ -13,7 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
 	"github.com/jonhadfield/azwaf/helpers"
-	"github.com/sirupsen/logrus"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 // GetResourcesClient creates a new resources client instance and stores it in the provided session.
@@ -24,12 +24,12 @@ func (s *Session) GetResourcesClient(subID string) (err error) {
 	}
 
 	if s.ResourcesClients[subID] != nil {
-		logrus.Debugf("re-using resources client for subscription: %s", subID)
+		logging.Debugf("re-using resources client for subscription: %s", subID)
 
 		return nil
 	}
 
-	logrus.Debugf("creating resources client for subscription: %s", subID)
+	logging.Debugf("creating resources client for subscription: %s", subID)
 
 	if s.ClientCredential == nil {
 		err = s.GetClientCredential()
@@ -52,7 +52,7 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	funcName := helpers.GetFunctionName()
 	startTime := time.Now()
 
-	logrus.Infof("%s | Starting GetFrontDoorPoliciesClient for subscription: %s", funcName, subID)
+	logging.Debugf("%s | Starting GetFrontDoorPoliciesClient for subscription: %s", funcName, subID)
 
 	if s == nil {
 		return errors.New("session is nil")
@@ -63,26 +63,26 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	}
 
 	if s.FrontDoorPoliciesClients[subID] != nil {
-		logrus.Infof("%s | Re-using existing client (took: %v)", funcName, time.Since(startTime))
+		logging.Debugf("%s | Re-using existing client (took: %v)", funcName, time.Since(startTime))
 		return nil
 	}
 
-	logrus.Infof("%s | Creating new policies client for subscription: %s", funcName, subID)
+	logging.Debugf("%s | Creating new policies client for subscription: %s", funcName, subID)
 
 	if s.ClientCredential == nil {
 		credStartTime := time.Now()
-		logrus.Infof("%s | Getting client credentials...", funcName)
+		logging.Debugf("%s | Getting client credentials...", funcName)
 		err = s.GetClientCredential()
 		credDuration := time.Since(credStartTime)
-		logrus.Infof("%s | Client credential retrieval took: %v", funcName, credDuration)
+		logging.Debugf("%s | Client credential retrieval took: %v", funcName, credDuration)
 		if err != nil {
-			logrus.Errorf("%s | Failed to get client credentials: %v", funcName, err)
+			logging.Errorf("%s | Failed to get client credentials: %v", funcName, err)
 			return
 		}
 	}
 
 	clientCreateStartTime := time.Now()
-	logrus.Infof("%s | Creating Azure Frontdoor client with optimized settings...", funcName)
+	logging.Debugf("%s | Creating Azure Frontdoor client with optimized settings...", funcName)
 
 	// Create client options with custom retry and timeout settings
 	clientOptions := &arm.ClientOptions{
@@ -102,13 +102,13 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	clientCreateDuration := time.Since(clientCreateStartTime)
 
 	if merr != nil {
-		logrus.Errorf("%s | Failed to create client after %v: %s", funcName, clientCreateDuration, merr.Error())
+		logging.Errorf("%s | Failed to create client after %v: %s", funcName, clientCreateDuration, merr.Error())
 		return fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
 	s.FrontDoorPoliciesClients[subID] = frontDoorPoliciesClient
 	totalDuration := time.Since(startTime)
-	logrus.Infof("%s | Successfully created client in %v (client creation: %v)", funcName, totalDuration, clientCreateDuration)
+	logging.Debugf("%s | Successfully created client in %v (client creation: %v)", funcName, totalDuration, clientCreateDuration)
 
 	return
 }
@@ -131,7 +131,7 @@ func (s *Session) GetAppGWPoliciesClient(subID string) error {
 	}
 
 	if s.AppGWPoliciesClients[subID] != nil {
-		logrus.Debugf("re-using application gateway waf policies client for subscription: %s", subID)
+		logging.Debugf("re-using application gateway waf policies client for subscription: %s", subID)
 
 		return nil
 	}
@@ -142,7 +142,7 @@ func (s *Session) GetAppGWPoliciesClient(subID string) error {
 		}
 	}
 
-	logrus.Debugf("creating application gateway waf policies client for subscription: %s", subID)
+	logging.Debugf("creating application gateway waf policies client for subscription: %s", subID)
 
 	clientOptions := &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
@@ -179,12 +179,12 @@ func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
 	}
 
 	if s.FrontDoorsManagedRuleSetsClients[subID] != nil {
-		logrus.Debugf("re-using arm front door rules sets client for subscription: %s", subID)
+		logging.Debugf("re-using arm front door rules sets client for subscription: %s", subID)
 
 		return nil
 	}
 
-	logrus.Debugf("creating arm front door managed rule sets client for subscription: %s", subID)
+	logging.Debugf("creating arm front door managed rule sets client for subscription: %s", subID)
 
 	if s.ClientCredential == nil {
 		err = s.GetClientCredential()
@@ -193,7 +193,7 @@ func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
 		}
 	}
 
-	logrus.Debugf("creating new manage rule sets client for sub: %s", subID)
+	logging.Debugf("creating new manage rule sets client for sub: %s", subID)
 
 	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.ClientCredential, nil)
 	if merr != nil {

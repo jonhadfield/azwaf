@@ -1,8 +1,9 @@
 package commands
 
 import (
-	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
+
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdGet() *cli.Command {

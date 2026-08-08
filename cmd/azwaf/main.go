@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,10 +10,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/jonhadfield/azwaf/cmd/commands"
-
-	nested "github.com/antonfisher/nested-logrus-formatter"
-
-	"github.com/sirupsen/logrus"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 var version, versionOutput, tag, sha, buildDate string
@@ -26,22 +24,17 @@ const (
 
 func init() {
 	lvl, ok := os.LookupEnv("AZWAF_LOG")
-	// LOG_LEVEL not set, default to info
+	// AZWAF_LOG not set, default to info
 	if !ok {
 		lvl = defaultLogLevel
 	}
 
-	ll, err := logrus.ParseLevel(lvl)
+	ll, err := logging.ParseLevel(lvl)
 	if err != nil {
-		ll = logrus.InfoLevel
+		ll = slog.LevelInfo
 	}
 
-	logrus.SetFormatter(&nested.Formatter{
-		HideKeys:    true,
-		FieldsOrder: []string{"component", "category"},
-	})
-
-	logrus.SetLevel(ll)
+	logging.SetLevel(ll)
 }
 
 func main() {

@@ -11,13 +11,14 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/findexec"
-	"github.com/sirupsen/logrus"
+
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func compare(original interface{}, updated []byte) (differencesFound bool, err error) {
 	funcName := GetFunctionName()
 
-	logrus.Debugf("%s | finding differences between the current policy version and the proposed", funcName)
+	logging.Debugf("%s | finding differences between the current policy version and the proposed", funcName)
 
 	diffBinary := findexec.Find("diff", "")
 	if diffBinary == "" {

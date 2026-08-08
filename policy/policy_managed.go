@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 func getRuleGroupExclusionsFromRuleSet(ruleGroup string, ruleSet *armfrontdoor.ManagedRuleSet) (groupEx []*armfrontdoor.ManagedRuleExclusion) {
@@ -92,7 +92,7 @@ func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (o
 
 		output.RuleSetDefinition = ruleSetDefinition
 		// if rule set doesn't match this definition, then move on
-		logrus.Tracef("%s | comparing %s %s with %s %s", input.ruleSetType,
+		logging.Tracef("%s | comparing %s %s with %s %s", input.ruleSetType,
 			*ruleSetDefinition.Properties.RuleSetType, input.ruleSetVersion,
 			*ruleSetDefinition.Properties.RuleSetVersion, funcName)
 
@@ -153,7 +153,7 @@ func getDefinitionMatchingExistingRuleSet(input *getDefinitionsMatchingExistingR
 	output.RuleSetDefinition = input.mrsd
 
 	if input.scope == ScopeRuleSet && strings.EqualFold(*input.mrsd.Properties.RuleSetType, input.ruleSetType) && strings.EqualFold(*input.mrsd.Properties.RuleSetVersion, input.ruleSetVersion) {
-		logrus.Tracef("%s | comparing %s %s with %s %s", funcName, *input.mrsd.Properties.RuleSetType, input.ruleSetType, *input.mrsd.Properties.RuleSetVersion, input.ruleSetVersion)
+		logging.Tracef("%s | comparing %s %s with %s %s", funcName, *input.mrsd.Properties.RuleSetType, input.ruleSetType, *input.mrsd.Properties.RuleSetVersion, input.ruleSetVersion)
 
 		// if we match rule set input, then return
 		// * rule set input only specified if that's all that's needed
@@ -302,7 +302,7 @@ func getDefinitionMatchingExistingRuleSets(input *getDefinitionsMatchingExisting
 			ruleSetVersion: input.ruleSetVersion,
 		})
 		if err != nil {
-			logrus.Error(err.Error())
+			logging.Error(err.Error())
 		}
 
 		if match {
@@ -337,9 +337,12 @@ func (input *ShowExclusionsCLIInput) Validate() error {
 func ShowExclusions(in *ShowExclusionsCLIInput) error {
 	funcName := GetFunctionName()
 
-	logrus.Tracef("%s showing exclusions", funcName)
+	logging.Tracef("%s showing exclusions", funcName)
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: in.SubscriptionID,
@@ -474,7 +477,10 @@ func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.Ma
 func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	getPolicyInput := GetPolicyInput{
 		Session:  s,
@@ -538,7 +544,10 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID) error {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	getPolicyInput := GetPolicyInput{
 		Session:  s,
@@ -669,7 +678,10 @@ func HasMatchingExclusions(one, two *armfrontdoor.ManagedRuleExclusion) bool {
 func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID config.ResourceID) error {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 	getPolicyInput := GetPolicyInput{
 		Session:  s,
 		PolicyID: policyID,
@@ -762,7 +774,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 	}
 
 	if len(s.FrontDoorsManagedRuleSetDefinitions) != 0 {
-		logrus.Debugf("returning cached rule set definitions")
+		logging.Debugf("returning cached rule set definitions")
 		return s.FrontDoorsManagedRuleSetDefinitions, nil
 	}
 

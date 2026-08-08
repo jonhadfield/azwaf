@@ -14,8 +14,9 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/internal/azfakes"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jonhadfield/azwaf/internal/azfakes"
 )
 
 func fdPolicyWithCustomRuleForE2E(ruleName string) armfrontdoor.WebApplicationFirewallPolicy {

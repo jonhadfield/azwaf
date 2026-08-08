@@ -3,12 +3,14 @@ package policy
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/wI2L/jsondiff"
+
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func TestGetMatchingDefaultRuleDefinitionMissing(t *testing.T) {
@@ -51,7 +53,7 @@ func TestGetMatchingDefaultRuleDefinition(t *testing.T) {
 // 	ruleSetDefinitions, err := LoadManagedRulesetDefinitions()
 // 	require.NoError(t, err)
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -77,7 +79,7 @@ func TestGetMatchingDefaultRuleDefinition(t *testing.T) {
 // func TestAddRuleExclusionInvalidOperator(t *testing.T) {
 // 	mrs := getTestRuleSetOne()
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -98,7 +100,7 @@ func TestGetMatchingDefaultRuleDefinition(t *testing.T) {
 // func TestAddRuleExclusionInvalidVariable(t *testing.T) {
 // 	mrs := getTestRuleSetOne()
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -119,7 +121,7 @@ func TestGetMatchingDefaultRuleDefinition(t *testing.T) {
 func TestAddRuleExclusionRuleNotFound(t *testing.T) {
 	mrs := getTestRuleSetOne()
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	ruleSetDefinitions, err := LoadManagedRulesetDefinitions()
 	require.NoError(t, err)
@@ -143,7 +145,7 @@ func TestAddRuleExclusionRuleNotFound(t *testing.T) {
 // func TestAddRuleExclusion(t *testing.T) {
 // 	mrs := getTestRuleSetOne()
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -184,7 +186,7 @@ func TestAddRuleExclusionRuleNotFound(t *testing.T) {
 // func TestAddRuleExclusionMixedOperatorCase(t *testing.T) {
 // 	mrs := getTestRuleSetOne()
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -204,7 +206,7 @@ func TestAddRuleExclusionRuleNotFound(t *testing.T) {
 // func TestAddRuleExclusionMixedVariableCase(t *testing.T) {
 // 	mrs := getTestRuleSetOne()
 //
-// 	logrus.SetLevel(logrus.DebugLevel)
+// 	logging.SetLevel(slog.LevelDebug)
 //
 // 	dcri := AddManagedRuleExclusionInput{
 // 		DryRun:                false,
@@ -227,7 +229,7 @@ func TestAddRuleGroupExclusion(t *testing.T) {
 	orig, err := json.Marshal(mrs)
 	require.NoError(t, err)
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	err = addManagedRuleExclusion(&AddManagedRuleExclusionInput{
 		DryRun:                false,
@@ -271,7 +273,7 @@ func TestAddRuleSetExclusion(t *testing.T) {
 
 	require.NoError(t, err)
 
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	dcri := &AddManagedRuleExclusionInput{
 		DryRun:                false,

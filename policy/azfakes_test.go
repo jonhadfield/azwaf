@@ -9,8 +9,9 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/internal/azfakes"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jonhadfield/azwaf/internal/azfakes"
 )
 
 const azfakesSubID = "10000000-0000-0000-0000-000000000001"

@@ -3,8 +3,9 @@ package commands
 import (
 	"fmt"
 
-	policy "github.com/jonhadfield/azwaf/policy"
 	"github.com/urfave/cli/v2"
+
+	policy "github.com/jonhadfield/azwaf/policy"
 )
 
 func CmdDelete(versionOutput string) *cli.Command {

@@ -13,10 +13,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	"github.com/jonhadfield/azwaf/helpers"
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
+
+	"github.com/jonhadfield/azwaf/helpers"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 const (
@@ -56,7 +57,7 @@ func (s *Session) InitialiseFilePaths() error {
 	// attempt to use home directory as working directory for cache and auto-backups
 	workingRoot, herr := homedir.Dir()
 	if herr != nil {
-		logrus.Warnf("%s | failed to get home directory: %s", funcName, herr)
+		logging.Warnf("%s | failed to get home directory: %s", funcName, herr)
 	}
 
 	// if home directory can't be used, use current path
@@ -75,7 +76,7 @@ func (s *Session) InitialiseFilePaths() error {
 	}
 
 	s.WorkingDir = workingDir
-	logrus.Debugf("%s | working directory set to %s", funcName, s.WorkingDir)
+	logging.Debugf("%s | working directory set to %s", funcName, s.WorkingDir)
 
 	cacheDir := filepath.Join(workingDir, CacheRelPath)
 	if err := createDirectory(cacheDir); err != nil {
@@ -94,14 +95,14 @@ func (s *Session) InitialiseFilePaths() error {
 	return nil
 }
 
-func New() *Session {
+func New() (*Session, error) {
 	s := &Session{}
 
 	if err := s.InitialiseFilePaths(); err != nil {
-		logrus.Fatalf("%s | failed to initialise paths: %s", helpers.GetFunctionName(), err.Error())
+		return nil, fmt.Errorf("%s - failed to initialise paths: %w", helpers.GetFunctionName(), err)
 	}
 
-	return s
+	return s, nil
 }
 
 func (s *Session) InitialiseCache() {
@@ -114,14 +115,14 @@ func (s *Session) InitialiseCache() {
 
 	home, err := homedir.Dir()
 	if err != nil {
-		logrus.Errorf("%s - failed to get home directory: %s", funcName, err)
+		logging.Errorf("%s - failed to get home directory: %s", funcName, err)
 	}
 
 	appDir := filepath.Join(home, WorkingRelPath)
 
 	if _, err = os.Stat(appDir); os.IsNotExist(err) {
 		if err = os.Mkdir(appDir, os.ModePerm); err != nil {
-			logrus.Errorf("%s - failed to create application directory: %s", funcName, err)
+			logging.Errorf("%s - failed to create application directory: %s", funcName, err)
 
 			return
 		}
@@ -133,7 +134,7 @@ func (s *Session) InitialiseCache() {
 
 	cacheDB, err := buntdb.Open(s.CachePath)
 	if err != nil {
-		logrus.Errorf("%s - failed to open cache: %s", funcName, err)
+		logging.Errorf("%s - failed to open cache: %s", funcName, err)
 	}
 
 	s.Cache = cacheDB
@@ -147,7 +148,7 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 	}
 
 	if s.FrontDoorsClients[subID] != nil {
-		logrus.Debugf("re-using front doors client for Subscription: %s", subID)
+		logging.Debugf("re-using front doors client for Subscription: %s", subID)
 
 		return *s.FrontDoorsClients[subID], nil
 	}
@@ -159,7 +160,7 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 		}
 	}
 
-	logrus.Debugf("creating front doors client")
+	logging.Debugf("creating front doors client")
 
 	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
@@ -177,23 +178,23 @@ func (s *Session) GetClientCredential() error {
 
 	// Check if we already have a credential
 	if s.ClientCredential != nil {
-		logrus.Infof("%s | Reusing existing credential", funcName)
+		logging.Debugf("%s | Reusing existing credential", funcName)
 		return nil
 	}
 
-	logrus.Infof("%s | Starting Azure credential retrieval", funcName)
+	logging.Debugf("%s | Starting Azure credential retrieval", funcName)
 
 	// Check if managed identity is explicitly requested
 	forceManagedIdentity := os.Getenv("AZURE_USE_MANAGED_IDENTITY") == "true"
 
 	// Log environment variables being checked for diagnostics
-	logrus.Debugf("%s | Checking Azure environment indicators:", funcName)
-	logrus.Debugf("%s |   IDENTITY_ENDPOINT: %q", funcName, os.Getenv("IDENTITY_ENDPOINT"))
-	logrus.Debugf("%s |   IDENTITY_HEADER: %q", funcName, os.Getenv("IDENTITY_HEADER"))
-	logrus.Debugf("%s |   IMDS_ENDPOINT: %q", funcName, os.Getenv("IMDS_ENDPOINT"))
-	logrus.Debugf("%s |   MSI_ENDPOINT: %q", funcName, os.Getenv("MSI_ENDPOINT"))
-	logrus.Debugf("%s |   WEBSITE_INSTANCE_ID: %q", funcName, os.Getenv("WEBSITE_INSTANCE_ID"))
-	logrus.Debugf("%s |   CONTAINER_APP_NAME: %q", funcName, os.Getenv("CONTAINER_APP_NAME"))
+	logging.Debugf("%s | Checking Azure environment indicators:", funcName)
+	logging.Debugf("%s |   IDENTITY_ENDPOINT: %q", funcName, os.Getenv("IDENTITY_ENDPOINT"))
+	logging.Debugf("%s |   IDENTITY_HEADER: %q", funcName, os.Getenv("IDENTITY_HEADER"))
+	logging.Debugf("%s |   IMDS_ENDPOINT: %q", funcName, os.Getenv("IMDS_ENDPOINT"))
+	logging.Debugf("%s |   MSI_ENDPOINT: %q", funcName, os.Getenv("MSI_ENDPOINT"))
+	logging.Debugf("%s |   WEBSITE_INSTANCE_ID: %q", funcName, os.Getenv("WEBSITE_INSTANCE_ID"))
+	logging.Debugf("%s |   CONTAINER_APP_NAME: %q", funcName, os.Getenv("CONTAINER_APP_NAME"))
 
 	// Check if we're running in Azure by looking for various environment indicators
 	inAzure := os.Getenv("WEBSITE_INSTANCE_ID") != "" || // Azure App Service
@@ -211,58 +212,58 @@ func (s *Session) GetClientCredential() error {
 		// Check if we're on an Azure VM by looking for Azure agent
 		if _, err := os.Stat("/var/lib/waagent"); err == nil {
 			inAzure = true
-			logrus.Debugf("%s | Detected Azure VM via waagent directory", funcName)
+			logging.Debugf("%s | Detected Azure VM via waagent directory", funcName)
 		}
 	}
 
 	// Allow forcing managed identity even if Azure environment not detected
 	if forceManagedIdentity {
 		inAzure = true
-		logrus.Infof("%s | AZURE_USE_MANAGED_IDENTITY=true, will attempt managed identity", funcName)
+		logging.Debugf("%s | AZURE_USE_MANAGED_IDENTITY=true, will attempt managed identity", funcName)
 	}
 
-	logrus.Debugf("%s | Azure environment detected: %v", funcName, inAzure)
+	logging.Debugf("%s | Azure environment detected: %v", funcName, inAzure)
 
 	// Try environment credential first (fastest - reads from env vars)
 	envStartTime := time.Now()
-	logrus.Infof("%s | Trying environment credential first...", funcName)
+	logging.Debugf("%s | Trying environment credential first...", funcName)
 	envCred, envErr := azidentity.NewEnvironmentCredential(nil)
 	envDuration := time.Since(envStartTime)
 
 	if envErr == nil {
-		logrus.Infof("%s | Environment credential created in %v", funcName, envDuration)
+		logging.Debugf("%s | Environment credential created in %v", funcName, envDuration)
 		s.ClientCredential = envCred
 		s.InitialiseCache()
 		totalDuration := time.Since(startTime)
-		logrus.Infof("%s | Successfully retrieved credential via environment (total: %v)", funcName, totalDuration)
+		logging.Debugf("%s | Successfully retrieved credential via environment (total: %v)", funcName, totalDuration)
 		return nil
 	}
-	logrus.Debugf("%s | Environment credential not available after %v: %v", funcName, envDuration, envErr)
+	logging.Debugf("%s | Environment credential not available after %v: %v", funcName, envDuration, envErr)
 
 	// Only try managed identity if we detect we're running in Azure
 	if inAzure {
 		// Try managed identity (second fastest)
 		miStartTime := time.Now()
 		if forceManagedIdentity {
-			logrus.Infof("%s | AZURE_USE_MANAGED_IDENTITY=true, forcing managed identity credential...", funcName)
+			logging.Debugf("%s | AZURE_USE_MANAGED_IDENTITY=true, forcing managed identity credential...", funcName)
 		} else {
-			logrus.Infof("%s | Detected Azure environment, trying managed identity credential...", funcName)
+			logging.Debugf("%s | Detected Azure environment, trying managed identity credential...", funcName)
 		}
 		miCred, miErr := azidentity.NewManagedIdentityCredential(nil)
 		miDuration := time.Since(miStartTime)
 
 		if miErr == nil {
-			logrus.Infof("%s | Managed identity credential created in %v", funcName, miDuration)
+			logging.Debugf("%s | Managed identity credential created in %v", funcName, miDuration)
 			s.ClientCredential = miCred
 			s.InitialiseCache()
 			totalDuration := time.Since(startTime)
-			logrus.Infof("%s | Successfully retrieved credential via managed identity (total: %v)", funcName, totalDuration)
+			logging.Debugf("%s | Successfully retrieved credential via managed identity (total: %v)", funcName, totalDuration)
 			return nil
 		}
-		logrus.Errorf("%s | Managed identity failed after %v: %v", funcName, miDuration, miErr)
+		logging.Errorf("%s | Managed identity failed after %v: %v", funcName, miDuration, miErr)
 	} else {
-		logrus.Infof("%s | Azure environment not detected, skipping managed identity credential", funcName)
-		logrus.Debugf("%s | To force managed identity, set AZURE_USE_MANAGED_IDENTITY=true", funcName)
+		logging.Debugf("%s | Azure environment not detected, skipping managed identity credential", funcName)
+		logging.Debugf("%s | To force managed identity, set AZURE_USE_MANAGED_IDENTITY=true", funcName)
 	}
 
 	// Check if Azure CLI is available before trying it
@@ -270,27 +271,27 @@ func (s *Session) GetClientCredential() error {
 	if azErr == nil {
 		// Try Azure CLI credential
 		cliStartTime := time.Now()
-		logrus.Infof("%s | Azure CLI binary found at %s, trying Azure CLI credential...", funcName, azPath)
+		logging.Debugf("%s | Azure CLI binary found at %s, trying Azure CLI credential...", funcName, azPath)
 		cliCred, cliErr := azidentity.NewAzureCLICredential(nil)
 		cliDuration := time.Since(cliStartTime)
 
 		if cliErr == nil {
-			logrus.Infof("%s | Azure CLI credential created in %v", funcName, cliDuration)
+			logging.Debugf("%s | Azure CLI credential created in %v", funcName, cliDuration)
 			s.ClientCredential = cliCred
 			s.InitialiseCache()
 			totalDuration := time.Since(startTime)
-			logrus.Infof("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
+			logging.Debugf("%s | Successfully retrieved credential via Azure CLI (total: %v)", funcName, totalDuration)
 			return nil
 		}
-		logrus.Errorf("%s | Azure CLI credential failed after %v: %v", funcName, cliDuration, cliErr)
+		logging.Errorf("%s | Azure CLI credential failed after %v: %v", funcName, cliDuration, cliErr)
 	} else {
-		logrus.Infof("%s | Azure CLI binary not found on PATH (error: %v), skipping Azure CLI credential", funcName, azErr)
+		logging.Debugf("%s | Azure CLI binary not found on PATH (error: %v), skipping Azure CLI credential", funcName, azErr)
 	}
 
 	// We've tried all the credential methods individually
 	// Don't use DefaultAzureCredential as it would retry managed identity and cause hangs
 	totalDuration := time.Since(startTime)
-	logrus.Errorf("%s | All credential methods failed after %v", funcName, totalDuration)
+	logging.Errorf("%s | All credential methods failed after %v", funcName, totalDuration)
 
 	errorMsg := fmt.Sprintf("%s | No valid Azure credentials found after %v. Please authenticate using one of:\n", funcName, totalDuration)
 	errorMsg += "  1. Environment variables (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)\n"

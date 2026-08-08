@@ -5,9 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jonhadfield/azwaf/helpers"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
+
+	"github.com/jonhadfield/azwaf/helpers"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 // ParseResourceID accepts an azure resource ID as a string and returns a struct instance containing the components.
@@ -75,7 +76,7 @@ type FileConfig struct {
 func ReadFileBytes(path string) (content []byte, err error) {
 	funcName := helpers.GetFunctionName()
 
-	logrus.Debugf("%s | reading %s", funcName, path)
+	logging.Debugf("%s | reading %s", funcName, path)
 
 	if _, err = os.Stat(path); err != nil {
 		err = fmt.Errorf("%s - %w", funcName, err)

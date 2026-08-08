@@ -2,7 +2,8 @@ package policy
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/sirupsen/logrus"
+
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 // TODO: reintroduce this function once all the rule types are covered
@@ -29,16 +30,16 @@ func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleS
 
 	switch {
 	case p == nil:
-		logrus.Debugf("%s | policy undefined", funcName)
+		logging.Debugf("%s | policy undefined", funcName)
 		return false, 0
 	case p.Properties == nil:
-		logrus.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
 	case p.Properties.ManagedRules == nil:
-		logrus.Debugf("%s | policy %s has no managed rules", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no managed rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	case len(p.Properties.ManagedRules.ManagedRuleSets) == 0:
-		logrus.Debugf("%s | policy %s has no managed rule sets", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no managed rule sets", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
 		return true, len(p.Properties.ManagedRules.ManagedRuleSets)
@@ -52,13 +53,13 @@ func HaveEqualRuleSets(one, two *armfrontdoor.WebApplicationFirewallPolicy) bool
 
 	switch {
 	case !oneOK:
-		logrus.Debugf("%s | first policy hasn't got any rulesets", funcName)
+		logging.Debugf("%s | first policy hasn't got any rulesets", funcName)
 		return false
 	case !twoOK:
-		logrus.Debugf("%s | second policy hasn't got any rulesets", funcName)
+		logging.Debugf("%s | second policy hasn't got any rulesets", funcName)
 		return false
 	case oneNumRuleSets != twoNumRuleSets:
-		logrus.Debugf("%s | policies don't have same number of rulesets", funcName)
+		logging.Debugf("%s | policies don't have same number of rulesets", funcName)
 	}
 
 	var matches int
@@ -83,16 +84,16 @@ func HasCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRu
 
 	switch {
 	case p == nil:
-		logrus.Debugf("%s | policy undefined", funcName)
+		logging.Debugf("%s | policy undefined", funcName)
 		return false, 0
 	case p.Properties == nil:
-		logrus.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
 	case p.Properties.CustomRules == nil:
-		logrus.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	case len(p.Properties.CustomRules.Rules) == 0:
-		logrus.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
+		logging.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
 		return true, len(p.Properties.CustomRules.Rules)

@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	terminal "golang.org/x/term"
+
+	"github.com/jonhadfield/azwaf/session"
 )
 
 const (
@@ -65,7 +66,12 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 
 	s := in.Session
 	if s == nil {
-		s = session.New()
+		var serr error
+
+		s, serr = session.New()
+		if serr != nil {
+			return serr
+		}
 	}
 
 	// fail if only one of the storage account destination required parameters been defined
@@ -143,7 +149,7 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		}
 	}
 
-	logrus.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
+	logging.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
 
 	var blobClient *azblob.Client
 	var containerName string
@@ -260,7 +266,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 			return oerr
 		}
 
-		logrus.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
+		logging.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
 
 		// nothing valid to write for this policy; skip it rather than
 		// uploading empty content
@@ -274,7 +280,7 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 		ctx := context.Background()
 
 		if !quiet {
-			logrus.Infof("uploading file with blob name: %s\n", fName)
+			logging.Infof("uploading file with blob name: %s\n", fName)
 		}
 
 		// Modern SDK: Upload blob directly using the service client with container name and blob name
@@ -327,7 +333,7 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 			op = "./" + op
 		}
 
-		logrus.Infof("backup written to: %s", op)
+		logging.Infof("backup written to: %s", op)
 	}
 
 	return
@@ -343,7 +349,7 @@ func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, contain
 				return err
 			}
 
-			logrus.Error(err)
+			logging.Error(err)
 		}
 	}
 
@@ -396,7 +402,7 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 			return oerr
 		}
 
-		logrus.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
+		logging.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
 
 		// nothing valid to write for this policy; skip it rather than
 		// uploading empty content
@@ -409,7 +415,7 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 		ctx := context.Background()
 
 		if !quiet {
-			logrus.Infof("uploading file with blob name: %s\n", fName)
+			logging.Infof("uploading file with blob name: %s\n", fName)
 		}
 
 		if _, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
@@ -436,7 +442,7 @@ func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Clien
 				return err
 			}
 
-			logrus.Error(err)
+			logging.Error(err)
 		}
 	}
 

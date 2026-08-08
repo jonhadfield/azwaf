@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 type RestorePoliciesInput struct {
@@ -122,12 +122,17 @@ func RestorePolicies(i *RestorePoliciesInput) error {
 
 	s := i.Session
 	if s == nil {
-		s = session.New()
+		var serr error
+
+		s, serr = session.New()
+		if serr != nil {
+			return serr
+		}
 	}
 
 	s.AppVersion = i.AppVersion
 
-	logrus.Debugf("%s | loading paths %s", strings.Join(i.BackupsPaths, ", "), funcName)
+	logging.Debugf("%s | loading paths %s", strings.Join(i.BackupsPaths, ", "), funcName)
 
 	loaded, err := LoadAllBackupsFromPaths(i.BackupsPaths)
 	if err != nil {
@@ -197,7 +202,7 @@ func restoreFrontDoorBackups(s *session.Session, i *RestorePoliciesInput, wps []
 		}
 	} else {
 		i.TargetPolicy = wps[0].PolicyID
-		logrus.Debugf("retrieved target id from backup: %s", i.TargetPolicy)
+		logging.Debugf("retrieved target id from backup: %s", i.TargetPolicy)
 	}
 
 	policies, err := CompilePoliciesToRestore(s, wps, i)
@@ -252,7 +257,7 @@ func loadExistingPolicies(s *session.Session, targetPolicy, subscriptionID strin
 		filterIDs = []string{targetPolicy}
 	}
 
-	logrus.Debugf("retrieving target policy: %s", targetPolicy)
+	logging.Debugf("retrieving target policy: %s", targetPolicy)
 
 	o, err := GetWrappedPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
 		FilterResourceIDs: filterIDs,
@@ -270,17 +275,17 @@ func shouldRestore(foundExisting bool, matched WrappedPolicy, backup WrappedPoli
 
 	if foundExisting {
 		if i.CustomRulesOnly && patch.CustomRuleChanges == 0 {
-			logrus.Warn("target policy's custom rules are identical to those in backup")
+			logging.Warn("target policy's custom rules are identical to those in backup")
 			return false, nil
 		}
 
 		if i.ManagedRulesOnly && patch.ManagedRuleChanges == 0 {
-			logrus.Warn("target policy's Managed rules are identical to those in backup")
+			logging.Warn("target policy's Managed rules are identical to those in backup")
 			return false, nil
 		}
 
 		if patch.TotalRuleDifferences == 0 {
-			logrus.Warn("target policy rules are identical to backup")
+			logging.Warn("target policy rules are identical to backup")
 			return false, nil
 		}
 	}
@@ -300,7 +305,7 @@ func shouldRestore(foundExisting bool, matched WrappedPolicy, backup WrappedPoli
 	// derive a TargetPolicy from the backup; without it a no-target dry run
 	// would block on the interactive confirmation below.
 	case i.DryRun && (i.TargetPolicy != "" || foundExisting):
-		logrus.Debug("dry run only")
+		logging.Debug("dry run only")
 		return true, nil
 	case i.TargetPolicy != "" && !foundExisting:
 		return false, fmt.Errorf("%s - target policy does not exist", funcName)
@@ -336,7 +341,7 @@ func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy,
 		}
 
 		found, matched := MatchExistingPolicyByID(matchID, existingPolicies)
-		logrus.Debugf("%s | found existing policy matching id %s", funcName, matchID)
+		logging.Debugf("%s | found existing policy matching id %s", funcName, matchID)
 
 		var patch GeneratePolicyPatchOutput
 		if found {
@@ -354,7 +359,11 @@ func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy,
 			continue
 		}
 
-		restored := BuildRestoredPolicy(&matched, &backup, i)
+		restored, err := BuildRestoredPolicy(&matched, &backup, i)
+		if err != nil {
+			return nil, err
+		}
+
 		results = append(results, restorePair{original: &matched, updated: &restored})
 	}
 
@@ -364,13 +373,13 @@ func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy,
 // BuildRestoredPolicy accepts two policies (existing and backup) and options on which parts (Custom and or Managed rules) to replace
 // without options, the Original will have both Custom and Managed rules parts replaced
 // options allow for Custom or Managed rules in Original to replaced with those in backup
-func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInput) WrappedPolicy {
+func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInput) (WrappedPolicy, error) {
 	funcName := GetFunctionName()
 	// take a backup of the existing that we'll apply the updates to
 	// otherwise we're updating the original that we want to later use in a comparison
 	copyOfOriginalPolicy, err := CopyWrappedPolicy(existing)
 	if err != nil {
-		logrus.Fatalf("%s | failed to copy policy", funcName)
+		return WrappedPolicy{}, fmt.Errorf("%s | failed to copy policy: %w", funcName, err)
 	}
 
 	// if there isn't an existing Policy, then just add backup
@@ -380,7 +389,7 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			ResourceGroup:  i.ResourceGroup,
 			Name:           backup.Name,
 			Policy:         backup.Policy,
-		}
+		}, nil
 	}
 
 	switch {
@@ -394,7 +403,7 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			Name:           rID.Name,
 			Policy:         copyOfOriginalPolicy.Policy,
 			PolicyID:       copyOfOriginalPolicy.PolicyID,
-		}
+		}, nil
 	case i.ManagedRulesOnly:
 		if backup.Policy.Properties.ManagedRules == nil {
 			copyOfOriginalPolicy.Policy.Properties.ManagedRules = nil
@@ -410,7 +419,7 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			Name:           rID.Name,
 			Policy:         copyOfOriginalPolicy.Policy,
 			PolicyID:       copyOfOriginalPolicy.PolicyID,
-		}
+		}, nil
 	default:
 		// if both Original and backup are provided, then return Original with both Custom and Managed rules replaced
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
@@ -425,6 +434,6 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			Name:           rID.Name,
 			Policy:         copyOfOriginalPolicy.Policy,
 			PolicyID:       copyOfOriginalPolicy.PolicyID,
-		}
+		}, nil
 	}
 }
