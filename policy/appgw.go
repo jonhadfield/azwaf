@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	"github.com/wI2L/jsondiff"
+
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
+	"github.com/jonhadfield/azwaf/session"
 )
 
 // WAF policy resource type constants. These are the value of the 8th component
@@ -65,7 +66,7 @@ func GetRawAppGWPolicy(s *session.Session, subscription, resourceGroup, name str
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	logrus.Debugf("%s | getting AppGW WAF policy %s in subscription %s resource group %s",
+	logging.Debugf("%s | getting AppGW WAF policy %s in subscription %s resource group %s",
 		funcName, name, subscription, resourceGroup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), appGWPolicyGetTimeout)
@@ -97,7 +98,7 @@ func GetAllAppGWPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armne
 		top = MaxPoliciesToFetch
 	}
 
-	logrus.Debugf("listing first %d AppGW WAF policies in subscription: %s", top, i.SubscriptionID)
+	logging.Debugf("listing first %d AppGW WAF policies in subscription: %s", top, i.SubscriptionID)
 
 	pager := s.AppGWPoliciesClients[i.SubscriptionID].NewListAllPager(nil)
 
@@ -128,7 +129,7 @@ func GetAllAppGWPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armne
 		}
 	}
 
-	logrus.Debugf("retrieved %d AppGW WAF resources", total)
+	logging.Debugf("retrieved %d AppGW WAF resources", total)
 
 	return gres, nil
 }
@@ -163,7 +164,7 @@ func GetWrappedAppGWPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesI
 	var out []WrappedAppGWPolicy
 
 	for _, rid := range rids {
-		logrus.Debugf("retrieving raw AppGW WAF policy: %s %s %s", rid.SubscriptionID, rid.ResourceGroup, rid.Name)
+		logging.Debugf("retrieving raw AppGW WAF policy: %s %s %s", rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 
 		p, err := GetRawAppGWPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 		if err != nil {
@@ -199,7 +200,7 @@ type PushAppGWPolicyInput struct {
 func PushAppGWPolicy(s *session.Session, i *PushAppGWPolicyInput) error {
 	funcName := GetFunctionName()
 
-	logrus.Debugf("pushing AppGW WAF policy %s...", i.Name)
+	logging.Debugf("pushing AppGW WAF policy %s...", i.Name)
 
 	if err := s.GetAppGWPoliciesClient(i.Subscription); err != nil {
 		return fmt.Errorf("%s - %w", funcName, err)
@@ -212,7 +213,7 @@ func PushAppGWPolicy(s *session.Session, i *PushAppGWPolicyInput) error {
 		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	logrus.Infof("AppGW WAF policy %s updated", i.Name)
+	logging.Infof("AppGW WAF policy %s updated", i.Name)
 
 	return nil
 }

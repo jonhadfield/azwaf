@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jonhadfield/azwaf/helpers"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
+
+	"github.com/jonhadfield/azwaf/helpers"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func ReadFileBytes(path string) (content []byte, err error) {
 	funcName := helpers.GetFunctionName()
 
-	logrus.Debugf("%s | reading %s", funcName, path)
+	logging.Debugf("%s | reading %s", funcName, path)
 
 	if _, err = os.Stat(path); err != nil {
 		err = fmt.Errorf("%s - %w", funcName, err)

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 // CopyRulesInput are the arguments provided to the CopyRules function.
@@ -37,7 +37,10 @@ func CopyRules(i CopyRulesInput) error {
 		return fmt.Errorf("%s - source and target must be different", funcName)
 	}
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	SourceResourceID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: i.SubscriptionID,
@@ -57,8 +60,8 @@ func CopyRules(i CopyRulesInput) error {
 		return err
 	}
 
-	logrus.Debug("copy source: ", i.Source)
-	logrus.Debug("copy target: ", i.Target)
+	logging.Debug("copy source: ", i.Source)
+	logging.Debug("copy target: ", i.Target)
 
 	sourcePolicy, err := GetWrappedPoliciesFromRawIDs(s, GetWrappedPoliciesInput{
 		SubscriptionID:    SourceResourceID.SubscriptionID,
@@ -93,7 +96,7 @@ func CopyRules(i CopyRulesInput) error {
 		return fmt.Errorf("%s - source and target policies must have matching managed rule set types and versions when copying managed rule settings", funcName)
 	}
 
-	logrus.Debugf("%s | policies have matching managed ruleset types and versions", funcName)
+	logging.Debugf("%s | policies have matching managed ruleset types and versions", funcName)
 
 	// check change is required
 	o, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{
@@ -104,19 +107,19 @@ func CopyRules(i CopyRulesInput) error {
 		return fmt.Errorf(err.Error(), funcName)
 	}
 
-	logrus.Debugf("%s | custom rule changes %d managed rule changes %d total differences %d", funcName, o.CustomRuleChanges, o.ManagedRuleChanges, o.TotalDifferences)
+	logging.Debugf("%s | custom rule changes %d managed rule changes %d total differences %d", funcName, o.CustomRuleChanges, o.ManagedRuleChanges, o.TotalDifferences)
 
 	switch {
 	case o.CustomRuleChanges == 0 && i.CustomRulesOnly:
-		logrus.Warnf("%s | custom rules are already identical", funcName)
+		logging.Warnf("%s | custom rules are already identical", funcName)
 
 		return nil
 	case o.ManagedRuleChanges == 0 && i.ManagedRulesOnly:
-		logrus.Warnf("%s | managed rules are already identical", funcName)
+		logging.Warnf("%s | managed rules are already identical", funcName)
 
 		return nil
 	case o.TotalRuleDifferences == 0:
-		logrus.Warnf("%s | rules are already identical", funcName)
+		logging.Warnf("%s | rules are already identical", funcName)
 
 		return nil
 	}

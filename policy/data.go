@@ -4,17 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 // GetFrontDoorByID returns a front door instance for the provided id.
@@ -92,7 +91,7 @@ const (
 func PushPolicy(s *session.Session, i *PushPolicyInput) error {
 	funcName := GetFunctionName()
 
-	logrus.Debugf("pushing policy %s...", *i.Policy.Name)
+	logging.Debugf("pushing policy %s...", *i.Policy.Name)
 
 	ctx := context.Background()
 
@@ -108,19 +107,17 @@ func PushPolicy(s *session.Session, i *PushPolicyInput) error {
 	}
 
 	if i.Async {
-		logrus.Info("asynchronous policy push started")
+		logging.Info("asynchronous policy push started")
 
 		return nil
 	}
 
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		log.Fatalf("failed to pull the result: %v", err)
-
-		return err
+		return fmt.Errorf("%s - failed to poll create/update result: %w", funcName, err)
 	}
 
-	logrus.Infof("policy %s updated", *i.Policy.Name)
+	logging.Infof("policy %s updated", *i.Policy.Name)
 
 	return nil
 }
@@ -171,14 +168,14 @@ func LoadPolicyFromFile(f string) (armfrontdoor.WebApplicationFirewallPolicy, er
 
 func LoadWrappedPolicyFromFile(f string) (WrappedPolicy, error) {
 	funcName := GetFunctionName()
-	logrus.Debugf("%s | loading file %s", funcName, f)
+	logging.Debugf("%s | loading file %s", funcName, f)
 	// #nosec
 	data, err := os.ReadFile(f)
 	if err != nil {
 		return WrappedPolicy{}, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	logrus.Debugf("%s | loaded %d bytes of data from %s", funcName, len(data), f)
+	logging.Debugf("%s | loaded %d bytes of data from %s", funcName, len(data), f)
 
 	var wp WrappedPolicy
 
@@ -220,7 +217,7 @@ func LoadBackupsFromPaths(paths []string) ([]WrappedPolicy, error) {
 		all = append(all, wps...)
 	}
 
-	logrus.Debugf("loaded %d Policy backups", len(all))
+	logging.Debugf("loaded %d Policy backups", len(all))
 
 	return all, nil
 }
@@ -270,7 +267,7 @@ func LoadBackupsFromPath(rootPath string) ([]WrappedPolicy, error) {
 		wps = append(wps, wp)
 	}
 
-	logrus.Debugf("loaded %d Policy backups", len(wps))
+	logging.Debugf("loaded %d Policy backups", len(wps))
 
 	return wps, nil
 }
@@ -310,7 +307,7 @@ func LoadAllBackupsFromPaths(paths []string) (LoadedBackups, error) {
 		out.AppGW = append(out.AppGW, got.AppGW...)
 	}
 
-	logrus.Debugf("loaded %d FrontDoor and %d AppGW policy backups", len(out.FrontDoor), len(out.AppGW))
+	logging.Debugf("loaded %d FrontDoor and %d AppGW policy backups", len(out.FrontDoor), len(out.AppGW))
 
 	return out, nil
 }
@@ -357,7 +354,7 @@ func loadAllBackupsFromPath(rootPath string) (LoadedBackups, error) {
 
 func loadBackupFile(path string) (LoadedBackups, error) {
 	funcName := GetFunctionName()
-	logrus.Debugf("%s | loading file %s", funcName, path)
+	logging.Debugf("%s | loading file %s", funcName, path)
 
 	// #nosec
 	data, err := os.ReadFile(path)
