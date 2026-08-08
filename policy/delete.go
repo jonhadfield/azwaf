@@ -6,7 +6,8 @@ import (
 
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
-	"github.com/sirupsen/logrus"
+
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func displayStringDiffWithLib(orig, latest string) {
@@ -30,7 +31,7 @@ func DisplayPolicyDiff(original, latest interface{}) error {
 	}
 
 	platform := runtime.GOOS
-	logrus.Debugf("%s | detected %s", funcName, platform)
+	logging.Debugf("%s | detected %s", funcName, platform)
 
 	switch platform {
 	case "linux":
@@ -41,7 +42,7 @@ func DisplayPolicyDiff(original, latest interface{}) error {
 	case "darwin":
 		displayStringDiffWithLib(originalJSON, newJSON)
 	default:
-		logrus.Warnf("untested on OS %s. let me know if this works", platform)
+		logging.Warnf("untested on OS %s. let me know if this works", platform)
 		displayStringDiffWithLib(originalJSON, newJSON)
 	}
 

@@ -2,17 +2,19 @@ package policy
 
 import (
 	"encoding/json"
-	"go4.org/netipx"
 	"log"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
 	"sort"
 	"testing"
 
+	"go4.org/netipx"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
-	"github.com/sirupsen/logrus"
+	"github.com/jonhadfield/azwaf/logging"
 
 	_ "github.com/Azure/azure-sdk-for-go/profiles/latest/frontdoor/mgmt/frontdoor"
 
@@ -20,7 +22,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.SetLevel(slog.LevelDebug)
 
 	exitVal := m.Run()
 
@@ -188,7 +190,6 @@ func generateIPNets(cidr string) (ipns IPNets) {
 
 		var ipn netip.Prefix
 		ipn, err = netip.ParsePrefix(ipstring)
-
 		if err != nil {
 			log.Fatal(err)
 		}

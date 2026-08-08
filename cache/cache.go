@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jonhadfield/azwaf/helpers"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
+
+	"github.com/jonhadfield/azwaf/helpers"
+	"github.com/jonhadfield/azwaf/logging"
+	"github.com/jonhadfield/azwaf/session"
 )
 
 var m sync.Mutex
 
 func Write(sess *session.Session, key, value string) error {
 	funcName := helpers.GetFunctionName()
-	logrus.Debugf("%s | writing key %s with length %d to %s", funcName, key, len(value), sess.CachePath)
+	logging.Debugf("%s | writing key %s with length %d to %s", funcName, key, len(value), sess.CachePath)
 
 	m.Lock()
 	err := sess.Cache.Update(func(tx *buntdb.Tx) error {
@@ -45,7 +46,7 @@ func Read(sess *session.Session, key string) (string, error) {
 		return nil
 	})
 	if err == buntdb.ErrNotFound {
-		logrus.Debugf("%s | %s not found in the db", helpers.GetFunctionName(), key)
+		logging.Debugf("%s | %s not found in the db", helpers.GetFunctionName(), key)
 		return "", nil
 	}
 

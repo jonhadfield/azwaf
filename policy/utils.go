@@ -9,8 +9,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
-	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/ztrue/tracerr"
+
+	"github.com/jonhadfield/azwaf/helpers"
 )
 
 func toJSON(i interface{}) (out string, err error) {

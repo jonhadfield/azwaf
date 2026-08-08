@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
 	"github.com/jonhadfield/azwaf/session"
 )
 
@@ -15,7 +16,10 @@ type ShowPolicyInput struct {
 func ShowPolicy(in ShowPolicyInput) error {
 	funcName := GetFunctionName()
 
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
 		SubscriptionID: in.SubscriptionID,

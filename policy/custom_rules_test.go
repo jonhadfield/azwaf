@@ -1,13 +1,15 @@
 package policy
 
 import (
-	"github.com/stretchr/testify/assert"
 	"net/netip"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/config"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jonhadfield/azwaf/config"
 )
 
 func TestGetRateLimitConfigMismatched(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -15,10 +15,11 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
-	"github.com/jonhadfield/azwaf/config"
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	"go4.org/netipx"
+
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
+	"github.com/jonhadfield/azwaf/session"
 )
 
 type filterCustomRulesInput struct {
@@ -199,7 +200,7 @@ type RemoveNetsInput struct {
 	Nets          []netip.Prefix
 	MaxRules      int
 	// can be called from external so allow override
-	LogLevel *logrus.Level
+	LogLevel *slog.Level
 }
 
 type ApplyRemoveNetsInput struct {
@@ -214,13 +215,13 @@ type ApplyRemoveNetsInput struct {
 	Addrs       IPNets
 	MaxRules    int
 	// can be called from external so allow override
-	LogLevel *logrus.Level
+	LogLevel *slog.Level
 }
 
 // RemoveNets removes selected networks from custom rules
 func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 	if input.LogLevel != nil {
-		logrus.SetLevel(*input.LogLevel)
+		logging.SetLevel(*input.LogLevel)
 	}
 
 	if input.RuleType == nil {
@@ -228,7 +229,12 @@ func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 	}
 
 	if input.Session == nil {
-		input.Session = session.New()
+		var serr error
+
+		input.Session, serr = session.New()
+		if serr != nil {
+			return nil, serr
+		}
 	}
 
 	policyID := input.ResourceID
@@ -238,7 +244,6 @@ func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 	if policyID.Raw == "" {
 		if IsRIDHash(input.RawResourceID) {
 			policyID, err = GetPolicyResourceIDByHash(input.Session, input.SubscriptionID, input.RawResourceID)
-
 			if err != nil {
 				return nil, err
 			}
@@ -376,7 +381,7 @@ func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePr
 	if err != nil {
 		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
 	}
-	logrus.Tracef("existing %s positive nets: %d negative nets: %d", prefix, len(pos), len(neg))
+	logging.Tracef("existing %s positive nets: %d negative nets: %d", prefix, len(pos), len(neg))
 	return p, original, pos, neg, nil
 }
 
@@ -441,12 +446,12 @@ func updatePolicyRules(s *session.Session, p *armfrontdoor.WebApplicationFirewal
 	}
 
 	if patch.CustomRuleChanges == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 		return nil
 	}
 
 	if input.DryRun {
-		logrus.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), patch.CustomRuleChanges, action)
+		logging.Infof("%s | %d changes to %s list would be applied\n", GetFunctionName(), patch.CustomRuleChanges, action)
 		return nil
 	}
 
@@ -460,8 +465,8 @@ func updatePolicyRules(s *session.Session, p *armfrontdoor.WebApplicationFirewal
 		return fmt.Errorf("failed to compare policies: %w", err)
 	}
 
-	logrus.Debugf("diffsFound: %t", diffsFound)
-	logrus.Printf("updating policy %s", *p.Name)
+	logging.Debugf("diffsFound: %t", diffsFound)
+	logging.Infof("updating policy %s", *p.Name)
 
 	return PushPolicy(s, &PushPolicyInput{
 		Name:          *p.Name,
@@ -490,7 +495,7 @@ type DecorateExistingCustomRuleInput struct {
 	// StartRuleNumber int
 	MaxRules int
 	// can be called from external so allow override
-	LogLevel *logrus.Level
+	LogLevel *slog.Level
 }
 
 type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
@@ -513,7 +518,7 @@ type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	// StartRuleNumber int
 	MaxRules int
 	// can be called from external so allow override
-	LogLevel *logrus.Level
+	LogLevel *slog.Level
 }
 
 func loadLocalPrefixes(filepath string, prefixes IPNets) (IPNets, error) {
@@ -648,7 +653,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	if in.LogLevel != nil {
-		logrus.SetLevel(*in.LogLevel)
+		logging.SetLevel(*in.LogLevel)
 	}
 
 	// take a copy of the Policy for later comparison
@@ -719,7 +724,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	if patch.TotalDifferences == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return false, patch, nil
 	}
@@ -857,7 +862,7 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 	// this will be deducted from max values per rule
 	deDupedNegatedNets := deDupeIPNets(additionalNegativePrefixes)
 	sort.Strings(deDupedNegatedNets)
-	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
+	logging.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
 
 	deDupedNets := deDupeIPNets(additionalPositivePrefixes)
 	sort.Strings(deDupedNets)
@@ -874,7 +879,7 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 		return posMatchConditions, negMatchConditions, err
 	}
 
-	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
+	logging.Tracef("positive match conditions: %d", len(positiveMatchConditions))
 
 	// generate the match conditions to add to each rule
 	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
@@ -889,7 +894,7 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 		return posMatchConditions, negMatchConditions, err
 	}
 
-	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
+	logging.Tracef("negative match conditions: %d", len(negativeMatchConditions))
 
 	return positiveMatchConditions, negativeMatchConditions, nil
 }
@@ -901,7 +906,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	}
 
 	if in.LogLevel != nil {
-		logrus.SetLevel(*in.LogLevel)
+		logging.SetLevel(*in.LogLevel)
 	}
 
 	// take a copy of the Policy for later comparison
@@ -970,7 +975,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// os.WriteFile("new", np, 0644)
 
 	if patch.TotalDifferences == 0 {
-		logrus.Debug("nothing to do")
+		logging.Debug("nothing to do")
 
 		return false, patch, nil
 	}
@@ -1027,7 +1032,7 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 
 	for x := range iPrefixes {
 		if !iPrefixes[x].IsValid() {
-			logrus.Errorf("invalid prefix: %s\n", iPrefixes[x].String())
+			logging.Errorf("invalid prefix: %s\n", iPrefixes[x].String())
 
 			continue
 		}
@@ -1040,7 +1045,7 @@ func Normalise(iPrefixes []netip.Prefix) ([]netip.Prefix, error) {
 		return nil, err
 	}
 
-	logrus.Tracef("normalised %d to %d prefixes", len(iPrefixes), len(ipSet.Prefixes()))
+	logging.Tracef("normalised %d to %d prefixes", len(iPrefixes), len(ipSet.Prefixes()))
 
 	return ipSet.Prefixes(), nil
 }
@@ -1083,11 +1088,11 @@ func validateGenCustomRulesInput(in GenCustomRulesFromIPNetsInput) error {
 func prepareMatchConditions(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.MatchCondition, []*armfrontdoor.MatchCondition, error) {
 	deDupedNegatedNets := deDupeIPNets(in.NegativeMatchNets)
 	sort.Strings(deDupedNegatedNets)
-	logrus.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
+	logging.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
 
 	deDupedNets := deDupeIPNets(in.PositiveMatchNets)
 	sort.Strings(deDupedNets)
-	logrus.Tracef("total networks after deduplication: %d", len(deDupedNets))
+	logging.Tracef("total networks after deduplication: %d", len(deDupedNets))
 
 	if len(deDupedNegatedNets) >= 599 {
 		return nil, nil, fmt.Errorf("%d negated match values specified but cannot exceed 599", len(deDupedNegatedNets))
@@ -1104,7 +1109,7 @@ func prepareMatchConditions(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.M
 		return nil, nil, err
 	}
 
-	logrus.Tracef("positive match conditions: %d", len(positiveMatchConditions))
+	logging.Tracef("positive match conditions: %d", len(positiveMatchConditions))
 
 	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
 		nets:                  &deDupedNegatedNets,
@@ -1117,7 +1122,7 @@ func prepareMatchConditions(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.M
 		return nil, nil, err
 	}
 
-	logrus.Tracef("negative match conditions: %d", len(negativeMatchConditions))
+	logging.Tracef("negative match conditions: %d", len(negativeMatchConditions))
 
 	return positiveMatchConditions, negativeMatchConditions, nil
 }
@@ -1145,7 +1150,7 @@ func buildCustomRules(pos, neg []*armfrontdoor.MatchCondition, in GenCustomRules
 			rateLimitThreshold:         in.RateLimitThreshold,
 		})
 
-		logrus.Tracef("generated match condition: %d", priorityCount+1)
+		logging.Tracef("generated match condition: %d", priorityCount+1)
 
 		crs = append(crs, &cr)
 
@@ -1256,8 +1261,10 @@ func readIPsFromFile(fPath string) (IPNets, error) {
 	// #nosec
 	file, err := os.Open(fPath)
 	if err != nil {
-		log.Fatalf("failed to open")
+		return nil, fmt.Errorf("failed to open %s: %w", fPath, err)
 	}
+
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
@@ -1320,7 +1327,7 @@ func loadIPsFromPath(path string) (IPNets, error) {
 				return nil, fmt.Errorf("failed to load ips from file: %s", err)
 			}
 
-			logrus.Infof("loaded %d ips from file %s", len(n), p)
+			logging.Infof("loaded %d ips from file %s", len(n), p)
 
 			ipNets = append(ipNets, n...)
 		}
@@ -1335,7 +1342,7 @@ func loadIPsFromPath(path string) (IPNets, error) {
 		return nil, fmt.Errorf("failed to load ips from file: %s", err)
 	}
 
-	logrus.Debugf("loaded %d ips from file %s", len(n), path)
+	logging.Debugf("loaded %d ips from file %s", len(n), path)
 
 	ipNets = append(ipNets, n...)
 
@@ -1359,26 +1366,26 @@ type AddCustomRulesPrefixesInput struct {
 	// StartRuleNumber int
 	MaxRules int
 	// can be called from external so allow override
-	LogLevel *logrus.Level
+	LogLevel *slog.Level
 }
 
 // matchConditionSupported returns true if is for IPMatch
 // and is for remote address or socket addresses
 func matchConditionSupported(mc *armfrontdoor.MatchCondition) bool {
 	if mc.MatchVariable == nil || mc.Operator == nil {
-		logrus.Warnf("match condition missing variable or operator")
+		logging.Warnf("match condition missing variable or operator")
 
 		return false
 	}
 
 	// removing a prefix is only valid for remote or socket address
 	if !slices.Contains([]armfrontdoor.MatchVariable{armfrontdoor.MatchVariableRemoteAddr, armfrontdoor.MatchVariableSocketAddr}, *mc.MatchVariable) {
-		logrus.Warnf("match condition is not remote address nor socket address so not valid for unblock")
+		logging.Warnf("match condition is not remote address nor socket address so not valid for unblock")
 		return false
 	}
 
 	if *mc.Operator != armfrontdoor.OperatorIPMatch {
-		logrus.Warnf("match condition operator not ip match so not valid for unblock")
+		logging.Warnf("match condition operator not ip match so not valid for unblock")
 		return false
 	}
 

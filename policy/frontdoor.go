@@ -3,13 +3,18 @@ package policy
 import (
 	"context"
 	"fmt"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
+	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 func ListFrontDoors(subID string) error {
-	s := session.New()
+	s, err := session.New()
+	if err != nil {
+		return err
+	}
 
 	frontDoors, err := GetFrontDoors(s, subID)
 	if err != nil {
@@ -17,7 +22,7 @@ func ListFrontDoors(subID string) error {
 	}
 
 	if len(frontDoors) == 0 {
-		logrus.Info("no front doors found")
+		logging.Info("no front doors found")
 
 		return nil
 	}
@@ -84,7 +89,7 @@ func GetFrontDoors(s *session.Session, subID string) (frontDoors FrontDoors, err
 	for _, frontDoorID := range frontDoorIDs {
 		var fd FrontDoor
 
-		logrus.Debugf("requesting front door id %s", frontDoorID)
+		logging.Debugf("requesting front door id %s", frontDoorID)
 
 		fd, err = GetFrontDoorByID(s, frontDoorID)
 		if err != nil {

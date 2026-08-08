@@ -9,9 +9,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
+
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 )
 
 // ProcessAppGWPolicyChangesInput is the AppGW analogue of ProcessPolicyChangesInput.
@@ -50,7 +51,7 @@ func ProcessAppGWPolicyChanges(input *ProcessAppGWPolicyChangesInput) error {
 	}
 
 	if input.DryRun {
-		logrus.Infof("%s | changes were not applied as dry-run was requested", funcName)
+		logging.Infof("%s | changes were not applied as dry-run was requested", funcName)
 
 		return nil
 	}

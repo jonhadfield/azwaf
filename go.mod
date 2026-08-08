@@ -12,12 +12,10 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
 	github.com/alexeyco/simpletable v1.0.0
-	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/gookit/color v1.6.0
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/jonhadfield/findexec v0.0.0-20190902195615-78db24cd4e77
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/buntdb v1.3.2
 	github.com/urfave/cli/v2 v2.27.7

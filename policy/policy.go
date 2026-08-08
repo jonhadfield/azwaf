@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jonhadfield/azwaf/config"
 	"os"
 	"reflect"
 	"regexp"
@@ -13,14 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/logging"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
 	"github.com/jonhadfield/azwaf/cache"
 
 	// H "github.com/jonhadfield/azwaf/helpers"
 
-	"github.com/jonhadfield/azwaf/session"
-	"github.com/sirupsen/logrus"
 	"github.com/wI2L/jsondiff"
+
+	"github.com/jonhadfield/azwaf/session"
 )
 
 const (
@@ -88,14 +91,12 @@ const (
 	botManagerRuleSetPrefix   = "Microsoft_BotManagerRuleSet"
 )
 
-var (
-	ErrInvalidRuleType = errors.New("invalid rule type")
-)
+var ErrInvalidRuleType = errors.New("invalid rule type")
 
 func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, err error) {
 	funcName := GetFunctionName()
 
-	logrus.Debugf("%s | attempting to read waf resource id hash map from cache", funcName)
+	logging.Debugf("%s | attempting to read waf resource id hash map from cache", funcName)
 
 	cacheEntry, err := cache.Read(s, WAFResourceIDHashMapName)
 	if err != nil {
@@ -116,7 +117,7 @@ func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, 
 func SaveWAFResourceIDHashMap(s *session.Session, res []armfrontdoor.WebApplicationFirewallPolicy) error {
 	funcName := GetFunctionName()
 
-	logrus.Debugf("attempting to save waf resource id hash map from cache")
+	logging.Debugf("attempting to save waf resource id hash map from cache")
 
 	var hashMap WAFResourceIDHashMap
 
@@ -146,7 +147,12 @@ func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (string, e
 	funcName := GetFunctionName()
 
 	if s == nil {
-		s = session.New()
+		var serr error
+
+		s, serr = session.New()
+		if serr != nil {
+			return "", fmt.Errorf("%s - %w", funcName, serr)
+		}
 	}
 
 	hashMap, err := GetWAFResourceIDHashMap(s)
@@ -155,14 +161,14 @@ func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (string, e
 	}
 
 	if len(hashMap.Entries) == 0 {
-		logrus.Debugf("no hashmap entries were loaded")
+		logging.Debugf("no hashmap entries were loaded")
 
 		return "", nil
 	}
 
 	for _, entry := range hashMap.Entries {
 		if entry.Hash == hash {
-			logrus.Debugf("%s | found resource id matching hash %s in cache", funcName, hash)
+			logging.Debugf("%s | found resource id matching hash %s in cache", funcName, hash)
 
 			return entry.ResourceID, nil
 		}
@@ -188,7 +194,7 @@ func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (config.R
 	// check cache if we have a match
 	pID, err := GetWAFResourceIDFromCacheByHash(s, hash)
 	if err != nil {
-		logrus.Warn(err)
+		logging.Warn(err)
 	}
 
 	if pID != "" {
@@ -221,7 +227,7 @@ func GetPolicyRIDByHash(s *session.Session, subID, hash string) (string, error) 
 	// check cache if we have a match
 	pID, err := GetWAFResourceIDFromCacheByHash(s, hash)
 	if err != nil {
-		logrus.Warn(err)
+		logging.Warn(err)
 	}
 
 	if pID != "" {
@@ -305,25 +311,25 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 	funcName := GetFunctionName()
 	startTime := time.Now()
 
-	logrus.Infof("%s | Starting GetRawPolicy for %s/%s/%s", funcName, subscription, resourceGroup, name)
+	logging.Debugf("%s | Starting GetRawPolicy for %s/%s/%s", funcName, subscription, resourceGroup, name)
 
 	// Time client initialization
 	clientStartTime := time.Now()
 	err := s.GetFrontDoorPoliciesClient(subscription)
 	clientDuration := time.Since(clientStartTime)
-	logrus.Infof("%s | Client initialization took: %v", funcName, clientDuration)
+	logging.Debugf("%s | Client initialization took: %v", funcName, clientDuration)
 
 	if err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
 	}
 
-	logrus.Debugf("%s | getting AFD Policy %s from subscription %s and resource group %s",
+	logging.Debugf("%s | getting AFD Policy %s from subscription %s and resource group %s",
 		funcName,
 		name,
 		subscription,
 		resourceGroup)
 
-	logrus.Debugf("getting policy %s from subscription: %s resource group: %s",
+	logging.Debugf("getting policy %s from subscription: %s resource group: %s",
 		name,
 		subscription,
 		resourceGroup)
@@ -335,21 +341,21 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 
 	// Time the actual API call
 	apiStartTime := time.Now()
-	logrus.Infof("%s | Making API call to Azure (timeout: %v)", funcName, policyGetTimeout)
+	logging.Debugf("%s | Making API call to Azure (timeout: %v)", funcName, policyGetTimeout)
 
 	pcg, merr := s.FrontDoorPoliciesClients[subscription].Get(ctx, resourceGroup, name, &options)
 
 	apiDuration := time.Since(apiStartTime)
 	totalDuration := time.Since(startTime)
 
-	logrus.Infof("%s | API call completed in: %v (total time: %v)", funcName, apiDuration, totalDuration)
+	logging.Debugf("%s | API call completed in: %v (total time: %v)", funcName, apiDuration, totalDuration)
 
 	if merr != nil {
-		logrus.Errorf("%s | API call failed after %v: %s", funcName, apiDuration, merr.Error())
+		logging.Errorf("%s | API call failed after %v: %s", funcName, apiDuration, merr.Error())
 		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
 	}
 
-	logrus.Infof("%s | Successfully retrieved policy in %v", funcName, totalDuration)
+	logging.Debugf("%s | Successfully retrieved policy in %v", funcName, totalDuration)
 	return &pcg.WebApplicationFirewallPolicy, nil
 }
 
@@ -429,7 +435,7 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdo
 		top = MaxPoliciesToFetch
 	}
 
-	logrus.Debugf("listing first %d Policies in Subscription: %s", top, i.SubscriptionID)
+	logging.Debugf("listing first %d Policies in Subscription: %s", top, i.SubscriptionID)
 
 	pager := s.FrontDoorPoliciesClients[i.SubscriptionID].NewListBySubscriptionPager(nil)
 
@@ -464,7 +470,7 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdo
 		}
 	}
 
-	logrus.Debugf("retrieved %d resources", total)
+	logging.Debugf("retrieved %d resources", total)
 
 	return gres, err
 }
@@ -510,7 +516,7 @@ func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput)
 	for _, rid := range rids {
 		var p *armfrontdoor.WebApplicationFirewallPolicy
 
-		logrus.Debugf("retrieving raw Policy with: %s %s %s", rid.SubscriptionID, rid.ResourceGroup, rid.Name)
+		logging.Debugf("retrieving raw Policy with: %s %s %s", rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 
 		p, err = GetRawPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
 		if err != nil {
@@ -615,7 +621,7 @@ func calculatePatchStats(patch jsondiff.Patch) GeneratePolicyPatchOutput {
 	)
 
 	for _, op := range patch {
-		logrus.Trace(op.String())
+		logging.Trace(op.String())
 
 		switch op.Type {
 		case "add":
@@ -693,7 +699,7 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 	}
 
 	if input.DryRun {
-		logrus.Infof("%s | changes were not applied as dry-run was requested", funcName)
+		logging.Infof("%s | changes were not applied as dry-run was requested", funcName)
 
 		return nil
 	}

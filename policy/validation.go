@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
 	"github.com/jonhadfield/azwaf/config"
-	"github.com/sirupsen/logrus"
+	"github.com/jonhadfield/azwaf/logging"
 )
 
 func commonCLIInputValidation(subscriptionID, policyID string) error {
@@ -80,7 +81,7 @@ func containsStr(items interface{}, str string) bool {
 	case []*string:
 		strs = dereferenceStrings(v)
 	default:
-		logrus.Errorf("unhandled type for comparison %s", reflect.TypeOf(items).String())
+		logging.Errorf("unhandled type for comparison %s", reflect.TypeOf(items).String())
 	}
 
 	return slices.Contains(strs, str)
@@ -93,10 +94,10 @@ func MatchValuesHasMatchAll(mvs []*string, matchVariable armfrontdoor.MatchVaria
 		switch matchVariable {
 		case armfrontdoor.MatchVariableRemoteAddr:
 			// unable to list all available to be able to determine if it's a match all
-			logrus.Tracef("unable to list all available to be able to determine if it's a match all")
+			logging.Tracef("unable to list all available to be able to determine if it's a match all")
 		case armfrontdoor.MatchVariableSocketAddr:
 			// unable to list all available to be able to determine if it's a match all
-			logrus.Tracef("unable to list all available to be able to determine if it's a match all")
+			logging.Tracef("unable to list all available to be able to determine if it's a match all")
 		}
 	case armfrontdoor.OperatorIPMatch:
 		switch matchVariable {
@@ -111,7 +112,7 @@ func MatchValuesHasMatchAll(mvs []*string, matchVariable armfrontdoor.MatchVaria
 		}
 	}
 
-	logrus.Debugf("%s | match variable %s with operator %s not supported for checking if match-all is true",
+	logging.Debugf("%s | match variable %s with operator %s not supported for checking if match-all is true",
 		GetFunctionName(), matchVariable, operator)
 
 	return

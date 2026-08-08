@@ -15,7 +15,8 @@ func TestBuildRestoredPolicyBackupOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// test that if only backup provided, that backup is returned
-	generatedPolicyOne := BuildRestoredPolicy(&WrappedPolicy{}, &policyTwo, &RestorePoliciesInput{})
+	generatedPolicyOne, err := BuildRestoredPolicy(&WrappedPolicy{}, &policyTwo, &RestorePoliciesInput{})
+	require.NoError(t, err)
 	require.NotNil(t, generatedPolicyOne)
 	require.True(t, reflect.DeepEqual(generatedPolicyOne.Policy, policyTwoStatic.Policy))
 }
@@ -30,7 +31,8 @@ func TestBuildRestoredPolicyBackupWithoutOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	// test that providing two Policies without options returns Original with backup rules replacing Original's
-	generatedPolicyTwo := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{})
+	generatedPolicyTwo, err := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{})
+	require.NoError(t, err)
 	require.NotNil(t, generatedPolicyTwo)
 	require.True(t, reflect.DeepEqual(generatedPolicyTwo.Policy, policyTwoStatic.Policy))
 }
@@ -48,9 +50,10 @@ func TestBuildRestoredPolicyBackupCustomOnly(t *testing.T) {
 
 	// test that providing two Policies (with both different Custom rules and Managed rules) with option to only replace
 	// Custom rules with backup's Custom rules
-	generatedPolicyThree := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{
+	generatedPolicyThree, err := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{
 		CustomRulesOnly: true,
 	})
+	require.NoError(t, err)
 
 	require.NotNil(t, generatedPolicyThree)
 	// generated Policy's Custom rules should be identical to Policy two's
@@ -76,9 +79,10 @@ func TestBuildRestoredPolicyBackupManagedOnly(t *testing.T) {
 
 	// test that providing two Policies (with both different Custom rules and Managed rules) with option to only replace
 	// Custom rules with backup's Custom rules
-	generatedPolicyThree := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{
+	generatedPolicyThree, err := BuildRestoredPolicy(&policyOne, &policyTwo, &RestorePoliciesInput{
 		ManagedRulesOnly: true,
 	})
+	require.NoError(t, err)
 
 	require.NotNil(t, generatedPolicyThree)
 	// generated Policy's Custom rules should be identical to Policy one's
