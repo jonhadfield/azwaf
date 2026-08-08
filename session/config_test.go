@@ -22,7 +22,7 @@ func TestReadFileBytes(t *testing.T) {
 func TestReadFileBytesError(t *testing.T) {
 	_, err := ReadFileBytes("/no/such/file")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "helpers.GetFunctionName")
+	require.Contains(t, err.Error(), "session.ReadFileBytes")
 }
 
 func TestLoadFileConfig(t *testing.T) {
