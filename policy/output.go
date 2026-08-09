@@ -104,7 +104,7 @@ func PrintPolicyCustomRule(subscriptionID, extendedID, config string) error {
 
 	b, err = json.MarshalIndent(cr, "", "    ")
 	if err != nil {
-		return fmt.Errorf(fmt.Sprintf("failed to marshall Custom rule: %s", err.Error()), GetFunctionName())
+		return fmt.Errorf("%s - failed to marshall Custom rule: %w", GetFunctionName(), err)
 	}
 
 	fmt.Println(string(b))

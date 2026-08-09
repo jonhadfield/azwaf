@@ -12,8 +12,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/tidwall/buntdb"
 
 	"github.com/jonhadfield/azwaf/helpers"
@@ -34,7 +32,6 @@ type Session struct {
 	FrontDoorsManagedRuleSetsClients    map[string]*armfrontdoor.ManagedRuleSetsClient
 	FrontDoorsManagedRuleSetDefinitions []*armfrontdoor.ManagedRuleSetDefinition
 	AppGWPoliciesClients                map[string]*armnetwork.WebApplicationFirewallPoliciesClient
-	ResourcesClients                    map[string]*armresources.Client
 	WorkingDir                          string
 	BackupsDir                          string
 	CacheDir                            string
@@ -55,7 +52,7 @@ func (s *Session) InitialiseFilePaths() error {
 	funcName := helpers.GetFunctionName()
 
 	// attempt to use home directory as working directory for cache and auto-backups
-	workingRoot, herr := homedir.Dir()
+	workingRoot, herr := os.UserHomeDir()
 	if herr != nil {
 		logging.Warnf("%s | failed to get home directory: %s", funcName, herr)
 	}
@@ -113,7 +110,7 @@ func (s *Session) InitialiseCache() {
 		panic("%s called with null session")
 	}
 
-	home, err := homedir.Dir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		logging.Errorf("%s - failed to get home directory: %s", funcName, err)
 	}
@@ -164,7 +161,7 @@ func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsCl
 
 	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
-		return c, fmt.Errorf(merr.Error(), helpers.GetFunctionName())
+		return c, fmt.Errorf("%s - %w", helpers.GetFunctionName(), merr)
 	}
 
 	s.FrontDoorsClients[subID] = frontDoorsClient

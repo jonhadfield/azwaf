@@ -45,8 +45,12 @@ func (in *BackupPoliciesInput) Validate() error {
 			GetFunctionName())
 	}
 
-	if err := validateSubscriptionID(in.SubscriptionID); err != nil {
-		return err
+	// a subscription id is optional when resource ids are supplied (each id
+	// carries its own), but when provided it must be well-formed
+	if in.SubscriptionID != "" {
+		if err := validateSubscriptionID(in.SubscriptionID); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -18,7 +18,7 @@ func commonCLIInputValidation(subscriptionID, policyID string) error {
 	funcName := GetFunctionName()
 
 	if err := ValidateResourceID(policyID, false); err != nil {
-		return fmt.Errorf(err.Error(), funcName)
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	// unlike a raw policy ID, a resource id hash doesn't contain a subscription id, so one needs to be provided

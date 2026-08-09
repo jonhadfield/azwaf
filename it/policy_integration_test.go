@@ -20,8 +20,6 @@ import (
 	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/policy"
 	"github.com/jonhadfield/azwaf/session"
-
-	_ "github.com/Azure/azure-sdk-for-go/profiles/latest/frontdoor/mgmt/frontdoor"
 )
 
 const integrationTestRulePrefix = "intTest"
