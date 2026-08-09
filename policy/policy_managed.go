@@ -249,7 +249,7 @@ func getDefinitionsMatchingGroupName(s *session.Session, policy *armfrontdoor.We
 	})
 
 	if matchingDefinitions.RuleGroupDefinition == nil {
-		err = fmt.Errorf(fmt.Sprintf("group definition %s not found", groupName), funcName)
+		err = fmt.Errorf("%s - group definition %s not found", funcName, groupName)
 	}
 
 	return
@@ -277,7 +277,7 @@ func getDefinitionsMatchingRuleID(s *session.Session, policy *armfrontdoor.WebAp
 	})
 
 	if matchingDefinitions.RuleDefinition == nil {
-		err = fmt.Errorf(fmt.Sprintf("rule definition for %s not found", ruleID), funcName)
+		err = fmt.Errorf("%s - rule definition for %s not found", funcName, ruleID)
 	}
 
 	return
@@ -557,7 +557,7 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 
 	getPolicyOutput, err := getPolicyInput.GetPolicy()
 	if err != nil {
-		return fmt.Errorf(err.Error(), funcName)
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
@@ -724,10 +724,10 @@ func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID c
 	})
 
 	if matchingDefinitions.RuleSetDefinition == nil {
-		return fmt.Errorf(fmt.Sprintf("rule set %s_%s does not exist",
+		return fmt.Errorf("%s - rule set %s_%s does not exist",
+			funcName,
 			ruleSetType,
-			ruleSetVersion),
-			funcName)
+			ruleSetVersion)
 	}
 
 	OutputManagedRuleSetExclusions(&OutputManagedRuleInput{
@@ -791,7 +791,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 	for pager.More() {
 		nextResult, merr := pager.NextPage(ctx)
 		if merr != nil {
-			return nil, fmt.Errorf(merr.Error(), GetFunctionName())
+			return nil, fmt.Errorf("%s - %w", GetFunctionName(), merr)
 		}
 
 		rsds = append(rsds, nextResult.Value...)
@@ -829,10 +829,11 @@ func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusion
 		return ScopeRuleGroup, nil
 	}
 
-	return "", fmt.Errorf(fmt.Sprintf("failed to determine scope based on input: RuleSet %s RuleGroup %s RuleId %s",
+	return "", fmt.Errorf("%s - failed to determine scope based on input: RuleSet %s RuleGroup %s RuleId %s",
+		funcName,
 		valueOrDash(input.RuleSetType),
 		valueOrDash(input.RuleGroup),
-		valueOrDash(input.RuleID)), funcName)
+		valueOrDash(input.RuleID))
 }
 
 // GetAddManagedRuleExclusionProcessScope returns the scope for deletion of Managed rule exclusions
@@ -870,11 +871,12 @@ func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) 
 	}
 
 	return "unhandled",
-		fmt.Errorf(fmt.Sprintf("failed to determine scope based on input: RuleSet %s_%s RuleGroup %s RuleId %s",
+		fmt.Errorf("%s - failed to determine scope based on input: RuleSet %s_%s RuleGroup %s RuleId %s",
+			funcName,
 			valueOrDash(ruleSetType),
 			valueOrDash(ruleSetVersion),
 			valueOrDash(ruleGroup),
-			valueOrDash(ruleID)), funcName)
+			valueOrDash(ruleID))
 }
 
 func IsValidExclusionRuleVariable(v armfrontdoor.ManagedRuleExclusionMatchVariable, ci bool) bool {

@@ -16,8 +16,6 @@ import (
 
 	"github.com/jonhadfield/azwaf/logging"
 
-	_ "github.com/Azure/azure-sdk-for-go/profiles/latest/frontdoor/mgmt/frontdoor"
-
 	"github.com/stretchr/testify/require"
 )
 
