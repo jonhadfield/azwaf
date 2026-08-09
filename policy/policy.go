@@ -352,7 +352,10 @@ func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) 
 
 	if merr != nil {
 		logging.Errorf("%s | API call failed after %v: %s", funcName, apiDuration, merr.Error())
-		return nil, fmt.Errorf("%s - %s", funcName, merr.Error())
+
+		// wrap, don't flatten: callers can then detect typed
+		// *azcore.ResponseError values (e.g. 404s) in the chain
+		return nil, fmt.Errorf("%s - %w", funcName, merr)
 	}
 
 	logging.Debugf("%s | Successfully retrieved policy in %v", funcName, totalDuration)
@@ -665,17 +668,17 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput
 
 	originalBytes, err := marshalPolicy(i.Original)
 	if err != nil {
-		return output, fmt.Errorf(err.Error(), funcName)
+		return output, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	newPolicyJSON, err := json.MarshalIndent(i.New, "", "    ")
 	if err != nil {
-		return output, fmt.Errorf(err.Error(), funcName)
+		return output, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	patch, err := jsondiff.CompareJSON(originalBytes, newPolicyJSON)
 	if err != nil {
-		return output, fmt.Errorf(err.Error(), funcName)
+		return output, fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	output = calculatePatchStats(patch)
@@ -694,7 +697,7 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 
 	if input.ShowDiff {
 		if err = DisplayPolicyDiff(preChange, input.PolicyPostChange); err != nil {
-			return fmt.Errorf(err.Error(), funcName)
+			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 

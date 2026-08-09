@@ -7,7 +7,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
@@ -15,38 +14,6 @@ import (
 	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
-
-// GetResourcesClient creates a new resources client instance and stores it in the provided session.
-// If an authorizer instance is missing, it will make a call to create it and then store in the session also.
-func (s *Session) GetResourcesClient(subID string) (err error) {
-	if s.ResourcesClients == nil {
-		s.ResourcesClients = make(map[string]*armresources.Client)
-	}
-
-	if s.ResourcesClients[subID] != nil {
-		logging.Debugf("re-using resources client for subscription: %s", subID)
-
-		return nil
-	}
-
-	logging.Debugf("creating resources client for subscription: %s", subID)
-
-	if s.ClientCredential == nil {
-		err = s.GetClientCredential()
-		if err != nil {
-			return
-		}
-	}
-
-	c, err := armresources.NewClient(subID, s.ClientCredential, nil)
-	if err != nil {
-		return fmt.Errorf(err.Error(), helpers.GetFunctionName())
-	}
-
-	s.ResourcesClients[subID] = c
-
-	return
-}
 
 func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 	funcName := helpers.GetFunctionName()
@@ -197,7 +164,7 @@ func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
 
 	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.ClientCredential, nil)
 	if merr != nil {
-		return fmt.Errorf(merr.Error(), helpers.GetFunctionName())
+		return fmt.Errorf("%s - %w", helpers.GetFunctionName(), merr)
 	}
 
 	s.FrontDoorsManagedRuleSetsClients[subID] = frontDoorManagedRuleSetsClient

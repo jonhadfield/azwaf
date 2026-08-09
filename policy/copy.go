@@ -68,7 +68,7 @@ func CopyRules(i CopyRulesInput) error {
 		FilterResourceIDs: []string{SourceResourceID.Raw},
 	})
 	if err != nil {
-		return fmt.Errorf(err.Error(), funcName)
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	if len(sourcePolicy.Policies) == 0 {
@@ -85,7 +85,7 @@ func CopyRules(i CopyRulesInput) error {
 
 	// originalTargetPolicy, err := CopyPolicy(targetPolicy.Policies[0].Policy)
 	// if err != nil {
-	// 	return fmt.Errorf(err.Error(), funcName)
+	// 	return fmt.Errorf("%s - %w", funcName, err)
 	// }
 
 	if len(targetPolicy.Policies) == 0 {
@@ -104,7 +104,7 @@ func CopyRules(i CopyRulesInput) error {
 		New:      targetPolicy.Policies[0].Policy,
 	})
 	if err != nil {
-		return fmt.Errorf(err.Error(), funcName)
+		return fmt.Errorf("%s - %w", funcName, err)
 	}
 
 	logging.Debugf("%s | custom rule changes %d managed rule changes %d total differences %d", funcName, o.CustomRuleChanges, o.ManagedRuleChanges, o.TotalDifferences)
