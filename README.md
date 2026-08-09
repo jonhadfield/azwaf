@@ -522,7 +522,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Built with
 
-- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) — `armfrontdoor`, `armnetwork`, `armresources`, `azidentity`
+- [Azure SDK for Go](https://github.com/Azure/azure-sdk-for-go) — `armfrontdoor`, `armnetwork`, `armstorage`, `azblob`, `azidentity`
 - [urfave/cli](https://github.com/urfave/cli) — CLI framework
 - [BuntDB](https://github.com/tidwall/buntdb) — embedded key/value cache
 - standard library [log/slog](https://pkg.go.dev/log/slog) — logging (azwaf's own logger instance; silent at default level when embedded as a library)
