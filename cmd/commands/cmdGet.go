@@ -36,7 +36,13 @@ func CmdGet() *cli.Command {
 					// get custom rule match-value field using format "<policy id>|<rule-name>"
 					input := c.Args().First()
 
-					return policy.PrintPolicyCustomRule(c.String(FlagSubscriptionID), input, c.String(FlagConfig))
+					return policy.PrintPolicyCustomRule(policy.PrintPolicyCustomRuleInput{
+						SubscriptionID: c.String(FlagSubscriptionID),
+						ExtendedID:     input,
+						ConfigPath:     c.String(FlagConfig),
+						OutputPath:     c.String("output"),
+						Quiet:          c.Bool("quiet"),
+					})
 				},
 			},
 		},

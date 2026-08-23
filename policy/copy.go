@@ -16,18 +16,20 @@ import (
 
 // CopyRulesInput are the arguments provided to the CopyRules function.
 type CopyRulesInput struct {
+	// BaseCLIInput carries SubscriptionID, DryRun, Debug, Quiet and AppVersion.
+	// Those five were previously redeclared below, shadowing the embedded copies
+	// that cmd/commands/cmdCopy.go actually populates, so reads of i.DryRun and
+	// i.SubscriptionID always saw zero values and --dry-run pushed anyway.
 	BaseCLIInput
-	SubscriptionID   string
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session          *session.Session
 	Source           string
 	Target           string
 	CustomRulesOnly  bool
 	ManagedRulesOnly bool
-	DryRun           bool
 	ShowDiff         bool
-	Debug            bool
 	Async            bool
-	Quiet            bool
-	AppVersion       string
 }
 
 // CopyRules copies managed and custom rules between policies with matching rule sets
@@ -37,9 +39,13 @@ func CopyRules(i CopyRulesInput) error {
 		return fmt.Errorf("%s - source and target must be different", funcName)
 	}
 
-	s, err := session.New()
-	if err != nil {
-		return err
+	s := i.Session
+	if s == nil {
+		var serr error
+
+		if s, serr = session.New(); serr != nil {
+			return serr
+		}
 	}
 
 	SourceResourceID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
@@ -139,6 +145,7 @@ func CopyRules(i CopyRulesInput) error {
 		DryRun:           i.DryRun,
 		Backup:           i.AutoBackup,
 		Debug:            i.Debug,
+		Async:            i.Async,
 	})
 }
 
@@ -170,34 +177,42 @@ func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, mana
 
 // copyPolicyRules takes two policies and copies the chosen sections from source to the target
 func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, customRulesOnly, managedRulesOnly bool) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
+	funcName := GetFunctionName()
+
 	if customRulesOnly && managedRulesOnly {
 		return nil, fmt.Errorf("please choose only one of custom-only and managed-only, or neither to copy both")
 	}
 
-	switch {
-	case source == nil:
-		return nil, fmt.Errorf("%s - source policy is missing", GetFunctionName())
-	case customRulesOnly || !managedRulesOnly:
-		if source.Properties.ManagedRules == nil {
-			return nil, fmt.Errorf("source policy has no managed rules")
-		}
-	case target == nil:
-		return nil, fmt.Errorf("%s - target policy is missing", GetFunctionName())
+	// these were arms of the same switch as the managed-rules check below, so
+	// the target arm could not be reached once an earlier one matched and a nil
+	// target — or either policy with no Properties — panicked instead of erroring
+	if source == nil || source.Properties == nil {
+		return nil, fmt.Errorf("%s - source policy is missing", funcName)
+	}
+
+	if target == nil || target.Properties == nil {
+		return nil, fmt.Errorf("%s - target policy is missing", funcName)
+	}
+
+	if (customRulesOnly || !managedRulesOnly) && policyManagedRuleSetList(source) == nil {
+		return nil, fmt.Errorf("source policy has no managed rules")
 	}
 
 	switch {
 	case customRulesOnly:
-		target.Properties.CustomRules = source.Properties.CustomRules
+		logging.Debugf("%s | copying custom rules only", funcName)
+
+		target.Properties.CustomRules = policyCustomRuleList(source)
 	case managedRulesOnly:
-		fmt.Printf("copying managed rules to policy: %#+v\n", target.Properties)
-		fmt.Printf("copying managed rules to: %#+v\n", target.Properties)
-		fmt.Printf("copying managed rules to: %#+v\n", target.Properties.ManagedRules)
-		fmt.Printf("copying managed rules from: %#+v \n", source.Properties.ManagedRules)
-		target.Properties.ManagedRules = source.Properties.ManagedRules
+		logging.Debugf("%s | copying managed rules only, from %#+v to %#+v",
+			funcName, policyManagedRuleSetList(source), policyManagedRuleSetList(target))
+
+		target.Properties.ManagedRules = policyManagedRuleSetList(source)
 	default:
-		fmt.Printf("copying managed rules to policy: %#+v\n", target.Properties)
-		target.Properties.CustomRules = source.Properties.CustomRules
-		target.Properties.ManagedRules = source.Properties.ManagedRules
+		logging.Debugf("%s | copying custom and managed rules onto %#+v", funcName, target.Properties)
+
+		target.Properties.CustomRules = policyCustomRuleList(source)
+		target.Properties.ManagedRules = policyManagedRuleSetList(source)
 	}
 
 	return target, nil

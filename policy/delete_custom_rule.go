@@ -114,10 +114,10 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 	}
 
 	// remove all but those starting with supplied prefix
-	preLen := len(policyCopy.Properties.CustomRules.Rules)
+	preLen := len(policyCustomRules(&policyCopy))
 
 	// generate slice of existing Custom rules that do NOT match the regex nor priority
-	ecrs := stripCustomRulesMatchingNameOrPriority(in.PrioritySet, in.Priority, in.NameMatch, in.Policy.Properties.CustomRules.Rules)
+	ecrs := stripCustomRulesMatchingNameOrPriority(in.PrioritySet, in.Priority, in.NameMatch, policyCustomRules(in.Policy))
 	if len(ecrs) == preLen {
 		logging.Debug("nothing to do")
 
@@ -155,9 +155,11 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 	funcName := GetFunctionName()
 
-	s, err := session.New()
-	if err != nil {
-		return err
+	s := cliInput.Session
+	if s == nil {
+		if s, err = session.New(); err != nil {
+			return err
+		}
 	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
@@ -211,6 +213,7 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 		ResourceGroup:    policyID.ResourceGroup,
 		PolicyPostChange: *getPolicyOutput.Policy,
 		DryRun:           cliInput.DryRun,
+		Backup:           cliInput.AutoBackup,
 		Debug:            dcri.Debug,
 	})
 }

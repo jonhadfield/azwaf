@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/logging"
 
@@ -370,6 +372,35 @@ func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy,
 	return results, nil
 }
 
+// ensurePolicyProperties returns p's properties, creating them if absent, so a
+// restore onto a policy that carries none does not panic.
+func ensurePolicyProperties(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.WebApplicationFirewallPolicyProperties {
+	if p.Properties == nil {
+		p.Properties = &armfrontdoor.WebApplicationFirewallPolicyProperties{}
+	}
+
+	return p.Properties
+}
+
+// backupCustomRules and backupManagedRules read a backup's rules without
+// assuming it has properties. A backup legitimately holds none when the policy
+// it captured had none, in which case the restore clears the target's.
+func backupCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.CustomRuleList {
+	if p.Properties == nil {
+		return nil
+	}
+
+	return policyCustomRuleList(p)
+}
+
+func backupManagedRules(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.ManagedRuleSetList {
+	if p.Properties == nil {
+		return nil
+	}
+
+	return policyManagedRuleSetList(p)
+}
+
 // BuildRestoredPolicy accepts two policies (existing and backup) and options on which parts (Custom and or Managed rules) to replace
 // without options, the Original will have both Custom and Managed rules parts replaced
 // options allow for Custom or Managed rules in Original to replaced with those in backup
@@ -394,7 +425,17 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 
 	switch {
 	case i.CustomRulesOnly:
-		copyOfOriginalPolicy.Policy.Properties.CustomRules.Rules = backup.Policy.Properties.CustomRules.Rules
+		props := ensurePolicyProperties(&copyOfOriginalPolicy.Policy)
+		if props.CustomRules == nil {
+			props.CustomRules = &armfrontdoor.CustomRuleList{}
+		}
+
+		if src := backupCustomRules(&backup.Policy); src != nil {
+			props.CustomRules.Rules = src.Rules
+		} else {
+			props.CustomRules.Rules = nil
+		}
+
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
 		return WrappedPolicy{
@@ -405,11 +446,7 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			PolicyID:       copyOfOriginalPolicy.PolicyID,
 		}, nil
 	case i.ManagedRulesOnly:
-		if backup.Policy.Properties.ManagedRules == nil {
-			copyOfOriginalPolicy.Policy.Properties.ManagedRules = nil
-		} else {
-			copyOfOriginalPolicy.Policy.Properties.ManagedRules = backup.Policy.Properties.ManagedRules
-		}
+		ensurePolicyProperties(&copyOfOriginalPolicy.Policy).ManagedRules = backupManagedRules(&backup.Policy)
 
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
@@ -424,9 +461,9 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 		// if both Original and backup are provided, then return Original with both Custom and Managed rules replaced
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
-		copyOfOriginalPolicy.Policy.Properties.CustomRules = backup.Policy.Properties.CustomRules
-
-		copyOfOriginalPolicy.Policy.Properties.ManagedRules = backup.Policy.Properties.ManagedRules
+		props := ensurePolicyProperties(&copyOfOriginalPolicy.Policy)
+		props.CustomRules = backupCustomRules(&backup.Policy)
+		props.ManagedRules = backupManagedRules(&backup.Policy)
 
 		return WrappedPolicy{
 			SubscriptionID: rID.SubscriptionID,

@@ -383,17 +383,20 @@ type LogIPsInput struct {
 }
 
 type DeleteCustomRulesCLIInput struct {
-	BaseCLIInput   BaseCLIInput
-	SubscriptionID string
-	PolicyID       string
-	DryRun         bool
-	ConfigPath     string
-	RID            config.ResourceID
-	Name           string
-	NameMatch      *regexp.Regexp
-	Priority       string
-	MaxRules       int
-	Debug          bool
+	// BaseCLIInput is embedded, not a named field: it previously sat alongside
+	// duplicate SubscriptionID/DryRun/ConfigPath/Debug fields that the CLI
+	// never populated, so reads of the outer twins silently saw zero values
+	// and --dry-run pushed anyway.
+	BaseCLIInput
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session   *session.Session
+	PolicyID  string
+	RID       config.ResourceID
+	Name      string
+	NameMatch *regexp.Regexp
+	Priority  string
+	MaxRules  int
 }
 
 type DeleteCustomRulesPrefixesInput struct {
@@ -686,8 +689,28 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput
 	return output, nil
 }
 
+// validatePolicyLimits checks a policy against the Azure limits azwaf can
+// determine locally. Without it an over-limit policy is only rejected once it
+// reaches the API, and the caller has already paid for a fetch, a diff and an
+// auto-backup by then.
+func validatePolicyLimits(p *armfrontdoor.WebApplicationFirewallPolicy) error {
+	if count := len(policyCustomRules(p)); count > MaxCustomRules {
+		return fmt.Errorf("policy has %d custom rules, exceeding Azure's limit of %d",
+			count, MaxCustomRules)
+	}
+
+	return nil
+}
+
 func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 	funcName := GetFunctionName()
+
+	// reject before spending a fetch, a diff and a backup on a policy the API
+	// will refuse. This runs ahead of the dry-run return so a dry run reports
+	// the problem too
+	if err := validatePolicyLimits(&input.PolicyPostChange); err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
+	}
 
 	// get existing policy before change to allow for diff and backups
 	preChange, err := GetRawPolicy(input.Session, input.SubscriptionID, input.ResourceGroup, input.PolicyName)
@@ -727,5 +750,6 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 		ResourceGroup: input.ResourceGroup,
 		Policy:        input.PolicyPostChange,
 		Debug:         input.Debug,
+		Async:         input.Async,
 	})
 }

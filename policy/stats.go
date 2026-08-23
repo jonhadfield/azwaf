@@ -58,7 +58,7 @@ func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*a
 
 	var stats []RuleSetStatsOutput
 
-	if policy == nil || policy.Properties == nil || policy.Properties.ManagedRules == nil || len(policy.Properties.ManagedRules.ManagedRuleSets) == 0 {
+	if len(policyManagedRuleSets(policy)) == 0 {
 		return stats, fmt.Errorf("%s - policy not defined", funcName)
 	}
 
@@ -66,7 +66,7 @@ func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*a
 		return stats, fmt.Errorf("%s - managed ruleset definitions not provided", funcName)
 	}
 
-	for _, rs := range policy.Properties.ManagedRules.ManagedRuleSets {
+	for _, rs := range policyManagedRuleSets(policy) {
 		rs := rs
 		matchingDefinitionsOutput := getDefinitionMatchingExistingRuleSets(&getDefinitionsMatchingExistingRuleSetsInput{
 			mrsdl:          mrsd,
@@ -75,9 +75,8 @@ func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*a
 		})
 
 		if matchingDefinitionsOutput.RuleSetDefinition == nil {
-			return stats, fmt.Errorf(
-				fmt.Sprintf("failed to get matching definition for rule set %s_%s",
-					*rs.RuleSetType, *rs.RuleSetVersion), funcName)
+			return stats, fmt.Errorf("%s - failed to get matching definition for rule set %s_%s",
+				funcName, *rs.RuleSetType, *rs.RuleSetVersion)
 		}
 
 		stats = append(stats, getRuleSetStats(rs, matchingDefinitionsOutput.RuleSetDefinition))

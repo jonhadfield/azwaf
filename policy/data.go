@@ -91,7 +91,13 @@ const (
 func PushPolicy(s *session.Session, i *PushPolicyInput) error {
 	funcName := GetFunctionName()
 
-	logging.Debugf("pushing policy %s...", *i.Policy.Name)
+	logging.Debugf("pushing policy %s...", i.Name)
+
+	// backstop for callers that reach PushPolicy without going through
+	// ProcessPolicyChanges, so no path can push an over-limit policy
+	if err := validatePolicyLimits(&i.Policy); err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
+	}
 
 	ctx := context.Background()
 

@@ -15,8 +15,12 @@ import (
 )
 
 type DeleteManagedRuleExclusionCLIInput struct {
+	// BaseCLIInput carries SubscriptionID, ConfigPath and Debug. SubscriptionID
+	// and Debug were previously redeclared here, shadowing the embedded copies.
 	BaseCLIInput
-	SubscriptionID        string
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session               *session.Session
 	PolicyID              string
 	RID                   config.ResourceID
 	RuleSet               string
@@ -26,7 +30,6 @@ type DeleteManagedRuleExclusionCLIInput struct {
 	ExclusionRuleVariable string
 	ExclusionRuleOperator string
 	ExclusionRuleSelector string
-	Debug                 bool
 }
 
 func (input *DeleteCustomRulesCLIInput) ProcessCLIInput() (output DeleteCustomRulesPrefixesInput, err error) {
@@ -89,6 +92,10 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 	// required when running tests without init
 	checkDebug(dcri.Debug)
 	logging.Tracef("%s | scope: %s", funcName, dcri.Scope)
+
+	if existingManagedRuleSet == nil {
+		return nil, fmt.Errorf("%s - managed rule set is missing", funcName)
+	}
 
 	newMRS = &armfrontdoor.ManagedRuleSet{}
 	newMRS.RuleSetAction = existingManagedRuleSet.RuleSetAction
@@ -231,6 +238,10 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 	var mRGOE bool
 
 	for _, managedRuleExclusion := range existingManagedRuleExclusions {
+		if managedRuleExclusion == nil {
+			continue
+		}
+
 		mRGOE = matchManagedRuleGroupOverrideExclusion(matchManagedRuleGroupOverrideExclusionInput{
 			existingManagedRuleExclusion: managedRuleExclusion,
 			variable:                     dcri.ExclusionRuleVariable,
@@ -241,18 +252,18 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 		if mRGOE {
 			logging.Debugf("%s | match for exclusion variable: %s operator: %s selector: %s",
 				funcName,
-				*managedRuleExclusion.MatchVariable,
-				*managedRuleExclusion.SelectorMatchOperator,
-				*managedRuleExclusion.Selector)
+				valueOrDash(managedRuleExclusion.MatchVariable),
+				valueOrDash(managedRuleExclusion.SelectorMatchOperator),
+				valueOrDash(managedRuleExclusion.Selector))
 
 			continue
 		}
 
 		logging.Tracef("%s | no match for exclusion %s %s %s",
 			funcName,
-			*managedRuleExclusion.MatchVariable,
-			*managedRuleExclusion.SelectorMatchOperator,
-			*managedRuleExclusion.Selector)
+			valueOrDash(managedRuleExclusion.MatchVariable),
+			valueOrDash(managedRuleExclusion.SelectorMatchOperator),
+			valueOrDash(managedRuleExclusion.Selector))
 
 		newManagedRuleExclusions = append(newManagedRuleExclusions, managedRuleExclusion)
 	}
@@ -299,21 +310,28 @@ func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideE
 // Return nil if empty
 func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleOverride *armfrontdoor.ManagedRuleOverride) (newManagedRuleOverride *armfrontdoor.ManagedRuleOverride) {
 	funcName := GetFunctionName()
+
+	if existingManagedRuleOverride == nil {
+		return nil
+	}
+
+	ruleID := derefOrEmpty(existingManagedRuleOverride.RuleID)
+
 	// if the rule id is provided, and there's no match then return existing (no removal)
-	if dcri.RuleID != "" && dcri.RuleID != *existingManagedRuleOverride.RuleID {
+	if dcri.RuleID != "" && dcri.RuleID != ruleID {
 		return existingManagedRuleOverride
 	}
 
 	// if no exclusion details were passed, return matching rule override with all exclusions removed
 	if dcri.ExclusionRuleSelector == "" && dcri.ExclusionRuleOperator == "" && dcri.ExclusionRuleVariable == "" {
-		logging.Debugf("%s | no exclusion selector, operator, nor variable passed, so return matching rule without exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
+		logging.Debugf("%s | no exclusion selector, operator, nor variable passed, so return matching rule without exclusions for %s", funcName, ruleID)
 		existingManagedRuleOverride.Exclusions = []*armfrontdoor.ManagedRuleExclusion{}
 
 		return existingManagedRuleOverride
 	}
 
 	// exclusions were passed, so remove any matching
-	logging.Debugf("%s | exclusion selector, operator, and variable passed, so return matching rule stripped exclusions for %s", funcName, *existingManagedRuleOverride.RuleID)
+	logging.Debugf("%s | exclusion selector, operator, and variable passed, so return matching rule stripped exclusions for %s", funcName, ruleID)
 
 	preExclusionCount := len(existingManagedRuleOverride.Exclusions)
 
@@ -321,7 +339,7 @@ func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingMan
 
 	// report if any exclusions have been removed
 	if preExclusionCount != len(existingManagedRuleOverride.Exclusions) {
-		logging.Debugf("%s | removed %d exclusions from rule %s", funcName, preExclusionCount-len(existingManagedRuleOverride.Exclusions), *existingManagedRuleOverride.RuleID)
+		logging.Debugf("%s | removed %d exclusions from rule %s", funcName, preExclusionCount-len(existingManagedRuleOverride.Exclusions), ruleID)
 	}
 
 	return existingManagedRuleOverride
@@ -342,13 +360,17 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 
 	for _, existingManagedRuleOverride := range existingManagedRuleGroupOverrides {
 		existingManagedRuleOverride := existingManagedRuleOverride
+		if existingManagedRuleOverride == nil {
+			continue
+		}
 
 		preExclusionsCount := len(existingManagedRuleOverride.Exclusions)
+		ruleID := derefOrEmpty(existingManagedRuleOverride.RuleID)
 
 		logging.Tracef(
 			"%s | %s with %d exclusions",
 			funcName,
-			*existingManagedRuleOverride.RuleID,
+			ruleID,
 			len(existingManagedRuleOverride.Exclusions),
 		)
 
@@ -358,16 +380,19 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 		// TODO: output changes if any made
 
 		// if we got a result, append it as it means no changes were necessary, or an update was made
-		if newManagedRuleOverride != nil {
-			newManagedRuleGroupOverrides = append(newManagedRuleGroupOverrides, newManagedRuleOverride)
+		// the count comparison below reads through it, so it has to stay inside this check
+		if newManagedRuleOverride == nil {
+			continue
 		}
+
+		newManagedRuleGroupOverrides = append(newManagedRuleGroupOverrides, newManagedRuleOverride)
 
 		postExclusionsCount := len(newManagedRuleOverride.Exclusions)
 		if preExclusionsCount > postExclusionsCount {
 			logging.Infof(
 				"removing %d exclusions from override rule %s",
 				preExclusionsCount-postExclusionsCount,
-				*existingManagedRuleOverride.RuleID,
+				ruleID,
 			)
 		}
 	}
@@ -377,6 +402,10 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 
 func stripManagedRuleGroupOverride(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride) (newManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride, err error) {
 	funcName := GetFunctionName()
+
+	if existingManagedRuleGroupOverride == nil {
+		return nil, fmt.Errorf("%s - rule group override is missing", funcName)
+	}
 
 	newManagedRuleGroupOverride = &armfrontdoor.ManagedRuleGroupOverride{
 		Exclusions: []*armfrontdoor.ManagedRuleExclusion{},
@@ -430,12 +459,20 @@ func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *a
 	newMRSList = &armfrontdoor.ManagedRuleSetList{}
 	newMRSList.ManagedRuleSets = []*armfrontdoor.ManagedRuleSet{}
 
+	if existingMRSList == nil {
+		return newMRSList, nil
+	}
+
 	// walk through ruleset lists, building a new set based on user provided matches
 	for x := range existingMRSList.ManagedRuleSets {
+		if existingMRSList.ManagedRuleSets[x] == nil {
+			continue
+		}
+
 		// create a new Managed rule set that'll mirror the existing, minus the MREs
 		logging.Debugf("stripping from ruleset %s_%s",
-			*existingMRSList.ManagedRuleSets[x].RuleSetType,
-			*existingMRSList.ManagedRuleSets[x].RuleSetVersion)
+			derefOrEmpty(existingMRSList.ManagedRuleSets[x].RuleSetType),
+			derefOrEmpty(existingMRSList.ManagedRuleSets[x].RuleSetVersion))
 
 		var strippedMRS *armfrontdoor.ManagedRuleSet
 
@@ -460,21 +497,26 @@ func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *a
 }
 
 func DeleteManagedRuleExclusion(dmreci *DeleteManagedRuleExclusionCLIInput) (err error) {
-	s, err := session.New()
-	if err != nil {
-		return err
-	}
-	s.AppVersion = dmreci.AppVersion
-
-	policyID := dmreci.PolicyID
-	if IsRIDHash(dmreci.PolicyID) {
-		policyID, err = GetPolicyRIDByHash(s, dmreci.SubscriptionID, dmreci.PolicyID)
-		if err != nil {
+	s := dmreci.Session
+	if s == nil {
+		if s, err = session.New(); err != nil {
 			return err
 		}
 	}
 
-	rid := config.ParseResourceID(policyID)
+	s.AppVersion = dmreci.AppVersion
+
+	// resolve the policy name through the shared resolver so that aliases,
+	// hashes and full resource ids all work, as they do for add exclusion
+	rid, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
+		SubscriptionID: dmreci.SubscriptionID,
+		RawPolicyID:    dmreci.PolicyID,
+		ConfigPath:     dmreci.ConfigPath,
+	})
+	if err != nil {
+		return err
+	}
+
 	dmreci.RID = rid
 
 	dmrei, err := dmreci.ParseConfig()
@@ -500,7 +542,7 @@ func DeleteManagedRuleExclusion(dmreci *DeleteManagedRuleExclusionCLIInput) (err
 		return
 	}
 
-	updatedMRSL, err := stripMatchingMREs(dmrei, p.Properties.ManagedRules)
+	updatedMRSL, err := stripMatchingMREs(dmrei, policyManagedRuleSetList(p))
 	if err != nil {
 		logging.Error(err.Error())
 	}
@@ -547,4 +589,6 @@ type ProcessPolicyChangesInput struct {
 	DryRun           bool
 	Backup           bool
 	Debug            bool
+	// Async pushes the policy without waiting for the operation to complete.
+	Async bool
 }
