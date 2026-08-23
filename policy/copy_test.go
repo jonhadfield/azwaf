@@ -137,7 +137,7 @@ func TestCopyRulesInputChooseOneOnly(t *testing.T) {
 		Target:           "/subscriptions/291bba3f-e0a5-47bc-a099-3bdcb2a50a05/resourcegroups/waf-resource-group/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/wafpolicy",
 		CustomRulesOnly:  true,
 		ManagedRulesOnly: true,
-		SubscriptionID:   "291bba3f-e0a5-47bc-a099-3bdcb2a50a05",
+		BaseCLIInput:     BaseCLIInput{SubscriptionID: "291bba3f-e0a5-47bc-a099-3bdcb2a50a05"},
 	}
 
 	err := c.Validate()
@@ -151,7 +151,7 @@ func TestCopyRulesInputInvalidSourceId(t *testing.T) {
 		Target:           "/subscriptions/291bba3f-e0a5-47bc-a099-3bdcb2a50a05/resourcegroups/waf-resource-group/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/wafpolicy",
 		CustomRulesOnly:  true,
 		ManagedRulesOnly: false,
-		SubscriptionID:   "291bba3f-e0a5-47bc-a099-3bdcb2a50a05",
+		BaseCLIInput:     BaseCLIInput{SubscriptionID: "291bba3f-e0a5-47bc-a099-3bdcb2a50a05"},
 	}
 
 	err := c.Validate()
@@ -166,7 +166,7 @@ func TestCopyRulesInputInvalidTargetId(t *testing.T) {
 		Target:           "invalid",
 		CustomRulesOnly:  true,
 		ManagedRulesOnly: false,
-		SubscriptionID:   "291bba3f-e0a5-47bc-a099-3bdcb2a50a05",
+		BaseCLIInput:     BaseCLIInput{SubscriptionID: "291bba3f-e0a5-47bc-a099-3bdcb2a50a05"},
 	}
 
 	err := c.Validate()
@@ -180,7 +180,7 @@ func TestCopyRulesInputInvalidSubId(t *testing.T) {
 		Target:           "/subscriptions/291bba3f-e0a5-47bc-a099-3bdcb2a50a05/resourcegroups/waf-resource-group/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/wafpolicyTwo",
 		CustomRulesOnly:  true,
 		ManagedRulesOnly: false,
-		SubscriptionID:   "invalid-e0a5-47bc-a099-3bdcb2a50a05",
+		BaseCLIInput:     BaseCLIInput{SubscriptionID: "invalid-e0a5-47bc-a099-3bdcb2a50a05"},
 	}
 
 	err := c.Validate()

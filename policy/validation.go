@@ -67,8 +67,14 @@ func validateSubscriptionID(subscriptionID string) error {
 }
 
 func (in *ShowPolicyInput) Validate() error {
+	// --custom-only hides managed rulesets and --managed-only hides custom
+	// rules, so together they leave nothing to render — unless --stats is
+	// asked for, which prints regardless
 	if in.Custom && in.Managed && !in.Stats {
-		return fmt.Errorf("%s - at least one of --custom, --managed and --stats is required", GetFunctionName())
+		return fmt.Errorf(
+			"%s - --custom-only and --managed-only cannot be combined: together they hide everything. "+
+				"Omit both to show the whole policy, or add --stats",
+			GetFunctionName())
 	}
 
 	return nil

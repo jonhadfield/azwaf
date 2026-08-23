@@ -14,10 +14,12 @@ import (
 )
 
 func getRuleGroupExclusionsFromRuleSet(ruleGroup string, ruleSet *armfrontdoor.ManagedRuleSet) (groupEx []*armfrontdoor.ManagedRuleExclusion) {
-	// for _, ruleSet := range ruleSets {
-	// 	ruleSet := ruleSet
-	for _, ruleGroupOverride := range ruleSet.RuleGroupOverrides {
+	for _, ruleGroupOverride := range ruleSetGroupOverrides(ruleSet) {
 		ruleGroupOverride := ruleGroupOverride
+		if ruleGroupOverride == nil || ruleGroupOverride.RuleGroupName == nil {
+			continue
+		}
+
 		if strings.EqualFold(ruleGroup, *ruleGroupOverride.RuleGroupName) {
 			groupEx = ruleGroupOverride.Exclusions
 
@@ -30,14 +32,18 @@ func getRuleGroupExclusionsFromRuleSet(ruleGroup string, ruleSet *armfrontdoor.M
 
 // getAllExclusionsByRuleID returns all of the rule set and rule group exclusions that would be inherited by the rule
 func getAllExclusionsByRuleID(ruleID string, ruleSet *armfrontdoor.ManagedRuleSet) (ruleEx, groupEx, setEx []*armfrontdoor.ManagedRuleExclusion) {
-	setEx = ruleSet.Exclusions
+	setEx = ruleSetExclusions(ruleSet)
 
-	for _, ruleGroupOverride := range ruleSet.RuleGroupOverrides {
+	for _, ruleGroupOverride := range ruleSetGroupOverrides(ruleSet) {
 		ruleGroupOverride := ruleGroupOverride
-		groupEx = ruleGroupOverride.Exclusions
+		groupEx = groupOverrideExclusions(ruleGroupOverride)
 
-		for _, rule := range ruleGroupOverride.Rules {
+		for _, rule := range groupOverrideRules(ruleGroupOverride) {
 			rule := rule
+			if rule == nil || rule.RuleID == nil {
+				continue
+			}
+
 			if *rule.RuleID == ruleID {
 				ruleEx = rule.Exclusions
 
@@ -79,12 +85,12 @@ type getMatchingDefaultDefinitionsOutput struct {
 }
 
 // getMatchingDefaultDefinitions returns the API's default definitions of the given rule, rule group, and/or rule set provided
-func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (output getMatchingDefaultDefinitionsOutput) {
+func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (output getMatchingDefaultDefinitionsOutput, err error) {
 	funcName := GetFunctionName()
 
 	//  ruleset details are required
 	if input.ruleSetType == "" || input.ruleSetVersion == "" {
-		panic("ruleset type and version required to match default definitions")
+		return output, fmt.Errorf("%s - rule set type and version are required to match default definitions", funcName)
 	}
 
 	for _, ruleSetDefinition := range input.mrsdl {
@@ -126,11 +132,12 @@ func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (o
 		}
 	}
 
+	// no match: not an error, the callers report the specific miss
 	return getMatchingDefaultDefinitionsOutput{
 		RuleSetDefinition:   nil,
 		RuleGroupDefinition: nil,
 		RuleDefinition:      nil,
-	}
+	}, nil
 }
 
 type getDefinitionsMatchingExistingRuleSetInput struct {
@@ -149,11 +156,18 @@ func getDefinitionMatchingExistingRuleSet(input *getDefinitionsMatchingExistingR
 		return false, output, fmt.Errorf("%s - scope must be provided", funcName)
 	}
 
+	if input.mrsd == nil || input.mrsd.Properties == nil {
+		return false, output, fmt.Errorf("%s - rule set definition is missing", funcName)
+	}
+
 	// we can set this early as a scope specific match with determine success
 	output.RuleSetDefinition = input.mrsd
 
-	if input.scope == ScopeRuleSet && strings.EqualFold(*input.mrsd.Properties.RuleSetType, input.ruleSetType) && strings.EqualFold(*input.mrsd.Properties.RuleSetVersion, input.ruleSetVersion) {
-		logging.Tracef("%s | comparing %s %s with %s %s", funcName, *input.mrsd.Properties.RuleSetType, input.ruleSetType, *input.mrsd.Properties.RuleSetVersion, input.ruleSetVersion)
+	defType := derefOrEmpty(input.mrsd.Properties.RuleSetType)
+	defVersion := derefOrEmpty(input.mrsd.Properties.RuleSetVersion)
+
+	if input.scope == ScopeRuleSet && strings.EqualFold(defType, input.ruleSetType) && strings.EqualFold(defVersion, input.ruleSetVersion) {
+		logging.Tracef("%s | comparing %s %s with %s %s", funcName, defType, input.ruleSetType, defVersion, input.ruleSetVersion)
 
 		// if we match rule set input, then return
 		// * rule set input only specified if that's all that's needed
@@ -165,7 +179,11 @@ func getDefinitionMatchingExistingRuleSet(input *getDefinitionsMatchingExistingR
 
 		output.RuleGroupDefinition = ruleGroupDefinition
 
-		if input.scope == ScopeRuleGroup && strings.EqualFold(input.groupName, *ruleGroupDefinition.RuleGroupName) {
+		if ruleGroupDefinition == nil {
+			continue
+		}
+
+		if input.scope == ScopeRuleGroup && strings.EqualFold(input.groupName, derefOrEmpty(ruleGroupDefinition.RuleGroupName)) {
 			// if only group is needed, then return
 			return true, output, err
 		}
@@ -207,7 +225,7 @@ func GetRuleSetDefinitionsMatchingPolicy(s *session.Session, policy *armfrontdoo
 		return
 	}
 
-	for _, ruleSet := range policy.Properties.ManagedRules.ManagedRuleSets {
+	for _, ruleSet := range policyManagedRuleSets(policy) {
 		ruleSet := ruleSet
 		if ok, mrsd := getRuleSetDefinitionMatchingRuleSetTypeVersion(allRuleSetDefs, *ruleSet.RuleSetType, *ruleSet.RuleSetVersion); ok {
 			rsds = append(rsds, mrsd)
@@ -219,7 +237,12 @@ func GetRuleSetDefinitionsMatchingPolicy(s *session.Session, policy *armfrontdoo
 
 func getRuleSetDefinitionMatchingRuleSetTypeVersion(rsds []*armfrontdoor.ManagedRuleSetDefinition, ruleSetType, ruleSetVersion string) (match bool, mrsd *armfrontdoor.ManagedRuleSetDefinition) {
 	for x := range rsds {
-		if *rsds[x].Properties.RuleSetType == ruleSetType && *rsds[x].Properties.RuleSetVersion == ruleSetVersion {
+		if rsds[x] == nil || rsds[x].Properties == nil {
+			continue
+		}
+
+		if derefOrEmpty(rsds[x].Properties.RuleSetType) == ruleSetType &&
+			derefOrEmpty(rsds[x].Properties.RuleSetVersion) == ruleSetVersion {
 			return true, rsds[x]
 		}
 	}
@@ -241,12 +264,15 @@ func getDefinitionsMatchingGroupName(s *session.Session, policy *armfrontdoor.We
 	}
 
 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
-	matchingDefinitions = getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
+	matchingDefinitions, err = getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
 		mrsdl:          matchingRuleSetDefinitions,
 		ruleSetType:    ruleSetType,
 		ruleSetVersion: ruleSetVersion,
 		groupName:      groupName,
 	})
+	if err != nil {
+		return
+	}
 
 	if matchingDefinitions.RuleGroupDefinition == nil {
 		err = fmt.Errorf("%s - group definition %s not found", funcName, groupName)
@@ -269,12 +295,15 @@ func getDefinitionsMatchingRuleID(s *session.Session, policy *armfrontdoor.WebAp
 	}
 
 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
-	matchingDefinitions = getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
+	matchingDefinitions, err = getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
 		mrsdl:          matchingRuleSetDefinitions,
 		ruleSetType:    ruleSetType,
 		ruleSetVersion: ruleSetVersion,
 		ruleID:         ruleID,
 	})
+	if err != nil {
+		return
+	}
 
 	if matchingDefinitions.RuleDefinition == nil {
 		err = fmt.Errorf("%s - rule definition for %s not found", funcName, ruleID)
@@ -383,23 +412,27 @@ type getMatchingRuleSetInput struct {
 }
 
 func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.ManagedRuleSet, found bool) {
-	for _, rs := range input.RuleSetList.ManagedRuleSets {
+	for _, rs := range ruleSetListSets(input.RuleSetList) {
 		rs := rs
+		if rs == nil {
+			continue
+		}
 
-		if input.ruleSetType == *rs.RuleSetType && input.ruleSetVersion == *rs.RuleSetVersion {
+		if input.ruleSetType == derefOrEmpty(rs.RuleSetType) && input.ruleSetVersion == derefOrEmpty(rs.RuleSetVersion) {
 			return rs, true
 		}
 
-		for _, ruleGroup := range rs.RuleGroupOverrides {
+		for _, ruleGroup := range ruleSetGroupOverrides(rs) {
 			ruleGroup := ruleGroup
 
-			if strings.EqualFold(input.RuleGroup, *ruleGroup.RuleGroupName) {
+			if strings.EqualFold(input.RuleGroup, derefOrEmpty(ruleGroup.RuleGroupName)) {
 				return rs, true
 			}
 
-			for _, rule := range ruleGroup.Rules {
+			for _, rule := range groupOverrideRules(ruleGroup) {
 				rule := rule
-				if input.RuleID == *rule.RuleID {
+
+				if input.RuleID == derefOrEmpty(rule.RuleID) {
 					return rs, true
 				}
 			}
@@ -432,7 +465,7 @@ func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.Ma
 //
 // 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
 // 	matchingRuleSet, found := getMatchingRuleSet(getMatchingRuleSetInput{
-// 		RuleSetList: getPolicyOutput.Policy.Properties.ManagedRules,
+// 		RuleSetList: policyManagedRuleSetList(getPolicyOutput.Policy),
 // 		RuleID:      ruleID,
 // 	})
 // 	if !found {
@@ -452,7 +485,7 @@ func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.Ma
 //
 // 	gmro := getManagedRule(getManagedRuleInput{
 // 		ruleID:             ruleID,
-// 		managedRuleSetList: getPolicyOutput.Policy.Properties.ManagedRules,
+// 		managedRuleSetList: policyManagedRuleSetList(getPolicyOutput.Policy),
 // 	})
 //
 // 	OutputManagedRuleExclusions(&OutputManagedRuleInput{
@@ -499,13 +532,12 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 
 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
 	matchingRuleSet, found := getMatchingRuleSet(getMatchingRuleSetInput{
-		RuleSetList: getPolicyOutput.Policy.Properties.ManagedRules,
+		RuleSetList: policyManagedRuleSetList(getPolicyOutput.Policy),
 		RuleID:      ruleID,
 	})
 	if !found {
-		return fmt.Errorf(
-			fmt.Sprintf("rule with id %s has no directly assigned exclusions in associated rule sets", ruleID),
-			funcName)
+		return fmt.Errorf("%s - rule with id %s has no directly assigned exclusions in associated rule sets",
+			funcName, ruleID)
 	}
 
 	// get rule definition
@@ -519,7 +551,7 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 
 	gmro := getManagedRule(getManagedRuleInput{
 		ruleID:             ruleID,
-		managedRuleSetList: getPolicyOutput.Policy.Properties.ManagedRules,
+		managedRuleSetList: policyManagedRuleSetList(getPolicyOutput.Policy),
 	})
 
 	OutputManagedRuleExclusions(&OutputManagedRuleInput{
@@ -562,13 +594,11 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 
 	// get policy associated rule set matching the requested rule set, rule group, or rule identifiers
 	matchingRuleSet, found := getMatchingRuleSet(getMatchingRuleSetInput{
-		RuleSetList: getPolicyOutput.Policy.Properties.ManagedRules,
+		RuleSetList: policyManagedRuleSetList(getPolicyOutput.Policy),
 		RuleGroup:   ruleGroup,
 	})
 	if !found {
-		return fmt.Errorf(
-			fmt.Sprintf("failed to find rule group %s in associated rule sets", ruleGroup),
-			funcName)
+		return fmt.Errorf("%s - failed to find rule group %s in associated rule sets", funcName, ruleGroup)
 	}
 
 	matchingDefinitions, err := getDefinitionsMatchingGroupName(s, getPolicyOutput.Policy, ruleGroup, *matchingRuleSet.RuleSetType, *matchingRuleSet.RuleSetVersion)
@@ -605,10 +635,22 @@ type shadow struct {
 }
 
 func getShadowsFromRuleSet(ruleSet *armfrontdoor.ManagedRuleSet) (ruleShadows, groupShadows []shadow) {
+	if ruleSet == nil {
+		return nil, nil
+	}
+
 	// loop through each rule group
 	for x := range ruleSet.RuleGroupOverrides {
+		if ruleSet.RuleGroupOverrides[x] == nil {
+			continue
+		}
+
 		// loop through each rule
 		for y := range ruleSet.RuleGroupOverrides[x].Rules {
+			if ruleSet.RuleGroupOverrides[x].Rules[y] == nil {
+				continue
+			}
+
 			// loop through each rules exclusions
 			for y1 := range ruleSet.RuleGroupOverrides[x].Rules[y].Exclusions {
 				// loop through each rule groups exclusions
@@ -618,9 +660,9 @@ func getShadowsFromRuleSet(ruleSet *armfrontdoor.ManagedRuleSet) (ruleShadows, g
 						// check if exclusions match
 						ruleShadows = append(ruleShadows, shadow{
 							shadowType:  ScopeRule,
-							shadowName:  *ruleSet.RuleGroupOverrides[x].Rules[y].RuleID,
+							shadowName:  derefOrEmpty(ruleSet.RuleGroupOverrides[x].Rules[y].RuleID),
 							shadowsType: ScopeRuleGroup,
-							shadowsName: *ruleSet.RuleGroupOverrides[x].RuleGroupName,
+							shadowsName: derefOrEmpty(ruleSet.RuleGroupOverrides[x].RuleGroupName),
 							exclusion:   ruleSet.RuleGroupOverrides[x].Exclusions[y2],
 						})
 					}
@@ -630,9 +672,9 @@ func getShadowsFromRuleSet(ruleSet *armfrontdoor.ManagedRuleSet) (ruleShadows, g
 					if HasMatchingExclusions(ruleSet.RuleGroupOverrides[x].Rules[y].Exclusions[y1], ruleSet.Exclusions[x2]) {
 						ruleShadows = append(ruleShadows, shadow{
 							shadowType:  ScopeRule,
-							shadowName:  *ruleSet.RuleGroupOverrides[x].Rules[y].RuleID,
+							shadowName:  derefOrEmpty(ruleSet.RuleGroupOverrides[x].Rules[y].RuleID),
 							shadowsType: ScopeRuleSet,
-							shadowsName: fmt.Sprintf("%s_%s", *ruleSet.RuleSetType, *ruleSet.RuleSetVersion),
+							shadowsName: fmt.Sprintf("%s_%s", derefOrEmpty(ruleSet.RuleSetType), derefOrEmpty(ruleSet.RuleSetVersion)),
 							exclusion:   ruleSet.Exclusions[x2],
 						})
 					}
@@ -646,9 +688,9 @@ func getShadowsFromRuleSet(ruleSet *armfrontdoor.ManagedRuleSet) (ruleShadows, g
 				if HasMatchingExclusions(ruleSet.RuleGroupOverrides[x].Exclusions[x1], ruleSet.Exclusions[x2]) {
 					groupShadows = append(groupShadows, shadow{
 						shadowType:  ScopeRuleGroup,
-						shadowName:  *ruleSet.RuleGroupOverrides[x].RuleGroupName,
+						shadowName:  derefOrEmpty(ruleSet.RuleGroupOverrides[x].RuleGroupName),
 						shadowsType: ScopeRuleSet,
-						shadowsName: fmt.Sprintf("%s_%s", *ruleSet.RuleSetType, *ruleSet.RuleSetVersion),
+						shadowsName: fmt.Sprintf("%s_%s", derefOrEmpty(ruleSet.RuleSetType), derefOrEmpty(ruleSet.RuleSetVersion)),
 						exclusion:   ruleSet.Exclusions[x2],
 					})
 				}
@@ -660,6 +702,10 @@ func getShadowsFromRuleSet(ruleSet *armfrontdoor.ManagedRuleSet) (ruleShadows, g
 }
 
 func HasMatchingExclusions(one, two *armfrontdoor.ManagedRuleExclusion) bool {
+	if one == nil || two == nil {
+		return false
+	}
+
 	if one.MatchVariable == nil || two.MatchVariable == nil || (*one.MatchVariable != *two.MatchVariable) {
 		return false
 	}
@@ -697,17 +743,13 @@ func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID c
 	}
 
 	matchingRuleSet, found := getMatchingRuleSet(getMatchingRuleSetInput{
-		RuleSetList:    getPolicyOutput.Policy.Properties.ManagedRules,
+		RuleSetList:    policyManagedRuleSetList(getPolicyOutput.Policy),
 		ruleSetType:    ruleSetType,
 		ruleSetVersion: ruleSetVersion,
 	})
 	if !found {
-		return fmt.Errorf(
-			fmt.Sprintf("rule set with type %s and version %s not associated with this policy",
-				ruleSetType,
-				ruleSetVersion,
-			),
-			funcName)
+		return fmt.Errorf("%s - rule set with type %s and version %s not associated with this policy",
+			funcName, ruleSetType, ruleSetVersion)
 	}
 
 	definitionsMatchingPolicy, err := GetRuleSetDefinitionsMatchingPolicy(s, getPolicyOutput.Policy)
@@ -718,7 +760,7 @@ func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID c
 	// get set definition
 	matchingDefinitions := getDefinitionMatchingExistingRuleSets(&getDefinitionsMatchingExistingRuleSetsInput{
 		mrsdl:          definitionsMatchingPolicy,
-		mrsl:           getPolicyOutput.Policy.Properties.ManagedRules,
+		mrsl:           policyManagedRuleSetList(getPolicyOutput.Policy),
 		ruleSetType:    ruleSetType,
 		ruleSetVersion: ruleSetVersion,
 	})
@@ -938,8 +980,12 @@ func NormaliseMatchOperator(mo string) (match bool, result armfrontdoor.ManagedR
 }
 
 func getRuleSetStats(rs *armfrontdoor.ManagedRuleSet, rsd *armfrontdoor.ManagedRuleSetDefinition) (stats RuleSetStatsOutput) {
-	stats.RuleSetType = *rs.RuleSetType
-	stats.RuleSetVersion = *rs.RuleSetVersion
+	if rs == nil {
+		return stats
+	}
+
+	stats.RuleSetType = derefOrEmpty(rs.RuleSetType)
+	stats.RuleSetVersion = derefOrEmpty(rs.RuleSetVersion)
 	stats.RuleSetScopeExclusionsTotal = len(rs.Exclusions)
 
 	mrsl := armfrontdoor.ManagedRuleSetList{
@@ -948,18 +994,19 @@ func getRuleSetStats(rs *armfrontdoor.ManagedRuleSet, rsd *armfrontdoor.ManagedR
 	matchingDefinitionsOutput := getDefinitionMatchingExistingRuleSets(&getDefinitionsMatchingExistingRuleSetsInput{
 		mrsdl:          []*armfrontdoor.ManagedRuleSetDefinition{rsd},
 		mrsl:           &mrsl,
-		ruleSetType:    *rs.RuleSetType,
-		ruleSetVersion: *rs.RuleSetVersion,
+		ruleSetType:    stats.RuleSetType,
+		ruleSetVersion: stats.RuleSetVersion,
 	})
 
-	if matchingDefinitionsOutput.RuleSetDefinition == nil {
+	if matchingDefinitionsOutput.RuleSetDefinition == nil ||
+		matchingDefinitionsOutput.RuleSetDefinition.Properties == nil {
 		return
 	}
 
 	// record the previous group name so we know when to output row with exclusions count
 	for _, managedRuleSetDefinitionRuleGroup := range matchingDefinitionsOutput.RuleSetDefinition.Properties.RuleGroups {
 		managedRuleSetDefinitionRuleGroup := managedRuleSetDefinitionRuleGroup
-		rgExclusions := getRuleGroupExclusions(*managedRuleSetDefinitionRuleGroup.RuleGroupName,
+		rgExclusions := getRuleGroupExclusions(derefOrEmpty(managedRuleSetDefinitionRuleGroup.RuleGroupName),
 			[]*armfrontdoor.ManagedRuleSet{rs})
 		stats.RuleGroupScopeExclusionsTotal += len(rgExclusions)
 		stats.GroupCount++

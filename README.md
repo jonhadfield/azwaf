@@ -84,7 +84,7 @@ make build-linux     # linux/amd64 only
 | Variable | Purpose |
 | --- | --- |
 | `AZURE_SUBSCRIPTION_ID` | Subscription containing your WAF policies. Most commands need this (or `--subscription-id`). |
-| `AZWAF_LOG` | Log level: `trace`, `debug`, `info`, `warn`, or `error`. Default `info`. When azwaf is embedded as a library it logs at `warn` and above only, to its own logger — see the `logging` package to adjust. |
+| `AZWAF_LOG` | Log level: `trace`, `debug`, `info`, `warn`, or `error`. Default `info`. The `--debug` global flag is a shortcut for `debug`. When azwaf is embedded as a library it logs at `warn` and above only, to its own logger — see the `logging` package to adjust. |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Service-principal auth (one of several supported flows). |
 
 ### Config file
@@ -147,14 +147,23 @@ azwaf show managed-rule-exclusions prod-waf --shadows
 
 ### Global flags
 
-These are accepted by every command:
+These must be given **before** the command name — `azwaf --subscription-id <id> backup …`, not
+`azwaf backup --subscription-id <id>`. Passing one after the command fails with
+`flag provided but not defined`.
 
 | Flag | Aliases | Default | Description |
 | --- | --- | --- | --- |
 | `--subscription-id` | `-s`, `--subscription` | `$AZURE_SUBSCRIPTION_ID` | Target subscription |
 | `--config` | | `~/.config/azwaf/config.yaml` | Config file path |
-| `--quiet` | | `false` | Suppress non-essential output |
+| `--quiet` | | `false` | Suppress non-essential output. Currently honoured by `backup` only — other commands accept the flag but still print. |
+| `--debug` | | `false` | Enable debug logging, equivalent to `AZWAF_LOG=debug` |
 | `--auto-backup` | | `true` | Auto-snapshot the policy to `~/.azwaf/backups/` before any mutation |
+
+> **Careful with `-s`.** Several commands define their own `-s`, which takes precedence once you
+> are past the command name: it means `--storage-account-id` on `backup`, `--show-diff` on
+> `restore`, `--source` on `copy`, and `--match-selector` on `add exclusion` and
+> `delete managed-rule-exclusion`. Only `azwaf -s <id> <command>` sets the subscription; prefer
+> the unambiguous `--subscription-id`, or set `AZURE_SUBSCRIPTION_ID`.
 
 ---
 
@@ -170,7 +179,9 @@ azwaf list policies --top 50         # cap results (default 200)
 azwaf list frontdoors                # Front Doors and the policies they reference
 ```
 
-Aliases: `list policies` ↔ `list p`, `list frontdoors` ↔ `list f`.
+Command aliases: `list policies` ↔ `list p`, `list frontdoors` ↔ `list f`.
+
+Flag aliases: `--full` ↔ `-f`, `--top` ↔ `--max`.
 
 ---
 
@@ -271,7 +282,11 @@ Aliases: `c`, `cr`.
 
 #### `delete managed-rule-exclusion`
 
-Mirror of `add exclusion` — same scope and match flags, same `--dry-run` / `--show-diff`.
+Mirror of `add exclusion` — same scope and match flag *names*, same `--dry-run` / `--show-diff`.
+
+> Unlike `add exclusion`, the scope flags here have no short aliases: spell out `--rule-set`,
+> `--rule-group` and `--rule-id` in full. `-r`, `-g` and `-i` are not accepted. The match flags
+> (`-v`, `-o`, `-s`) do have the same aliases as on `add exclusion`.
 
 ```bash
 azwaf delete managed-rule-exclusion prod-waf \
@@ -303,8 +318,9 @@ azwaf backup prod-waf \
 azwaf backup prod-waf \
   --container-url https://myacc.blob.core.windows.net/waf-backups
 
-# Or via storage-account resource ID (azwaf will resolve it)
+# Add a storage-account resource ID to authenticate with account keys instead
 azwaf backup prod-waf \
+  --container-url https://myacc.blob.core.windows.net/waf-backups \
   --storage-account-id /subscriptions/.../storageAccounts/myacc
 
 azwaf backup prod-waf staging-waf --path ./backups/ --fail-fast
@@ -313,8 +329,8 @@ azwaf backup prod-waf staging-waf --path ./backups/ --fail-fast
 | Flag | Aliases | Description |
 | --- | --- | --- |
 | `--path` | `-p` | Local directory for backup files |
-| `--container-url` | `-c` | Blob container URL to upload to |
-| `--storage-account-id` | `-s` | Storage-account resource ID (alternative to `--container-url`) |
+| `--container-url` | `-c` | Blob container URL to upload to. Sufficient on its own; uploads authenticate with your Azure AD identity, which needs a blob data role on the account. |
+| `--storage-account-id` | `-s` | Storage-account resource ID. Optional; use with `--container-url` to authenticate with account keys rather than your Azure AD identity. Cannot be used on its own — nothing would name the container. |
 | `--fail-fast` | `-f` | Stop on the first error rather than continuing |
 
 > Mutating commands also create an auto-backup under `~/.azwaf/backups/` unless `--auto-backup=false` is set.
@@ -439,14 +455,24 @@ azwaf/
 
 The limits below apply to Front Door WAF policies. Application Gateway WAF policies are subject to a separate set of Azure limits — `azwaf` does not enforce or surface them.
 
-| Resource | Limit | Source |
-| --- | --- | --- |
-| Custom rules per policy | **90** | Azure hard limit |
-| IP-match values per rule | **600** | Azure hard limit |
-| Conditions per custom rule | **10** | Azure hard limit |
-| Exclusions per scope | **100** (warns at 95) | Azure hard limit |
-| Policies fetched per `list policies` | **200** (configurable via `--top`) | Tool default |
-| Front Doors fetched per `list frontdoors` | **100** | Tool default |
+| Resource | Limit | Source | Enforced by `azwaf`? |
+| --- | --- | --- | --- |
+| Custom rules per policy | **90** | Azure hard limit | Yes — every push is checked |
+| IP-match values per rule | **600** | Azure hard limit | Not on the CLI paths — see note |
+| Conditions per custom rule | **10** | Azure hard limit | No |
+| Exclusions per scope | **100** | Azure hard limit | Advisory only — see note |
+| Policies fetched per `list policies` | **200** (configurable via `--top`) | Tool default | Yes |
+| Front Doors fetched per `list frontdoors` | **100** | Tool default | Yes |
+
+> **What `azwaf` actually checks.** The custom-rule count is validated before every push, so
+> `copy` and `restore --custom-rules` fail with a clear error rather than letting Azure reject
+> the policy — and a `--dry-run` reports it too. The other three are not enforced. The
+> 600-IP-match check exists only inside the IP-network helper functions, which are exported for
+> library use but have no CLI entry point; the conditions-per-rule limit is not checked at all;
+> and the exclusions-per-scope figure is surfaced as a warning above 95 by `show policy --stats`,
+> computed on the *total* across all three scopes rather than per scope, with `add exclusion`
+> never consulting it. Treat those three as upstream Azure limits you should stay within, not as
+> guardrails the tool provides.
 
 See [Azure Front Door service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-standard-and-premium-tier-service-limits) for the Front Door upstream specifics, and [Application Gateway service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#application-gateway-limits) for Application Gateway.
 

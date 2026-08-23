@@ -156,7 +156,7 @@ func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err err
 
 	logging.Debugf("%s | store copy of policy %s for later comparison", funcName, *original.Name)
 
-	amrei.RuleSets = getPolicyOutput.Policy.Properties.ManagedRules.ManagedRuleSets
+	amrei.RuleSets = policyManagedRuleSets(getPolicyOutput.Policy)
 	amrei.PolicyResourceID = policyID
 	// Session only needed in case we need to retrieve managed ruleset definitions list for
 	// adding rule that may not already have exclusions
@@ -240,6 +240,10 @@ func addManagedRuleExclusion(input *AddManagedRuleExclusionInput) error {
 }
 
 func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.ManagedRuleSet) (err error) {
+	if mrs == nil {
+		return fmt.Errorf("%s - managed rule set is missing", GetFunctionName())
+	}
+
 	funcName := GetFunctionName()
 	// required when running tests without init
 	checkDebug(input.Debug)

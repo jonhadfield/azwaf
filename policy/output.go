@@ -58,7 +58,7 @@ func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, 
 
 	var pcr armfrontdoor.CustomRule
 
-	for _, r := range p.Properties.CustomRules.Rules {
+	for _, r := range policyCustomRules(p) {
 		if *r.Name == customRuleName {
 			pcr = *r
 
@@ -73,23 +73,45 @@ func GetRawPolicyCustomRuleByID(s *session.Session, policyID config.ResourceID, 
 	return pcr, nil
 }
 
-// PrintPolicyCustomRule outputs the Custom rule for a given resource.
-// The id is an extended resource id: <Policy>|<Custom rule name>.
-func PrintPolicyCustomRule(subscriptionID, extendedID, config string) error {
-	s, err := session.New()
-	if err != nil {
-		return err
+// PrintPolicyCustomRuleInput are the arguments for PrintPolicyCustomRule.
+type PrintPolicyCustomRuleInput struct {
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session        *session.Session
+	SubscriptionID string
+	// ExtendedID names the rule as "<policy-id>|<custom-rule-name>".
+	ExtendedID string
+	ConfigPath string
+	// OutputPath writes the rule to this file rather than stdout when set.
+	OutputPath string
+	// Quiet suppresses the confirmation printed after writing OutputPath.
+	Quiet bool
+}
+
+// PrintPolicyCustomRule outputs the Custom rule for a given resource, to
+// OutputPath when one is set and to stdout otherwise. The id is an extended
+// resource id: <Policy>|<Custom rule name>.
+func PrintPolicyCustomRule(in PrintPolicyCustomRuleInput) error {
+	funcName := GetFunctionName()
+
+	s := in.Session
+	if s == nil {
+		var serr error
+
+		if s, serr = session.New(); serr != nil {
+			return serr
+		}
 	}
 
-	policyID, customRuleName, err := splitExtendedID(extendedID)
+	policyID, customRuleName, err := splitExtendedID(in.ExtendedID)
 	if err != nil {
 		return fmt.Errorf("id not in the format <policy-id>|<custom-rule-name>")
 	}
 
 	resourceID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
-		SubscriptionID: subscriptionID,
+		SubscriptionID: in.SubscriptionID,
 		RawPolicyID:    policyID,
-		ConfigPath:     config,
+		ConfigPath:     in.ConfigPath,
 	})
 	if err != nil {
 		return err
@@ -100,14 +122,25 @@ func PrintPolicyCustomRule(subscriptionID, extendedID, config string) error {
 		return err
 	}
 
-	var b []byte
-
-	b, err = json.MarshalIndent(cr, "", "    ")
+	b, err := json.MarshalIndent(cr, "", "    ")
 	if err != nil {
-		return fmt.Errorf("%s - failed to marshall Custom rule: %w", GetFunctionName(), err)
+		return fmt.Errorf("%s - failed to marshal custom rule: %w", funcName, err)
 	}
 
-	fmt.Println(string(b))
+	if in.OutputPath == "" {
+		fmt.Println(string(b))
+
+		return nil
+	}
+
+	// #nosec G306 -- policy definitions are not secrets, and backups are written the same way
+	if err = os.WriteFile(in.OutputPath, b, 0o644); err != nil {
+		return fmt.Errorf("%s - failed to write custom rule to %s: %w", funcName, in.OutputPath, err)
+	}
+
+	if !in.Quiet {
+		logging.Infof("custom rule %s written to %s", customRuleName, in.OutputPath)
+	}
 
 	return nil
 }
@@ -135,8 +168,7 @@ func PrintPolicy(policyID, subscriptionID, configPath string) error {
 
 	b, jerr := json.MarshalIndent(p, "", "    ")
 	if jerr != nil {
-		return fmt.Errorf(
-			fmt.Sprintf("failed to marshall Custom rule: %s", jerr.Error()), GetFunctionName())
+		return fmt.Errorf("%s - failed to marshal custom rule: %w", GetFunctionName(), jerr)
 	}
 
 	fmt.Println(string(b))
@@ -180,7 +212,7 @@ func showFrontDoors(afds FrontDoors) {
 			r = []*simpletable.Cell{
 				{Text: afdName},
 				{Text: endpoint.name},
-				{Text: *endpoint.wafPolicy.Name},
+				{Text: valueOrDash(endpoint.wafPolicy.Name)},
 			}
 			table.Body.Cells = append(table.Body.Cells, r)
 		}
@@ -199,9 +231,12 @@ func formatRuleEnabledState(enabledState, defaultState string) string {
 		return color.Red.Sprint("Disabled")
 	}
 
-	// prevent infinite loop
+	// no usable default to fall back on: render a dash rather than recursing
+	// forever, or bringing the process down mid-table for an unrecognised state
 	if defaultState != "Enabled" && defaultState != "Disabled" {
-		panic(fmt.Sprintf("default state invalid: %s", defaultState))
+		logging.Debugf("unrecognised rule enabled state %q with default %q", enabledState, defaultState)
+
+		return "-"
 	}
 
 	return formatRuleEnabledState(defaultState, "")
@@ -265,21 +300,42 @@ func colourEnabledState(es string) string {
 }
 
 func appendCustomRuleRows(table *simpletable.Table, cr *armfrontdoor.CustomRule, showFull bool) {
+	if cr == nil {
+		return
+	}
+
+	// every one of these is a pointer on the API type: a policy missing any of
+	// them should render a dash, not bring the process down mid-table
+	ruleType := ""
+	if cr.RuleType != nil {
+		ruleType = string(*cr.RuleType)
+	}
+
 	rldim := " "
-	if cr.RateLimitDurationInMinutes != nil && string(*cr.RuleType) == "RateLimitRule" {
+	if cr.RateLimitDurationInMinutes != nil && ruleType == "RateLimitRule" {
 		rldim = strconv.Itoa(int(*cr.RateLimitDurationInMinutes))
 	}
 
 	rlt := " "
-	if cr.RateLimitThreshold != nil && string(*cr.RuleType) == "RateLimitRule" {
+	if cr.RateLimitThreshold != nil && ruleType == "RateLimitRule" {
 		rlt = strconv.Itoa(int(*cr.RateLimitThreshold))
 	}
 
+	enabledState := ""
+	if cr.EnabledState != nil {
+		enabledState = string(*cr.EnabledState)
+	}
+
+	priority := "-"
+	if cr.Priority != nil {
+		priority = strconv.Itoa(int(*cr.Priority))
+	}
+
 	table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-		{Text: color.BgDarkGray.Sprint(*cr.Name) + "\n" + strings.Repeat("-", 11)},
-		{Text: colourEnabledState(string(*cr.EnabledState)) + "\n" + strings.Repeat("-", 9)},
-		{Text: strconv.Itoa(int(*cr.Priority)) + "\n" + strings.Repeat("-", 10)},
-		{Text: string(*cr.RuleType) + "\n" + strings.Repeat("-", 13)},
+		{Text: color.BgDarkGray.Sprint(valueOrDash(cr.Name)) + "\n" + strings.Repeat("-", 11)},
+		{Text: colourEnabledState(enabledState) + "\n" + strings.Repeat("-", 9)},
+		{Text: priority + "\n" + strings.Repeat("-", 10)},
+		{Text: valueOrDash(ruleType) + "\n" + strings.Repeat("-", 13)},
 		{Text: rldim + "\n" + strings.Repeat("-", 28)},
 		{Text: rlt + "\n" + strings.Repeat("-", 22)},
 		{Align: simpletable.AlignCenter, Text: formatRuleAction(cr.Action) + "\n" + strings.Repeat("-", 8)},
@@ -305,19 +361,21 @@ func appendCustomRuleRows(table *simpletable.Table, cr *armfrontdoor.CustomRule,
 				continue
 			}
 
-			if _, err := transformsOutput.WriteString(fmt.Sprintf("%s, ", string(*t))); err != nil {
+			if _, err := fmt.Fprintf(&transformsOutput, "%s, ", string(*t)); err != nil {
 				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 		}
 
-		if mc.NegateCondition == nil {
-			panic("negate condition not set")
+		// an absent negate condition is rendered like any other missing value
+		negateCondition := "-"
+		if mc.NegateCondition != nil {
+			negateCondition = strconv.FormatBool(*mc.NegateCondition)
 		}
 
 		table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
 			{Text: valueOrDash(mc.MatchVariable)},
 			{Text: valueOrDash(mc.Selector)},
-			{Text: strconv.FormatBool(*mc.NegateCondition)},
+			{Text: negateCondition},
 			{Text: valueOrDash(valueOrDash(mc.Operator))},
 			{Text: valueOrDash(transformsOutput.String())},
 			{Text: wrapMatchValues(mc.MatchValue, showFull)},
@@ -348,7 +406,7 @@ func outputCustomRules(policy *armfrontdoor.WebApplicationFirewallPolicy, showFu
 		},
 	}
 
-	customRules := policy.Properties.CustomRules.Rules
+	customRules := policyCustomRules(policy)
 	if len(customRules) > 0 {
 		color.HiWhite.Println("Custom Rules")
 
@@ -547,8 +605,15 @@ func getManagedRulesetRows(managedRuleSetConfig armfrontdoor.ManagedRuleSet, mrs
 }
 
 func outputManagedRulesets(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsdl []*armfrontdoor.ManagedRuleSetDefinition) {
+	if policy == nil {
+		logging.Errorf("policy not defined")
+
+		return
+	}
+
 	if ok, _ := HasRuleSets(policy); !ok {
-		if *policy.SKU.Name == armfrontdoor.SKUNameStandardAzureFrontDoor {
+		if policy.SKU != nil && policy.SKU.Name != nil &&
+			*policy.SKU.Name == armfrontdoor.SKUNameStandardAzureFrontDoor {
 			color.Bold.Println("Managed Rules: Cannot be viewed with Standard SKU")
 
 			return
@@ -574,7 +639,7 @@ func outputManagedRulesets(policy *armfrontdoor.WebApplicationFirewallPolicy, mr
 		},
 	}
 
-	for x, mrs := range policy.Properties.ManagedRules.ManagedRuleSets {
+	for x, mrs := range policyManagedRuleSets(policy) {
 		mrs := mrs
 		// if it's not the first row, then add separator row above
 		if x != 0 {
@@ -779,7 +844,7 @@ func formatPolicyProvisioningState(provisioningState *string) string {
 	return color.Yellow.Sprint(*provisioningState)
 }
 
-// formatRequestBodyCheck(policy.Properties.PolicySettings.RequestBodyCheck))
+// formatRequestBodyCheck(settings.RequestBodyCheck))
 
 func formatRedirectURL(url *string) string {
 	if url == nil {
@@ -1007,19 +1072,52 @@ func OutputManagedRuleSetExclusionsTable(in *OutputManagedRuleExclusionsTableInp
 }
 
 func OutputPolicyMetaData(policy *armfrontdoor.WebApplicationFirewallPolicy) {
-	rid := config.ParseResourceID(*policy.ID)
-	fmt.Printf("\n%s:%s%s (hash: %s)\n", color.Bold.Sprint("Policy Name"), spaces(9), rid.Name, computeAdler32(*policy.ID))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("SKU"), spaces(17), *policy.SKU.Name)
+	if policy == nil {
+		logging.Errorf("policy not defined")
+
+		return
+	}
+
+	// ID, SKU, Properties and PolicySettings are all optional on the API type.
+	// Substitute empties so the format helpers below — which already handle nil
+	// fields — render dashes instead of the process dying mid-page.
+	var (
+		rid  config.ResourceID
+		hash = "-"
+	)
+
+	if policy.ID != nil {
+		rid = config.ParseResourceID(*policy.ID)
+		hash = computeAdler32(*policy.ID)
+	}
+
+	sku := "-"
+	if policy.SKU != nil && policy.SKU.Name != nil {
+		sku = string(*policy.SKU.Name)
+	}
+
+	props := policy.Properties
+	if props == nil {
+		props = &armfrontdoor.WebApplicationFirewallPolicyProperties{}
+	}
+
+	settings := props.PolicySettings
+	if settings == nil {
+		settings = &armfrontdoor.PolicySettings{}
+	}
+
+	fmt.Printf("\n%s:%s%s (hash: %s)\n", color.Bold.Sprint("Policy Name"), spaces(9), rid.Name, hash)
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("SKU"), spaces(17), sku)
 	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Resource Group"), spaces(6), rid.ResourceGroup)
 	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Subscription"), spaces(8), rid.SubscriptionID)
-	fmt.Printf("\n%s:%s%s\n", color.Bold.Sprint("Provisioning State"), spaces(2), formatPolicyProvisioningState(policy.Properties.ProvisioningState))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Resource State"), spaces(6), formatPolicyResourceState(policy.Properties.ResourceState))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Enabled State"), spaces(7), formatPolicyEnabledState(policy.Properties.PolicySettings.EnabledState))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Mode"), spaces(16), formatPolicyMode(policy.Properties.PolicySettings.Mode))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Redirect URL"), spaces(8), formatRedirectURL(policy.Properties.PolicySettings.RedirectURL))
-	fmt.Printf("\n%s:%s%s\n", color.Bold.Sprint("Custom Block Response Status Code"), spaces(2), formatCustomBlockResponseStatusCode(policy.Properties.PolicySettings.CustomBlockResponseStatusCode))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Custom Block Response Body"), spaces(9), formatCustomBlockResponseBody(policy.Properties.PolicySettings.CustomBlockResponseBody))
-	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Request Body Check"), spaces(17), formatRequestBodyCheck(policy.Properties.PolicySettings.RequestBodyCheck))
+	fmt.Printf("\n%s:%s%s\n", color.Bold.Sprint("Provisioning State"), spaces(2), formatPolicyProvisioningState(props.ProvisioningState))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Resource State"), spaces(6), formatPolicyResourceState(props.ResourceState))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Enabled State"), spaces(7), formatPolicyEnabledState(settings.EnabledState))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Mode"), spaces(16), formatPolicyMode(settings.Mode))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Redirect URL"), spaces(8), formatRedirectURL(settings.RedirectURL))
+	fmt.Printf("\n%s:%s%s\n", color.Bold.Sprint("Custom Block Response Status Code"), spaces(2), formatCustomBlockResponseStatusCode(settings.CustomBlockResponseStatusCode))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Custom Block Response Body"), spaces(9), formatCustomBlockResponseBody(settings.CustomBlockResponseBody))
+	fmt.Printf("%s:%s%s\n", color.Bold.Sprint("Request Body Check"), spaces(17), formatRequestBodyCheck(settings.RequestBodyCheck))
 }
 
 func spaces(num int) string {
@@ -1139,9 +1237,13 @@ func OutputPolicy(input OutputPolicyInput) {
 }
 
 func getDefaultRuleSet(policy *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.ManagedRuleSet {
-	for x := range policy.Properties.ManagedRules.ManagedRuleSets {
-		if strings.Contains(*policy.Properties.ManagedRules.ManagedRuleSets[x].RuleSetType, "DefaultRuleSet") {
-			return policy.Properties.ManagedRules.ManagedRuleSets[x]
+	for _, rs := range policyManagedRuleSets(policy) {
+		if rs == nil {
+			continue
+		}
+
+		if strings.Contains(derefOrEmpty(rs.RuleSetType), "DefaultRuleSet") {
+			return rs
 		}
 	}
 
@@ -1162,9 +1264,13 @@ func valueOrDash(val interface{}) string {
 			return v
 		}
 	case *armfrontdoor.MatchVariable:
-		return string(*v)
+		if v != nil {
+			return string(*v)
+		}
 	case *armfrontdoor.Operator:
-		return string(*v)
+		if v != nil {
+			return string(*v)
+		}
 	default:
 		return "-"
 	}
@@ -1215,142 +1321,53 @@ func handleURLValue(builder *strings.Builder, val string, prevType *string) {
 	*prevType = ""
 }
 
-func handleIPv4Value(builder *strings.Builder, val string, prevType *string, valsWritten *int, prevLen, nextLen int) {
+// ipTypeV4 and ipTypeV6 are the values prevType carries between match values,
+// naming the family of the value most recently written inline.
+const (
+	ipTypeV4 = "ipv4"
+	ipTypeV6 = "ipv6"
+)
+
+// handleIPValue writes one IP match value, wrapping the line when the current
+// one is full. valType names the family being written — ipTypeV4 or ipTypeV6 —
+// and is what prevType carries forward.
+//
+// The empty prevType case deliberately skips the wrapping checks: handleURLValue
+// clears prevType without resetting valsWritten, so a value can arrive here with
+// a line already part-written, and the two-function version this replaced put it
+// inline regardless. Folding it in with the others would change where lines break.
+func handleIPValue(builder *strings.Builder, val string, prevType *string, valsWritten *int, prevLen, nextLen int, valType string) {
 	switch *prevType {
 	case "":
-		if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-			logging.Errorf("builder failed to write string - %s", err.Error())
-		}
-
-		(*valsWritten)++
-
-		*prevType = "ipv4"
-	case "ipv4":
-		switch {
-		case *valsWritten == 2:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		default:
-			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logging.Errorf("builder failed to write string - %s", err.Error())
-			}
-
-			(*valsWritten)++
-
-			*prevType = "ipv4"
-		}
-	case "ipv6":
-		switch {
-		case *valsWritten == 2:
+		writeIPValueInline(builder, val, prevType, valsWritten, valType)
+	case ipTypeV4, ipTypeV6:
+		// end the line on the third value, or on the second where the next one
+		// would push it past the limit
+		if *valsWritten == 2 || (*valsWritten == 1 && prevLen+len(val)+nextLen > lineLengthLimit) {
 			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
 				logging.Errorf("builder failed to write string - err: %s", err.Error())
 			}
 
 			*valsWritten = 0
-
 			*prevType = ""
-		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
 
-			*valsWritten = 0
-
-			*prevType = ""
-		default:
-			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			(*valsWritten)++
-
-			*prevType = "ipv4"
+			return
 		}
+
+		writeIPValueInline(builder, val, prevType, valsWritten, valType)
 	default:
 		logging.Errorf("unexpected prev type '%s'", *prevType)
 	}
 }
 
-func handleIPv6Value(builder *strings.Builder, val string, prevType *string, valsWritten *int, prevLen, nextLen int) {
-	switch *prevType {
-	case "":
-		if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-			logging.Errorf("builder failed to write string - err: %s", err.Error())
-		}
-
-		(*valsWritten)++
-
-		*prevType = "ipv6"
-	case "ipv4":
-		switch {
-		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		case *valsWritten == 2:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		default:
-			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			(*valsWritten)++
-
-			*prevType = "ipv6"
-		}
-	case "ipv6":
-		switch {
-		case *valsWritten == 1 && (prevLen+len(val)+nextLen) > lineLengthLimit:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		case *valsWritten == 2:
-			if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			*valsWritten = 0
-
-			*prevType = ""
-		default:
-			if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
-				logging.Errorf("builder failed to write string - err: %s", err.Error())
-			}
-
-			(*valsWritten)++
-
-			*prevType = "ipv6"
-		}
-	default:
-		logging.Errorf("unexpected prev type '%s'", *prevType)
+// writeIPValueInline appends a value to the current line.
+func writeIPValueInline(builder *strings.Builder, val string, prevType *string, valsWritten *int, valType string) {
+	if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
+		logging.Errorf("builder failed to write string - err: %s", err.Error())
 	}
+
+	(*valsWritten)++
+	*prevType = valType
 }
 
 // wrapMatchValues accepts a slice of strings and returns a single comma/line-break separated representation
@@ -1382,9 +1399,9 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 		case isURL:
 			handleURLValue(&builder, val, &prevType)
 		case isIPv4:
-			handleIPv4Value(&builder, val, &prevType, &valsWritten, prevLen, nextLen)
+			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipTypeV4)
 		case isIPv6:
-			handleIPv6Value(&builder, val, &prevType, &valsWritten, prevLen, nextLen)
+			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipTypeV6)
 		default:
 			logging.Errorf("unknown type for %s", val)
 		}

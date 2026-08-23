@@ -78,6 +78,9 @@ func main() {
 			Value: filepath.Join(home, ".config", appName, configFile),
 		},
 		&cli.BoolFlag{Name: "quiet", Usage: "suppress output"},
+		// several commands already read this; without registering it here the
+		// value was always false and the debug plumbing unreachable
+		&cli.BoolFlag{Name: "debug", Usage: "enable debug logging (equivalent to AZWAF_LOG=debug)"},
 		&cli.BoolFlag{Name: commands.FlagAutoBackup, Usage: "backup policy before applying any changes", Value: autoBackup},
 	}
 	app.Commands = []*cli.Command{

@@ -209,7 +209,6 @@ type ApplyRemoveNetsInput struct {
 	MatchPrefix RuleNamePrefix
 	Action      *armfrontdoor.ActionType
 	RuleType    *armfrontdoor.RuleType
-	Output      bool
 	DryRun      bool
 	Filepath    string
 	Addrs       IPNets
@@ -254,7 +253,6 @@ func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
 		BaseCLIInput: input.BaseCLIInput,
 		MatchPrefix:  input.MatchPrefix,
 		RID:          policyID,
-		Output:       input.Quiet,
 		DryRun:       input.DryRun,
 		Filepath:     input.Filepath,
 		RuleType:     input.RuleType,
@@ -370,7 +368,7 @@ func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePr
 	}
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		namePrefix:  prefix,
-		customRules: p.Properties.CustomRules.Rules,
+		customRules: policyCustomRules(p),
 		ruleType:    ruleType,
 		action:      action,
 	})
@@ -410,14 +408,14 @@ func mergeCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy, trimmed []ne
 		Action:              in.Action,
 		MaxRules:            in.MaxRules,
 		CustomNamePrefix:    in.MatchPrefix,
-		CustomPriorityStart: int(getLowestPriority(p.Properties.CustomRules.Rules, in.MatchPrefix)),
+		CustomPriorityStart: int(getLowestPriority(policyCustomRules(p), in.MatchPrefix)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate custom rules: %w", err)
 	}
 
 	var rules []*armfrontdoor.CustomRule
-	for _, cr := range p.Properties.CustomRules.Rules {
+	for _, cr := range policyCustomRules(p) {
 		if !strings.HasPrefix(*cr.Name, string(in.MatchPrefix)) {
 			rules = append(rules, cr)
 		}
@@ -483,7 +481,6 @@ type DecorateExistingCustomRuleInput struct {
 	RawResourceID           string
 	ResourceID              config.ResourceID
 	Action                  *armfrontdoor.ActionType
-	Output                  bool
 	Filepath                string
 	AdditionalAddrs         IPNets
 	AdditionalExcludedAddrs IPNets
@@ -505,7 +502,6 @@ type UpdatePolicyCustomRulesIPMatchPrefixesInput struct {
 	RawResourceID              string
 	ResourceID                 config.ResourceID
 	Action                     *armfrontdoor.ActionType
-	Output                     bool
 	Filepath                   string
 	Addrs                      IPNets
 	ReplaceAddrs               bool
@@ -581,7 +577,7 @@ func mergePrefixesWithExisting(rules []*armfrontdoor.CustomRule, action *armfron
 func replaceRulesWithPrefix(p *armfrontdoor.WebApplicationFirewallPolicy, prefix RuleNamePrefix, newRules []*armfrontdoor.CustomRule) {
 	var cleaned []*armfrontdoor.CustomRule
 
-	for _, r := range p.Properties.CustomRules.Rules {
+	for _, r := range policyCustomRules(p) {
 		if !strings.HasPrefix(*r.Name, string(prefix)) {
 			cleaned = append(cleaned, r)
 		}
@@ -671,7 +667,7 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		namePrefix:  in.RuleNamePrefix,
-		customRules: in.Policy.Properties.CustomRules.Rules,
+		customRules: policyCustomRules(in.Policy),
 		action:      in.Action,
 		ruleType:    in.RuleType,
 	})
@@ -710,13 +706,13 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	replaceRulesWithPrefix(in.Policy, in.RuleNamePrefix, crs)
 	// o, _ := json.MarshalIndent(in.Policy.Properties.CustomRules.Rules, "", "  ")
 
-	if len(in.Policy.Properties.CustomRules.Rules) > MaxCustomRules {
+	if len(policyCustomRules(in.Policy)) > MaxCustomRules {
 		return false, GeneratePolicyPatchOutput{}, fmt.Errorf("operation exceededs custom rules limit of %d", MaxCustomRules)
 	}
 
 	// sort rules by priority
-	sortRulesByPriority(in.Policy.Properties.CustomRules.Rules)
-	sortRulesByPriority(originalPolicy.Properties.CustomRules.Rules)
+	sortCustomRulesByPriority(policyCustomRules(in.Policy))
+	sortCustomRulesByPriority(policyCustomRules(&originalPolicy))
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
@@ -734,12 +730,6 @@ func UpdatePolicyCustomRulesIPMatchPrefixes(in UpdatePolicyCustomRulesIPMatchPre
 	}
 
 	return true, patch, nil
-}
-
-func sortRulesByPriority(rules []*armfrontdoor.CustomRule) {
-	sort.Slice(rules, func(i, j int) bool {
-		return *rules[i].Priority < *rules[j].Priority
-	})
 }
 
 func getRateLimitConfig(rules []*armfrontdoor.CustomRule) (*int32, *int32, error) {
@@ -810,17 +800,17 @@ func ValidateDecorateExistingCustomRuleInput(in DecorateExistingCustomRuleInput)
 		return fmt.Errorf("%s - policy is nil", funcName)
 	}
 
-	if in.Policy.Properties.CustomRules == nil {
+	if policyCustomRuleList(in.Policy) == nil {
 		return fmt.Errorf("%s - policy has no custom rules section", funcName)
 	}
 
-	if in.Policy.Properties.CustomRules.Rules == nil {
+	if policyCustomRules(in.Policy) == nil {
 		return fmt.Errorf("%s - policy has no custom rules", funcName)
 	}
 
-	if in.Policy.Properties == nil {
-		return fmt.Errorf("policy missing properties")
-	}
+	// the nil-Properties check that used to sit here ran *after* the line above
+	// had already dereferenced Properties, so it could never fire. The accessor
+	// covers that case now, returning nil and erroring above.
 
 	if in.RuleName == "" {
 		return fmt.Errorf("rule name cannot be empty")
@@ -927,7 +917,7 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// retrieve specified rule by name
 	filtered, err := filterCustomRules(filterCustomRulesInput{
 		names:       []string{in.RuleName},
-		customRules: in.Policy.Properties.CustomRules.Rules,
+		customRules: policyCustomRules(in.Policy),
 		ruleType:    in.RuleType,
 		action:      in.Action,
 	})
@@ -960,8 +950,8 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	// replace match conditions
 	ruleToDecorate.MatchConditions = replacementMatchConditions
 
-	sortCustomRulesByPriority(in.Policy.Properties.CustomRules.Rules)
-	sortCustomRulesByPriority(originalPolicy.Properties.CustomRules.Rules)
+	sortCustomRulesByPriority(policyCustomRules(in.Policy))
+	sortCustomRulesByPriority(policyCustomRules(&originalPolicy))
 
 	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: originalPolicy, New: *in.Policy})
 	if err != nil {
@@ -987,9 +977,19 @@ func DecorateExistingCustomRule(in DecorateExistingCustomRuleInput) (bool, Gener
 	return true, patch, nil
 }
 
+// sortCustomRulesByPriority orders rules ascending by priority, in place. A
+// rule with no priority sorts first rather than panicking the comparator.
 func sortCustomRulesByPriority(in []*armfrontdoor.CustomRule) {
+	priority := func(r *armfrontdoor.CustomRule) int32 {
+		if r == nil || r.Priority == nil {
+			return 0
+		}
+
+		return *r.Priority
+	}
+
 	sort.Slice(in, func(i, j int) bool {
-		return *in[i].Priority < *in[j].Priority
+		return priority(in[i]) < priority(in[j])
 	})
 }
 
@@ -1357,7 +1357,6 @@ type AddCustomRulesPrefixesInput struct {
 	RawResourceID  string
 	ResourceID     config.ResourceID
 	Action         armfrontdoor.ActionType
-	Output         bool
 	DryRun         bool
 	Filepath       string
 	Addrs          IPNets

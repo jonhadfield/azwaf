@@ -35,14 +35,14 @@ func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleS
 	case p.Properties == nil:
 		logging.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
-	case p.Properties.ManagedRules == nil:
+	case policyManagedRuleSetList(p) == nil:
 		logging.Debugf("%s | policy %s has no managed rules", valueOrDash(p.Name), funcName)
 		return false, 0
-	case len(p.Properties.ManagedRules.ManagedRuleSets) == 0:
+	case len(policyManagedRuleSets(p)) == 0:
 		logging.Debugf("%s | policy %s has no managed rule sets", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
-		return true, len(p.Properties.ManagedRules.ManagedRuleSets)
+		return true, len(policyManagedRuleSets(p))
 	}
 }
 
@@ -64,8 +64,8 @@ func HaveEqualRuleSets(one, two *armfrontdoor.WebApplicationFirewallPolicy) bool
 
 	var matches int
 
-	for _, rsOne := range one.Properties.ManagedRules.ManagedRuleSets {
-		for _, rsTwo := range two.Properties.ManagedRules.ManagedRuleSets {
+	for _, rsOne := range policyManagedRuleSets(one) {
+		for _, rsTwo := range policyManagedRuleSets(two) {
 			if *rsOne.RuleSetType == *rsTwo.RuleSetType && *rsOne.RuleSetVersion == *rsTwo.RuleSetVersion {
 				matches++
 
@@ -89,13 +89,13 @@ func HasCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRu
 	case p.Properties == nil:
 		logging.Debugf("%s | policy %s has no properties", valueOrDash(p.Name), funcName)
 		return false, 0
-	case p.Properties.CustomRules == nil:
+	case policyCustomRuleList(p) == nil:
 		logging.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
-	case len(p.Properties.CustomRules.Rules) == 0:
+	case len(policyCustomRules(p)) == 0:
 		logging.Debugf("%s | policy %s has no custom rules", valueOrDash(p.Name), funcName)
 		return false, 0
 	default:
-		return true, len(p.Properties.CustomRules.Rules)
+		return true, len(policyCustomRules(p))
 	}
 }
