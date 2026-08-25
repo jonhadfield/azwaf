@@ -123,3 +123,61 @@ func ruleSetListSets(l *armfrontdoor.ManagedRuleSetList) []*armfrontdoor.Managed
 
 	return l.ManagedRuleSets
 }
+
+// exclusionScope names one place exclusions can be attached. Azure caps each
+// at 100 independently, so they have to be counted separately: summing them and
+// comparing the total against the per-scope limit both cries wolf (three scopes
+// of 40 is not a breach) and misses real breaches.
+type exclusionScope struct {
+	// scope is "rule set", "rule group" or "rule".
+	scope string
+	// name identifies the individual rule set, group or rule.
+	name  string
+	count int
+}
+
+// policyExclusionScopes returns every scope in a policy that holds exclusions,
+// with its count. One entry per rule set, per rule group override and per rule
+// override — not aggregated, because the limit applies to each individually.
+func policyExclusionScopes(p *armfrontdoor.WebApplicationFirewallPolicy) []exclusionScope {
+	var scopes []exclusionScope
+
+	for _, rs := range policyManagedRuleSets(p) {
+		ruleSetName := ruleSetDisplayName(rs)
+
+		if c := len(ruleSetExclusions(rs)); c > 0 {
+			scopes = append(scopes, exclusionScope{scope: "rule set", name: ruleSetName, count: c})
+		}
+
+		for _, rgo := range ruleSetGroupOverrides(rs) {
+			if c := len(groupOverrideExclusions(rgo)); c > 0 {
+				scopes = append(scopes, exclusionScope{
+					scope: "rule group",
+					name:  ruleSetName + "/" + derefOrEmpty(rgo.RuleGroupName),
+					count: c,
+				})
+			}
+
+			for _, ro := range groupOverrideRules(rgo) {
+				if c := len(ruleOverrideExclusions(ro)); c > 0 {
+					scopes = append(scopes, exclusionScope{
+						scope: "rule",
+						name:  ruleSetName + "/" + derefOrEmpty(rgo.RuleGroupName) + "/" + derefOrEmpty(ro.RuleID),
+						count: c,
+					})
+				}
+			}
+		}
+	}
+
+	return scopes
+}
+
+// ruleSetDisplayName renders a rule set as "<type>_<version>".
+func ruleSetDisplayName(rs *armfrontdoor.ManagedRuleSet) string {
+	if rs == nil {
+		return ""
+	}
+
+	return derefOrEmpty(rs.RuleSetType) + "_" + derefOrEmpty(rs.RuleSetVersion)
+}

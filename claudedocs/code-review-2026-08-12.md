@@ -18,8 +18,9 @@ Status legend: `[ ]` open · `[x]` fixed · `[~]` partially addressed
 
 ## Triage summary
 
-All numbered findings are closed. What remains open is the P4 smell work, which
-the review framed as judgement calls rather than defects.
+All numbered findings are closed, including the code half of S9. What remains
+open is the P4 smell work, which the review framed as judgement calls rather
+than defects.
 
 | Priority | Item | Axis | Kind | Status |
 | --- | --- | --- | --- | --- |
@@ -33,7 +34,7 @@ the review framed as judgement calls rather than defects.
 | P1 | A3 `fmt.Errorf(fmt.Sprintf(...), funcName)` corrupts 5 error messages | Standards | code | fixed |
 | P2 | S3 `get custom-rule --output` ignored | Spec | code | fixed |
 | P2 | S10 90-rule limit unenforced on `copy` / `restore` | Spec | code | fixed |
-| P2 | S9 exclusion warning uses wrong granularity | Spec | code | doc corrected, code open |
+| P2 | S9 exclusion warning uses wrong granularity | Spec | code | fixed |
 | P2 | A4 / S12 debug `fmt.Printf` on stdout in `copy` | Standards | code | fixed |
 | P2 | A5 `panic` in library code (4 sites) | Standards | code | fixed |
 | P3 | S11 misleading `show policy` validation message | Spec | code | fixed |
@@ -542,12 +543,37 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   The `CustomRulesOnly && ManagedRulesOnly` conflict it also guards is still caught, just later,
   by `copyPolicyRules` (`policy/copy.go:181`).
 
-- [~] **S9. Exclusion limit checked at wrong granularity.** `README.md` — "Exclusions per
+- [x] **S9. Exclusion limit checked at wrong granularity.** `README.md` — "Exclusions per
   **scope** | 100 (warns at 95)". `policy/output.go:609-614` compares
   `stats[x].TotalExclusions`, which is the *sum* across all three scopes
   (`policy/policy_managed.go:1023`). The check is also display-only — it fires while rendering
-  `show policy --stats` and `add exclusion` never consults it. *Doc now describes the actual
-  behaviour; correcting the granularity in code remains open.*
+  `show policy --stats` and `add exclusion` never consults it.
+
+  *Fixed, both halves.*
+
+  *Granularity: `policyExclusionScopes` walks the policy and returns one entry per rule set, per
+  rule group override and per rule override, each with its own count, and both the warning and
+  the new check read those rather than a sum. The old arithmetic was wrong in both directions —
+  40 exclusions in each of three scopes totals 120 and was reported as a breach though no scope
+  was close, while a genuine breach in one scope alongside empty others could stay under the
+  combined threshold. The messages now name the offending scope instead of saying "policy".
+  The at-limit message also printed `maxExclusionLimit/maxExclusionLimit`, so it read "100/100"
+  regardless of the real count; it reports the count now.*
+
+  *Placement: the check is no longer display-only. `validatePolicyLimits` (`policy.go`) rejects
+  an over-limit scope before pushing, alongside the custom-rule count from S10, so `copy`,
+  `restore` and `add exclusion` all fail with a clear error and `--dry-run` reports it.
+  `show policy --stats` keeps its advisory warning from 95.*
+
+  *`warnOnExclusionLimits` was split into a pure `exclusionLimitWarnings` returning the messages
+  and a thin printer. The warnings go through gookit/color, which caches its writer at package
+  init, so swapping `os.Stdout` does not capture them — the split makes the logic testable
+  without depending on that.*
+
+  *Covered by six tests in `policy/exclusionlimits_test.go`, including the 40/40/40 false alarm,
+  a breach at each of the three scopes individually, the boundary at exactly 100, and enforcement
+  on the push path. Restoring the summed behaviour fails four of them. `README.md`'s Limits table
+  now records the exclusion limit as enforced.*
 
 - [x] **S10. The 90-custom-rule limit isn't enforced on documented paths.** `README.md` Limits
   table. Checked only at `policy/custom_rules.go:428` and `:713`, both inside the IP-nets

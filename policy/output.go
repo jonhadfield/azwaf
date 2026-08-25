@@ -660,24 +660,57 @@ func outputManagedRulesets(policy *armfrontdoor.WebApplicationFirewallPolicy, mr
 
 	table.Println()
 
-	// TODO: replace with call for a new function: NearMaxRulesLimit
-	stats, err := getPolicyStats(policy, mrsdl)
-	if err != nil {
-		return
-	}
+	warnOnExclusionLimits(policy)
+}
 
-	for x := range stats {
-		if strings.Contains(stats[x].RuleSetType, "Bot") {
+// exclusionLimitWarning is one scope worth reporting on.
+type exclusionLimitWarning struct {
+	// atLimit distinguishes reaching the limit from approaching it.
+	atLimit bool
+	message string
+}
+
+// exclusionLimitWarnings reports any scope approaching or at Azure's per-scope
+// exclusion limit. It reads each scope's own count: the previous version summed
+// all three and compared the total against the per-scope limit, which warned
+// about policies well inside it and stayed quiet about ones that were not.
+func exclusionLimitWarnings(policy *armfrontdoor.WebApplicationFirewallPolicy) []exclusionLimitWarning {
+	var warnings []exclusionLimitWarning
+
+	for _, scope := range policyExclusionScopes(policy) {
+		// bot rule sets are excluded from this limit
+		if strings.Contains(scope.name, "Bot") {
 			continue
 		}
 
-		if stats[x].TotalExclusions >= maxExclusionLimitWarningThreshold && stats[x].TotalExclusions < maxExclusionLimit {
-			color.Yellow.Printf("[WARNING] policy nearing maximum exclusion limit: %d/%d\n", stats[x].TotalExclusions, maxExclusionLimit)
+		switch {
+		case scope.count >= maxExclusionLimit:
+			warnings = append(warnings, exclusionLimitWarning{
+				atLimit: true,
+				message: fmt.Sprintf("[WARNING] %s %s has reached the maximum exclusion limit: %d/%d",
+					scope.scope, scope.name, scope.count, maxExclusionLimit),
+			})
+		case scope.count >= maxExclusionLimitWarningThreshold:
+			warnings = append(warnings, exclusionLimitWarning{
+				message: fmt.Sprintf("[WARNING] %s %s nearing maximum exclusion limit: %d/%d",
+					scope.scope, scope.name, scope.count, maxExclusionLimit),
+			})
+		}
+	}
+
+	return warnings
+}
+
+// warnOnExclusionLimits prints what exclusionLimitWarnings finds.
+func warnOnExclusionLimits(policy *armfrontdoor.WebApplicationFirewallPolicy) {
+	for _, w := range exclusionLimitWarnings(policy) {
+		if w.atLimit {
+			color.Red.Println(w.message)
+
+			continue
 		}
 
-		if stats[x].TotalExclusions >= maxExclusionLimit {
-			color.Red.Printf("[WARNING] policy has reached maximum exclusion limit: %d/%d\n", maxExclusionLimit, maxExclusionLimit)
-		}
+		color.Yellow.Println(w.message)
 	}
 }
 
