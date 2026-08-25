@@ -699,6 +699,15 @@ func validatePolicyLimits(p *armfrontdoor.WebApplicationFirewallPolicy) error {
 			count, MaxCustomRules)
 	}
 
+	// each scope is capped independently, so report the specific one that is
+	// over rather than a total that maps to no single limit
+	for _, scope := range policyExclusionScopes(p) {
+		if scope.count > maxExclusionLimit {
+			return fmt.Errorf("%s %s has %d exclusions, exceeding Azure's limit of %d per scope",
+				scope.scope, scope.name, scope.count, maxExclusionLimit)
+		}
+	}
+
 	return nil
 }
 

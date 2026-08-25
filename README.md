@@ -460,19 +460,18 @@ The limits below apply to Front Door WAF policies. Application Gateway WAF polic
 | Custom rules per policy | **90** | Azure hard limit | Yes — every push is checked |
 | IP-match values per rule | **600** | Azure hard limit | Not on the CLI paths — see note |
 | Conditions per custom rule | **10** | Azure hard limit | No |
-| Exclusions per scope | **100** | Azure hard limit | Advisory only — see note |
+| Exclusions per scope | **100** (warns at 95) | Azure hard limit | Yes — every push is checked |
 | Policies fetched per `list policies` | **200** (configurable via `--top`) | Tool default | Yes |
 | Front Doors fetched per `list frontdoors` | **100** | Tool default | Yes |
 
-> **What `azwaf` actually checks.** The custom-rule count is validated before every push, so
-> `copy` and `restore --custom-rules` fail with a clear error rather than letting Azure reject
-> the policy — and a `--dry-run` reports it too. The other three are not enforced. The
-> 600-IP-match check exists only inside the IP-network helper functions, which are exported for
-> library use but have no CLI entry point; the conditions-per-rule limit is not checked at all;
-> and the exclusions-per-scope figure is surfaced as a warning above 95 by `show policy --stats`,
-> computed on the *total* across all three scopes rather than per scope, with `add exclusion`
-> never consulting it. Treat those three as upstream Azure limits you should stay within, not as
-> guardrails the tool provides.
+> **What `azwaf` actually checks.** The custom-rule count and the per-scope exclusion count are
+> both validated before every push, so `copy`, `restore` and `add exclusion` fail with a clear
+> error naming the offending rule set, rule group or rule rather than letting Azure reject the
+> policy — and a `--dry-run` reports it too. `show policy --stats` additionally warns from 95
+> exclusions in any one scope. The remaining two limits are not enforced: the 600-IP-match check
+> exists only inside the IP-network helper functions, which are exported for library use but have
+> no CLI entry point, and the conditions-per-rule limit is not checked at all. Treat those two as
+> upstream Azure limits you should stay within, not as guardrails the tool provides.
 
 See [Azure Front Door service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-standard-and-premium-tier-service-limits) for the Front Door upstream specifics, and [Application Gateway service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#application-gateway-limits) for Application Gateway.
 
