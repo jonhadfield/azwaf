@@ -987,9 +987,6 @@ func formatPolicyResourceState(resourceState *armfrontdoor.PolicyResourceState) 
 
 type OutputManagedRuleExclusionsTableInput struct {
 	narrowestScope                 string
-	ruleDefinition                 *armfrontdoor.ManagedRuleDefinition
-	groupDefinition                *armfrontdoor.ManagedRuleGroupDefinition
-	setDefinition                  *armfrontdoor.ManagedRuleSetDefinition
 	ruleOverride                   *armfrontdoor.ManagedRuleOverride
 	groupExclusions, setExclusions []*armfrontdoor.ManagedRuleExclusion
 }
@@ -1183,9 +1180,6 @@ func OutputManagedRuleExclusions(in *OutputManagedRuleInput) {
 
 	OutputManagedRuleExclusionsTable(&OutputManagedRuleExclusionsTableInput{
 		narrowestScope:  ScopeRule,
-		ruleDefinition:  in.RuleDefinition,
-		groupDefinition: in.RuleGroupDefinition,
-		setDefinition:   in.RuleSetDefinition,
 		ruleOverride:    in.Rule,
 		groupExclusions: in.RuleGroupExclusions,
 		setExclusions:   in.RuleSetExclusions,
@@ -1202,9 +1196,6 @@ func OutputManagedRuleGroupExclusions(in *OutputManagedRuleInput) {
 	color.Bold.Printf("\nExclusions\n")
 	OutputManagedRuleExclusionsTable(&OutputManagedRuleExclusionsTableInput{
 		narrowestScope:  ScopeRuleGroup,
-		ruleDefinition:  in.RuleDefinition,
-		groupDefinition: in.RuleGroupDefinition,
-		setDefinition:   in.RuleSetDefinition,
 		ruleOverride:    in.Rule,
 		groupExclusions: in.RuleGroupExclusions,
 		setExclusions:   in.RuleSetExclusions,
@@ -1219,11 +1210,8 @@ func OutputManagedRuleSetExclusions(in *OutputManagedRuleInput) {
 	fmt.Printf("%s:     %s\n", color.Bold.Sprint("Rule Set"), *in.RuleSetDefinition.Name)
 	color.Bold.Printf("\nExclusions\n")
 	OutputManagedRuleSetExclusionsTable(&OutputManagedRuleExclusionsTableInput{
-		narrowestScope:  ScopeRuleGroup,
-		ruleDefinition:  in.RuleDefinition,
-		groupDefinition: in.RuleGroupDefinition,
-		setDefinition:   in.RuleSetDefinition,
-		setExclusions:   in.RuleSetExclusions,
+		narrowestScope: ScopeRuleGroup,
+		setExclusions:  in.RuleSetExclusions,
 	})
 }
 
