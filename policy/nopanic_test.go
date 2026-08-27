@@ -84,8 +84,7 @@ func TestGetMatchingDefaultDefinitionsRequiresRuleSetDetails(t *testing.T) {
 	}
 }
 
-// Guard the package against panics returning to non-test code. block.go is
-// entirely commented out and carries none; if that changes this will say so.
+// Guard the package against panics returning to non-test code.
 func TestNoPanicsInPolicyPackage(t *testing.T) {
 	var offenders []string
 

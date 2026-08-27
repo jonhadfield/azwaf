@@ -66,7 +66,7 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   `BlockNetsPriorityStart`, `LogNetsPrefix`, `MaxLogNetsRules`/`MaxBlockNetsRules`/
   `MaxAllowNetsRules` (`policy/policy.go:41-62`) have zero non-declaration references;
   `CustomPriorityStart` is taken unvalidated from callers (`policy/custom_rules.go:1174`). The
-  only consumer, `policy/block.go`, is 68 lines of fully commented-out code.
+  only consumer, `policy/block.go`, was 68 lines of fully commented-out code, since deleted.
   *Fixed on the doc side — see "Documentation fixes applied". Enforcing it in code, or deleting
   the constants, remains open.*
 
@@ -151,7 +151,7 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   guards — `TestNoPanicsInPolicyPackage` and `TestNoPanicsInSessionPackage` — fail on any `panic`
   reaching non-test code; against the restored versions they report
   `[output.go:204:3 output.go:315:4 policy_managed.go:87:3]`. No `panic` remains in any
-  non-test file outside the fully commented-out `policy/block.go`.*
+  non-test file.*
 
   *Separately noted, not fixed: `appendCustomRuleRows` (`policy/output.go:269-287`) dereferences
   `cr.Name`, `cr.EnabledState`, `cr.Priority` and `cr.RuleType` unguarded, and will nil-panic on a
@@ -347,7 +347,8 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   `NewResourceID`, `SetSubscriptionID`. `OutputManagedRuleExclusionsTableInput.ruleDefinition/
   groupDefinition/setDefinition` (`policy/output.go:892-894`) and six `OutputManagedRuleInput`
   fields are populated at every call site and read nowhere. Whole-file dead comment blocks:
-  `policy/block.go` (all 68 lines), `policy/restore.go:30-96`,
+  ~~`policy/block.go` (all 68 lines)~~ *— deleted; the file was nothing but comments, contributed
+  no symbol, and was referenced nowhere.* `policy/restore.go:30-96`,
   `policy/policy_managed.go:412-475`.
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
@@ -705,7 +706,7 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     structs (`ApplyRemoveNetsInput`, `DecorateExistingCustomRuleInput`,
     `UpdatePolicyCustomRulesIPMatchPrefixesInput`, `AddCustomRulesPrefixesInput`), assigned in
     exactly one place — backwards — and read nowhere in live code; its only reader is inside the
-    fully commented-out `policy/block.go`. All four structs already embed `BaseCLIInput`, which
+    since-deleted `policy/block.go`. All four structs already embed `BaseCLIInput`, which
     carries `Quiet`: the same information, correctly named and the right way round. So `Output`
     was redundant as well as inverted, and correcting the value would have left a dead field
     waiting to be miswired again. Four declarations, one assignment and nine test assignments
