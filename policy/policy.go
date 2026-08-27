@@ -84,11 +84,8 @@ const (
 	errExclusionAlreadyExists = "already exists"
 	errRuleNotFound           = "rule not found"
 	errRuleGroupNotFound      = "rule group not found"
-	errInvalidMatchVariable   = "invalid match variable"
 	errPolicyNotDefined       = "policy not defined"
 	WAFResourceIDHashMapName  = "WAFResourceIDHashMap"
-	defaultRuleSetPrefix      = "Microsoft_DefaultRuleSet"
-	botManagerRuleSetPrefix   = "Microsoft_BotManagerRuleSet"
 )
 
 var ErrInvalidRuleType = errors.New("invalid rule type")

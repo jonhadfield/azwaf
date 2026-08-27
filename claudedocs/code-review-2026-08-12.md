@@ -365,11 +365,24 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   unused; `actionBlock` reads as dead by the same argument but is genuinely used at
   `custom_rules.go:336`.*
 
-  *What remains under this heading is the unused declarations — `LoadBackupsFromPaths` /
-  `LoadBackupsFromPath`, `BotRuleSetStatsOutput`, `LogIPsInput`, `WrappedManagedRuleSet`,
-  `Action`, `NewResourceID`, `SetSubscriptionID` and the unread struct fields — plus scattered
-  commented-out fragments of five to sixteen lines across seven files, which are small enough
-  that some may be deliberate notes and were not swept.*
+  *The unexported dead declarations are now removed: `errInvalidMatchVariable`,
+  `defaultRuleSetPrefix`, `botManagerRuleSetPrefix` and `actionAllow`, plus the
+  `ruleDefinition` / `groupDefinition` / `setDefinition` fields on
+  `OutputManagedRuleExclusionsTableInput`, which were assigned at all three call sites and never
+  read — nine assignments went with them.*
+
+  *Two corrections to this finding while checking. `errPolicyNotDefined` is **not** dead:
+  `TestGetPolicyStatsWithoutPolicy` asserts against it, so the original list was counting
+  non-test references only. `actionBlock` reads as dead by the same argument the finding uses
+  but is genuinely used at `custom_rules.go:336`.*
+
+  *Still open, all **exported** and so a public-API decision rather than a cleanup:
+  `LoadBackupsFromPaths` / `LoadBackupsFromPath`, `BotRuleSetStatsOutput`, `LogIPsInput`,
+  `WrappedManagedRuleSet`, `Action`, `NewResourceID`, `SetSubscriptionID`, the eight constants
+  orphaned by deleting `block.go`, and five never-read fields on `OutputManagedRuleInput`
+  (`PolicyType`, `PolicyProvisioningState`, `PolicyResourceState`, `PolicyEnabledState`,
+  `PolicySettingsMode`). Also open: scattered commented-out fragments of five to sixteen lines
+  across seven files, small enough that some may be deliberate notes.*
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,
