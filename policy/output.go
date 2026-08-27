@@ -418,20 +418,8 @@ func outputCustomRules(policy *armfrontdoor.WebApplicationFirewallPolicy, showFu
 	table.SetStyle(simpletable.StyleRounded)
 	table.Println()
 
-	// TODO: too much noise until i can check all operators correctly
-	// d, err := HasDefaultDeny(policy)
-	// if err != nil {
-	// 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-	// 		color.Red.Println("[ERROR] Failed to check if Policy has default deny.", err)
-	// 		os.Exit(1)
-	// 	}
-	//
-	// 	color.Red.Println("[ERROR] Failed to check if Policy has default deny. run with debug for error")
-	// }
-	//
-	// if err == nil && !d {
-	// 	color.Yellow.Println("[WARNING] Policy does not have default deny")
-	// }
+	// TODO: warn when a policy has no default deny. Needs HasDefaultDeny, which
+	// is not implemented — see policy_checks.go.
 }
 
 // getRuleConfig gets the configuration for a rule based on the current settings overlapping the defaults

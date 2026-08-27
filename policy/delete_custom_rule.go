@@ -20,7 +20,6 @@ type customRuleMatchesNameOrPriorityInput struct {
 	priority int
 }
 
-// func customRuleMatchesNameOrPriority(dcri *DeleteCustomRulesPrefixesInput, cr *armfrontdoor.CustomRule) bool {
 func customRuleMatchesNameOrPriority(mi customRuleMatchesNameOrPriorityInput, cr *armfrontdoor.CustomRule) bool {
 	// check where a priority was provided and a name match exists
 	if mi.prioritySet && mi.nameMatch != nil {
@@ -52,7 +51,6 @@ func stripCustomRulesMatchingNameOrPriority(prioritySet bool, priority int, name
 	var res []*armfrontdoor.CustomRule
 
 	for _, cr := range ecrs {
-		// if customRuleMatchesNameOrPriority(dcri, cr) {
 		if customRuleMatchesNameOrPriority(customRuleMatchesNameOrPriorityInput{
 			prioritySet: prioritySet,
 			priority:    priority,
@@ -93,12 +91,6 @@ func (input *DeleteCustomRulesCLIInput) ParseConfig() (output DeleteCustomRulesP
 
 	return
 }
-
-// func StripCustomRulesPrefixes(s *session.Session, in DeleteCustomRulesPrefixesInput) (err error) {
-// 	checkDebug(in.Debug)
-//
-// 	return DeleteCustomRulesPrefixes(s, in)
-// }
 
 func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool, err error) {
 	funcName := GetFunctionName()

@@ -227,13 +227,8 @@ func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInp
 	}
 
 	newManagedRuleExclusions = []*armfrontdoor.ManagedRuleExclusion{}
-	// TODO: use-case for this?
-	// if no exclusion value operator, variable, nor selector are provided, then remove them all
-	// if dcri.exclusionRuleOperator == "" && dcri.exclusionRuleSelector == "" && variable == "" {
-	//	logging.Debugf("%s | no exclusion criteria provided so stripping all exclusions", funcName)
-	//
-	//	return
-	// }
+	// TODO: decide whether passing no operator, variable or selector should strip
+	// every exclusion rather than none. It currently strips none.
 
 	var mRGOE bool
 
