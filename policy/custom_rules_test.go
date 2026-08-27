@@ -68,7 +68,7 @@ func TestRebuildIPMatchConditions(t *testing.T) {
 }
 
 func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -119,7 +119,7 @@ func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
 
 // TestDecorateExistingCustomRules
 func TestDecorateExistingCustomRules(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -170,7 +170,7 @@ func TestDecorateExistingCustomRules(t *testing.T) {
 
 // TestDecorateExistingCustomRules
 func TestDecorateExistingCustomRulesRateLimit(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -291,7 +291,7 @@ func TestGetNetsToRemove(t *testing.T) {
 
 // TestUpdatePolicyCustomRules
 func TestUpdatePolicyCustomRules(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-one.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-one.json"})
 	require.NoError(t, err)
 
 	orig, err := CopyPolicy(wp[0].Policy)
@@ -317,7 +317,7 @@ func TestUpdatePolicyCustomRules(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesExisting - update custom rules by passing a prefix that already exists should return no change
 func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -345,7 +345,7 @@ func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing a prefix that doesn't exist should return a change
 func TestUpdatePolicyCustomRulesNew(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -369,7 +369,7 @@ func TestUpdatePolicyCustomRulesNew(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing two existing prefixes, but with a new prefix also, should return change
 func TestUpdatePolicyCustomRulesNewNamePrefix(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -398,7 +398,7 @@ func TestUpdatePolicyCustomRulesNewNamePrefix(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing two existing prefixes, but with a new prefix also, should return change
 func TestUpdatePolicyCustomRulesNewNamePrefixFromFile(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -444,7 +444,7 @@ func TestUpdatePolicyCustomRulesNewNamePrefixFromFile(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNegativeMatches
 func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -474,7 +474,7 @@ func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNegativeMatches
 func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -505,7 +505,7 @@ func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesReplaceExistingMatches tests that we can replace, instead of append, prefixes
 func TestUpdatePolicyCustomRulesReplaceExistingMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -542,7 +542,7 @@ func TestUpdatePolicyCustomRulesInvalidInput(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesInvalidInput tests we get an error with an invalid rule name prefix
 func TestUpdatePolicyCustomRulesInvalidRuleNamePrefix(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-one.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-one.json"})
 	require.NoError(t, err)
 	_, _, err = UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
 		Policy:         &wp[0].Policy,

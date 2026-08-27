@@ -376,13 +376,23 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   non-test references only. `actionBlock` reads as dead by the same argument the finding uses
   but is genuinely used at `custom_rules.go:336`.*
 
-  *Still open, all **exported** and so a public-API decision rather than a cleanup:
-  `LoadBackupsFromPaths` / `LoadBackupsFromPath`, `BotRuleSetStatsOutput`, `LogIPsInput`,
-  `WrappedManagedRuleSet`, `Action`, `NewResourceID`, `SetSubscriptionID`, the eight constants
-  orphaned by deleting `block.go`, and five never-read fields on `OutputManagedRuleInput`
-  (`PolicyType`, `PolicyProvisioningState`, `PolicyResourceState`, `PolicyEnabledState`,
-  `PolicySettingsMode`). Also open: scattered commented-out fragments of five to sixteen lines
-  across seven files, small enough that some may be deliberate notes.*
+  *The exported ones were then removed too, on the owner's decision. The module is at v0.4.0, so
+  semver permits it. Gone: `BotRuleSetStatsOutput`, `LogIPsInput`, `WrappedManagedRuleSet`,
+  `Action`, `SetSubscriptionID`, the eight constants orphaned by deleting `block.go`, and five
+  never-read fields on `OutputManagedRuleInput` — the last taking fifteen assignments with them,
+  three of which walked `Properties.PolicySettings` unguarded and were latent nil panics.*
+
+  *Two required more than deletion. `LoadBackupsFromPaths` and `LoadBackupsFromPath` were unused
+  by production code but loaded fixtures for fourteen tests; they moved into the test package as
+  `loadBackupsFromPathsForTest`, wrapping the superseding `LoadAllBackupsFromPaths`, which takes
+  them out of the public surface without churning the call sites. `NewResourceID` was **kept**:
+  it is used by `it/policy_integration_test.go`, which sits behind a `//go:build integration`
+  tag, so `go build ./...` and `go vet ./...` do not see it and removing it would have broken
+  the integration suite silently. Every candidate was checked against `it/` for that reason, and
+  the suite was compiled with `-tags integration` afterwards.*
+
+  *Still open: scattered commented-out fragments of five to sixteen lines across seven files,
+  small enough that some may be deliberate notes.*
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,

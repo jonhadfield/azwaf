@@ -30,28 +30,6 @@ type RuleSetStatsOutput struct {
 	TotalExclusions               int
 }
 
-type BotRuleSetStatsOutput struct {
-	// rule set
-	RuleSetType    string
-	RuleSetVersion string
-
-	// rules
-	Rules         int
-	RulesEnabled  int
-	RulesDisabled int
-	BlockTotal    int
-	AllowTotal    int
-	LogTotal      int
-	RedirectTotal int
-	GroupCount    int
-
-	// exclusions
-	RuleSetScopeExclusionsTotal   int
-	RuleGroupScopeExclusionsTotal int
-	RuleScopeExclusionsTotal      int
-	TotalExclusions               int
-}
-
 // getPolicyStats returns counts for all items in a rule set
 func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*armfrontdoor.ManagedRuleSetDefinition) ([]RuleSetStatsOutput, error) {
 	funcName := GetFunctionName()
