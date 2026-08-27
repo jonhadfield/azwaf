@@ -38,28 +38,11 @@ const (
 	MaxFrontDoorsToFetch = 100
 	// MaxCustomRules is the hard limit on the number of allowed Custom rules
 	MaxCustomRules = 90
-	// MaxLogNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxLogNetsRules = 10
-	// MaxBlockNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxBlockNetsRules = 40
-	// MaxAllowNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxAllowNetsRules = 10
 	// MaxIPMatchValues is Azure's hard limit on IPMatch values per rule
 	MaxIPMatchValues = 600
 
-	// LogNetsPrefix is the prefix for Custom Rules used for logging IP networks
-	LogNetsPrefix = "LogNets"
-	// LogNetsPriorityStart is the first Custom rule priority number
-	// Manual log rules should be numbered below 1000
-	LogNetsPriorityStart = 1000
-
 	// AllowNetsPrefix is the prefix for Custom Rules used for allowing IP networks
 	AllowNetsPrefix = "AllowNets"
-	// AllowNetsPriorityStart is the first Custom rule priority number
-	// Manual allow rules should be numbered 2000-2999
-	AllowNetsPriorityStart = 3000
-
-	BlockNetsPriorityStart = 5000
 
 	// MaxMatchValuesPerColumn is the number of match values to output per column when showing policies and rules
 	MaxMatchValuesPerColumn = 3
@@ -71,8 +54,6 @@ const (
 )
 
 const (
-	// Azure limits - https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-classic-limits
-	MaxConditionsPerCustomRule        = 10
 	maxExclusionLimit                 = 100
 	maxExclusionLimitWarningThreshold = 95
 	ScopeRuleSet                      = "ruleSet"
@@ -369,16 +350,6 @@ type BaseCLIInput struct {
 	DryRun         bool
 }
 
-type LogIPsInput struct {
-	RID      config.ResourceID
-	Output   bool
-	DryRun   bool
-	Filepath string
-	Nets     IPNets
-	MaxRules int
-	Debug    bool
-}
-
 type DeleteCustomRulesCLIInput struct {
 	// BaseCLIInput is embedded, not a named field: it previously sat alongside
 	// duplicate SubscriptionID/DryRun/ConfigPath/Debug fields that the CLI
@@ -562,16 +533,6 @@ type WrappedPolicy struct {
 	PolicyID       string
 	AppVersion     string
 	WAFType        string `json:",omitempty"`
-}
-
-type WrappedManagedRuleSet struct {
-	Date           time.Time
-	SubscriptionID string
-	ResourceGroup  string
-	Name           string
-	ManagedRuleSet armfrontdoor.ManagedRuleSet
-	PolicyID       string
-	AppVersion     string
 }
 
 type GeneratePolicyPatchInput struct {

@@ -34,14 +34,14 @@ func TestLoadWrappedPolicyFromFile(t *testing.T) {
 
 // TestLoadBackupsFromPathsEmpty tests that an empty slice of paths returns an error
 func TestLoadBackupsFromPathsEmpty(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{})
+	wp, err := loadBackupsFromPathsForTest([]string{})
 	require.Error(t, err)
 	require.Nil(t, wp)
 }
 
 // TestLoadBackupsFromPathsMissingPath tests that a missing path returns an error
 func TestLoadBackupsFromPathsMissingPath(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{""})
+	wp, err := loadBackupsFromPathsForTest([]string{""})
 	fmt.Println(err)
 	require.Error(t, err)
 	require.Nil(t, wp)

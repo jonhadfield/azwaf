@@ -490,19 +490,14 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 	})
 
 	OutputManagedRuleExclusions(&OutputManagedRuleInput{
-		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
-		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
-		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
-		RuleGroupExclusions:     ruleGroupEx,
-		RuleSetExclusions:       ruleSetEx,
-		Rule:                    gmro.managedRuleOverride,
-		RuleSetDefinition:       matchingDefinitions.RuleSetDefinition,
-		RuleGroupDefinition:     matchingDefinitions.RuleGroupDefinition,
-		RuleDefinition:          matchingDefinitions.RuleDefinition,
+		Policy:              getPolicyOutput.Policy,
+		PolicyName:          valueOrDash(getPolicyOutput.Policy.Name),
+		RuleGroupExclusions: ruleGroupEx,
+		RuleSetExclusions:   ruleSetEx,
+		Rule:                gmro.managedRuleOverride,
+		RuleSetDefinition:   matchingDefinitions.RuleSetDefinition,
+		RuleGroupDefinition: matchingDefinitions.RuleGroupDefinition,
+		RuleDefinition:      matchingDefinitions.RuleDefinition,
 	})
 
 	return nil
@@ -544,18 +539,13 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 	ruleGroupEx := getRuleGroupExclusionsFromRuleSet(ruleGroup, matchingRuleSet)
 
 	OutputManagedRuleGroupExclusions(&OutputManagedRuleInput{
-		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
-		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
-		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
-		RuleGroupExclusions:     ruleGroupEx,
-		RuleSetExclusions:       matchingRuleSet.Exclusions,
-		RuleSetDefinition:       matchingDefinitions.RuleSetDefinition,
-		RuleGroupDefinition:     matchingDefinitions.RuleGroupDefinition,
-		RuleDefinition:          matchingDefinitions.RuleDefinition,
+		Policy:              getPolicyOutput.Policy,
+		PolicyName:          valueOrDash(getPolicyOutput.Policy.Name),
+		RuleGroupExclusions: ruleGroupEx,
+		RuleSetExclusions:   matchingRuleSet.Exclusions,
+		RuleSetDefinition:   matchingDefinitions.RuleSetDefinition,
+		RuleGroupDefinition: matchingDefinitions.RuleGroupDefinition,
+		RuleDefinition:      matchingDefinitions.RuleDefinition,
 	})
 
 	return nil
@@ -708,36 +698,26 @@ func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID c
 	}
 
 	OutputManagedRuleSetExclusions(&OutputManagedRuleInput{
-		Policy:                  getPolicyOutput.Policy,
-		PolicyName:              valueOrDash(getPolicyOutput.Policy.Name),
-		PolicyType:              valueOrDash(getPolicyOutput.Policy.Type),
-		PolicyProvisioningState: valueOrDash(getPolicyOutput.Policy.Properties.ProvisioningState),
-		PolicyResourceState:     getPolicyOutput.Policy.Properties.ResourceState,
-		PolicyEnabledState:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.EnabledState),
-		PolicySettingsMode:      valueOrDash(getPolicyOutput.Policy.Properties.PolicySettings.Mode),
-		RuleSetExclusions:       matchingRuleSet.Exclusions,
-		RuleSetDefinition:       matchingDefinitions.RuleSetDefinition,
-		RuleGroupDefinition:     matchingDefinitions.RuleGroupDefinition,
-		RuleDefinition:          matchingDefinitions.RuleDefinition,
+		Policy:              getPolicyOutput.Policy,
+		PolicyName:          valueOrDash(getPolicyOutput.Policy.Name),
+		RuleSetExclusions:   matchingRuleSet.Exclusions,
+		RuleSetDefinition:   matchingDefinitions.RuleSetDefinition,
+		RuleGroupDefinition: matchingDefinitions.RuleGroupDefinition,
+		RuleDefinition:      matchingDefinitions.RuleDefinition,
 	})
 
 	return nil
 }
 
 type OutputManagedRuleInput struct {
-	Policy                  *armfrontdoor.WebApplicationFirewallPolicy
-	PolicyName              string
-	PolicyType              string
-	PolicyProvisioningState string
-	PolicyResourceState     *armfrontdoor.PolicyResourceState
-	PolicyEnabledState      string
-	PolicySettingsMode      string
-	Rule                    *armfrontdoor.ManagedRuleOverride
-	RuleGroupExclusions     []*armfrontdoor.ManagedRuleExclusion
-	RuleSetExclusions       []*armfrontdoor.ManagedRuleExclusion
-	RuleSetDefinition       *armfrontdoor.ManagedRuleSetDefinition
-	RuleGroupDefinition     *armfrontdoor.ManagedRuleGroupDefinition
-	RuleDefinition          *armfrontdoor.ManagedRuleDefinition
+	Policy              *armfrontdoor.WebApplicationFirewallPolicy
+	PolicyName          string
+	Rule                *armfrontdoor.ManagedRuleOverride
+	RuleGroupExclusions []*armfrontdoor.ManagedRuleExclusion
+	RuleSetExclusions   []*armfrontdoor.ManagedRuleExclusion
+	RuleSetDefinition   *armfrontdoor.ManagedRuleSetDefinition
+	RuleGroupDefinition *armfrontdoor.ManagedRuleGroupDefinition
+	RuleDefinition      *armfrontdoor.ManagedRuleDefinition
 }
 
 func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdoor.ManagedRuleSetDefinition, err error) {

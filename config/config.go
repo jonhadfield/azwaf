@@ -65,10 +65,6 @@ func NewResourceID(subID, rg, provider, name string) ResourceID {
 	}
 }
 
-func (rid *ResourceID) SetSubscriptionID(subID string) {
-	rid.SubscriptionID = subID
-}
-
 type FileConfig struct {
 	PolicyAliases map[string]string `yaml:"policy_aliases"`
 }
