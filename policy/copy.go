@@ -89,11 +89,6 @@ func CopyRules(i CopyRulesInput) error {
 		return err
 	}
 
-	// originalTargetPolicy, err := CopyPolicy(targetPolicy.Policies[0].Policy)
-	// if err != nil {
-	// 	return fmt.Errorf("%s - %w", funcName, err)
-	// }
-
 	if len(targetPolicy.Policies) == 0 {
 		return fmt.Errorf("%s - target policy not found", funcName)
 	}

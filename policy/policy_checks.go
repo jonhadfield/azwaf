@@ -6,24 +6,9 @@ import (
 	"github.com/jonhadfield/azwaf/logging"
 )
 
-// TODO: reintroduce this function once all the rule types are covered
-// func HasDefaultDeny(p *armfrontdoor.WebApplicationFirewallPolicy) (defaultDeny bool, err error) {
-// 	if p.Properties == nil || p.Properties.CustomRules == nil || p.Properties.CustomRules.Rules == nil {
-// 		return false, errors.New("no custom rules defined")
-// 	}
-//
-// 	// if Policy has "if not... then deny" then they do
-// 	// if Policy has "if ip 0.0.0.0/0 then deny" then true
-// 	for _, cr := range p.Properties.CustomRules.Rules {
-// 		if *cr.EnabledState != "CustomRuleEnabledStateEnabled" {
-// 			if CustomRuleHasDefaultDeny(cr) {
-// 				return true, err
-// 			}
-// 		}
-// 	}
-//
-// 	return
-// }
+// TODO: a HasDefaultDeny check belongs here, reporting whether a policy denies
+// by default. The previous attempt did not cover every rule type and was removed
+// rather than left commented out; it read the enabled state inverted.
 
 func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleSets int) {
 	funcName := GetFunctionName()

@@ -148,7 +148,6 @@ func getIPNetsForRuleIPMatchConditions(cr *armfrontdoor.CustomRule) ([]netip.Pre
 		//  are not currently supported
 		if !matchConditionSupported(mc[y]) {
 			continue
-			// return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *cr.Name)
 		}
 
 		for z := range mc[y].MatchValue {

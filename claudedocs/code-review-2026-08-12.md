@@ -391,8 +391,28 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   the integration suite silently. Every candidate was checked against `it/` for that reason, and
   the suite was compiled with `-tags integration` afterwards.*
 
-  *Still open: scattered commented-out fragments of five to sixteen lines across seven files,
-  small enough that some may be deliberate notes.*
+  *The scattered fragments are done too, judged one at a time rather than swept. The earlier
+  count of "five to sixteen lines across seven files" was inflated: the pattern used to find them
+  matched ordinary prose beginning `// if ...`, and the genuine commented-out code sat in five
+  files, not seven.*
+
+  *Deleted as refactor leftovers: an old function signature and an old call form in
+  `delete_custom_rule.go`, sitting directly above their replacements; a dead
+  `StripCustomRulesPrefixes` wrapper; an abandoned error return in `custom_rules.go` whose
+  behaviour the `continue` above already states; and a commented `originalTargetPolicy` block in
+  `copy.go`.*
+
+  *Three carried real open questions, so the question was kept as prose and only the code
+  dropped: whether passing no exclusion criteria should strip all exclusions or none
+  (`delete_managed_exclusion.go`), and the default-deny warning, whose commented implementation
+  spanned `output.go` and `policy_checks.go`. That pair could never have been uncommented as
+  written — it called `logrus`, dropped in the slog migration, and a `HasDefaultDeny` that was
+  itself commented out. It also read the enabled state inverted, which the replacement TODO
+  records.*
+
+  *`CustomRuleHasDefaultDeny` was **kept** despite having no production caller once
+  `HasDefaultDeny` went: it is exported, has real tests, and is the building block the remaining
+  TODO needs.*
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,
