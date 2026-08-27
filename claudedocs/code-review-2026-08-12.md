@@ -347,9 +347,29 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   `NewResourceID`, `SetSubscriptionID`. `OutputManagedRuleExclusionsTableInput.ruleDefinition/
   groupDefinition/setDefinition` (`policy/output.go:892-894`) and six `OutputManagedRuleInput`
   fields are populated at every call site and read nowhere. Whole-file dead comment blocks:
-  ~~`policy/block.go` (all 68 lines)~~ *— deleted; the file was nothing but comments, contributed
-  no symbol, and was referenced nowhere.* `policy/restore.go:30-96`,
-  `policy/policy_managed.go:412-475`.
+  ~~`policy/block.go` (all 68 lines), `policy/restore.go:30-96`,
+  `policy/policy_managed.go:412-475`.~~
+
+  *All three deleted. `block.go` was nothing but comments and a package declaration: it
+  contributed no symbol and was referenced nowhere. The other two were a commented-out
+  `restorePolicy` (67 lines, superseded by the active restore path) and a commented-out
+  `ShowManagedRuleExclusionShadows` (64 lines). Neither had an active counterpart. 199 lines in
+  total.*
+
+  *Deleting `block.go` also settled the status of the constants in A1: it had stood as their
+  notional consumer, and with it gone `LogNetsPriorityStart`, `AllowNetsPriorityStart`,
+  `BlockNetsPriorityStart`, `LogNetsPrefix`, `MaxLogNetsRules`, `MaxBlockNetsRules`,
+  `MaxAllowNetsRules` and `MaxConditionsPerCustomRule` have no reference beyond their own
+  declarations. They are **exported**, so removing them would break any library consumer — left
+  as a deliberate open decision rather than swept up. `actionAllow` is unexported and equally
+  unused; `actionBlock` reads as dead by the same argument but is genuinely used at
+  `custom_rules.go:336`.*
+
+  *What remains under this heading is the unused declarations — `LoadBackupsFromPaths` /
+  `LoadBackupsFromPath`, `BotRuleSetStatsOutput`, `LogIPsInput`, `WrappedManagedRuleSet`,
+  `Action`, `NewResourceID`, `SetSubscriptionID` and the unread struct fields — plus scattered
+  commented-out fragments of five to sixteen lines across seven files, which are small enough
+  that some may be deliberate notes and were not swept.*
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,
