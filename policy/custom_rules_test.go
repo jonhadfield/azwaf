@@ -68,7 +68,7 @@ func TestRebuildIPMatchConditions(t *testing.T) {
 }
 
 func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -79,7 +79,6 @@ func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
 		SubscriptionID: rid.SubscriptionID,
 		RawResourceID:  rid.Raw,
 		Action:         toPtr(armfrontdoor.ActionTypeBlock),
-		Output:         true,
 		// AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
 		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleType:                toPtr(armfrontdoor.RuleTypeMatchRule),
@@ -120,7 +119,7 @@ func TestDecorateExistingCustomRulesNoAdditionalPositive(t *testing.T) {
 
 // TestDecorateExistingCustomRules
 func TestDecorateExistingCustomRules(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -131,7 +130,6 @@ func TestDecorateExistingCustomRules(t *testing.T) {
 		SubscriptionID:          rid.SubscriptionID,
 		RawResourceID:           rid.Raw,
 		Action:                  toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                  true,
 		AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
 		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleType:                toPtr(armfrontdoor.RuleTypeMatchRule),
@@ -172,7 +170,7 @@ func TestDecorateExistingCustomRules(t *testing.T) {
 
 // TestDecorateExistingCustomRules
 func TestDecorateExistingCustomRulesRateLimit(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -183,7 +181,6 @@ func TestDecorateExistingCustomRulesRateLimit(t *testing.T) {
 		SubscriptionID:          rid.SubscriptionID,
 		RawResourceID:           rid.Raw,
 		Action:                  toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                  true,
 		AdditionalAddrs:         []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
 		AdditionalExcludedAddrs: []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleType:                toPtr(armfrontdoor.RuleTypeRateLimitRule),
@@ -294,7 +291,7 @@ func TestGetNetsToRemove(t *testing.T) {
 
 // TestUpdatePolicyCustomRules
 func TestUpdatePolicyCustomRules(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-one.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-one.json"})
 	require.NoError(t, err)
 
 	orig, err := CopyPolicy(wp[0].Policy)
@@ -320,7 +317,7 @@ func TestUpdatePolicyCustomRules(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesExisting - update custom rules by passing a prefix that already exists should return no change
 func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -331,7 +328,6 @@ func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
 		RawResourceID:              rid.Raw,
 		ResourceID:                 config.ResourceID{},
 		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                     false,
 		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22")},
 		ExcludedAddrs:              nil,
 		RuleNamePrefix:             "BlockList",
@@ -349,7 +345,7 @@ func TestUpdatePolicyCustomRulesExisting(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing a prefix that doesn't exist should return a change
 func TestUpdatePolicyCustomRulesNew(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -373,7 +369,7 @@ func TestUpdatePolicyCustomRulesNew(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing two existing prefixes, but with a new prefix also, should return change
 func TestUpdatePolicyCustomRulesNewNamePrefix(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -386,7 +382,6 @@ func TestUpdatePolicyCustomRulesNewNamePrefix(t *testing.T) {
 		RuleType:       toPtr(armfrontdoor.RuleTypeMatchRule),
 		ResourceID:     config.ResourceID{},
 		Action:         toPtr(armfrontdoor.ActionTypeBlock),
-		Output:         false,
 
 		Filepath:       "",
 		Addrs:          []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
@@ -403,7 +398,7 @@ func TestUpdatePolicyCustomRulesNewNamePrefix(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNew - update custom rules by passing two existing prefixes, but with a new prefix also, should return change
 func TestUpdatePolicyCustomRulesNewNamePrefixFromFile(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -414,7 +409,6 @@ func TestUpdatePolicyCustomRulesNewNamePrefixFromFile(t *testing.T) {
 		RawResourceID:  rid.Raw,
 		ResourceID:     config.ResourceID{},
 		Action:         toPtr(armfrontdoor.ActionTypeBlock),
-		Output:         false,
 		Filepath:       "testdata/nets.txt",
 		Addrs:          []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
 		RuleNamePrefix: "BlockListNew",
@@ -450,7 +444,7 @@ func TestUpdatePolicyCustomRulesNewNamePrefixFromFile(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNegativeMatches
 func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-three.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-three.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -462,7 +456,6 @@ func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
 		SubscriptionID:             rid.SubscriptionID,
 		RawResourceID:              rid.Raw,
 		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                     true,
 		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
 		ExcludedAddrs:              []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleNamePrefix:             "BlockList",
@@ -481,7 +474,7 @@ func TestUpdatePolicyCustomRulesAddNegativeMatches(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesNegativeMatches
 func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -494,7 +487,6 @@ func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
 		RawResourceID:              rid.Raw,
 		ResourceID:                 config.ResourceID{},
 		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                     false,
 		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("3.3.0.0/22")},
 		ExcludedAddrs:              []netip.Prefix{netip.MustParsePrefix("2.2.0.0/22")},
 		RuleNamePrefix:             "BlockList",
@@ -513,7 +505,7 @@ func TestUpdatePolicyCustomRulesRemoveNegativeMatches(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesReplaceExistingMatches tests that we can replace, instead of append, prefixes
 func TestUpdatePolicyCustomRulesReplaceExistingMatches(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-four.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-four.json"})
 	require.NoError(t, err)
 
 	rid := config.ParseResourceID("/subscriptions/0a914e76-4921-4c19-b460-a2d36003525a/resourceGroups/flying/providers/Microsoft.Network/frontdoorWebApplicationFirewallPolicies/mypolicyone")
@@ -527,7 +519,6 @@ func TestUpdatePolicyCustomRulesReplaceExistingMatches(t *testing.T) {
 		ResourceID:                 config.ResourceID{},
 		ReplaceAddrs:               true,
 		Action:                     toPtr(armfrontdoor.ActionTypeBlock),
-		Output:                     false,
 		Addrs:                      []netip.Prefix{netip.MustParsePrefix("1.1.0.0/22"), netip.MustParsePrefix("6.6.0.0/22")},
 		RuleNamePrefix:             "BlockList",
 		RuleType:                   toPtr(armfrontdoor.RuleTypeMatchRule),
@@ -551,7 +542,7 @@ func TestUpdatePolicyCustomRulesInvalidInput(t *testing.T) {
 
 // TestUpdatePolicyCustomRulesInvalidInput tests we get an error with an invalid rule name prefix
 func TestUpdatePolicyCustomRulesInvalidRuleNamePrefix(t *testing.T) {
-	wp, err := LoadBackupsFromPaths([]string{"../testfiles/wrapped-policy-one.json"})
+	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-one.json"})
 	require.NoError(t, err)
 	_, _, err = UpdatePolicyCustomRulesIPMatchPrefixes(UpdatePolicyCustomRulesIPMatchPrefixesInput{
 		Policy:         &wp[0].Policy,

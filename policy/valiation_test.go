@@ -211,3 +211,37 @@ func TestCustomRuleHasDefaultDenyFour(t *testing.T) {
 	})
 	require.False(t, dd)
 }
+
+// The message used to read "at least one of --custom, --managed and --stats is
+// required", describing the opposite of the condition it guards: the error
+// fires when --custom-only and --managed-only are combined, which would hide
+// every section of the output.
+func TestShowPolicyValidateRejectsCombinedOnlyFlags(t *testing.T) {
+	in := &ShowPolicyInput{Custom: true, Managed: true}
+
+	err := in.Validate()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cannot be combined")
+	require.NotContains(t, err.Error(), "at least one",
+		"message must describe the condition it actually rejects")
+}
+
+// Everything else is allowed: no flags shows the whole policy, either flag on
+// its own scopes it, and --stats gives the combination something to render.
+func TestShowPolicyValidateAllowsEveryOtherCombination(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		custom, managed, stats bool
+	}{
+		{"no flags", false, false, false},
+		{"custom only", true, false, false},
+		{"managed only", false, true, false},
+		{"stats only", false, false, true},
+		{"both with stats", true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := &ShowPolicyInput{Custom: tc.custom, Managed: tc.managed, Stats: tc.stats}
+			require.NoError(t, in.Validate())
+		})
+	}
+}

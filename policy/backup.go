@@ -78,14 +78,8 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		}
 	}
 
-	// fail if only one of the storage account destination required parameters been defined
-	if (in.StorageAccountResourceID != "" && in.ContainerURL == "") || (in.StorageAccountResourceID == "" && in.ContainerURL != "") {
-		return fmt.Errorf("%s - both storage account resource id and container url are required for backups to Azure Storage",
-			funcName)
-	}
-
-	// fail if neither path nor storage account details are provided
-	if in.StorageAccountResourceID == "" && in.Path == "" {
+	// fail if no destination at all was provided
+	if in.Path == "" && in.ContainerURL == "" {
 		return fmt.Errorf(
 			"%s - either path or storage account details are required",
 			funcName)
@@ -155,48 +149,9 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 
 	logging.Debugf("%s | retrieved %d FrontDoor and %d AppGW policies", funcName, len(fdPolicies), len(appgwPolicies))
 
-	var blobClient *azblob.Client
-	var containerName string
-
-	if in.StorageAccountResourceID != "" {
-		sari := config.ParseResourceID(in.StorageAccountResourceID)
-		var storageAccountsClient *armstorage.AccountsClient
-		storageAccountsClient, err = armstorage.NewAccountsClient(sari.SubscriptionID, s.ClientCredential, nil)
-		if err != nil {
-			return fmt.Errorf("failed to create storage account client - %s", err.Error())
-		}
-
-		ctx := context.Background()
-
-		var sac armstorage.AccountsClientListKeysResponse
-
-		sac, oerr := storageAccountsClient.ListKeys(ctx, sari.ResourceGroup, sari.Name, nil)
-		if oerr != nil {
-			return fmt.Errorf("failed to list keys for storage account %s - %s", sari.Name, oerr.Error())
-		}
-
-		b := sac.Keys[0]
-
-		credential, oerr := azblob.NewSharedKeyCredential(sari.Name, *b.Value)
-		if oerr != nil {
-			return fmt.Errorf("invalid credentials with error: %s", oerr.Error())
-		}
-
-		// Modern SDK: Create service client and extract container name from URL
-		// ContainerURL format: https://storageaccount.blob.core.windows.net/containername
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", sari.Name)
-		blobClient, oerr = azblob.NewClientWithSharedKeyCredential(serviceURL, credential, nil)
-		if oerr != nil {
-			return fmt.Errorf("failed to create blob client: %s", oerr.Error())
-		}
-
-		// Extract container name from ContainerURL
-		// Parse the URL and get the path component (should be /containername)
-		parts, oerr := azblob.ParseURL(in.ContainerURL)
-		if oerr != nil {
-			return fmt.Errorf("failed to parse container URL: %s", oerr.Error())
-		}
-		containerName = parts.ContainerName
+	blobClient, containerName, err := newBackupBlobClient(s, in.StorageAccountResourceID, in.ContainerURL)
+	if err != nil {
+		return err
 	}
 
 	if err = backupPolicies(fdPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path); err != nil {
@@ -204,6 +159,88 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 	}
 
 	return backupAppGWPolicies(appgwPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path)
+}
+
+// newBackupBlobClient builds the client used to upload backups to Azure
+// Storage, along with the container to write into.
+//
+// A container url is sufficient on its own: it names both the storage account
+// (its host) and the container (its path), and the session's Azure AD
+// credential is used to authenticate — the caller's identity needs a blob data
+// role on the account. Supplying a storage account resource id as well switches
+// to shared key authentication, looking the account keys up through ARM, which
+// is the option to reach for where no such role has been granted.
+//
+// Returns a nil client when no Azure Storage destination was requested, leaving
+// the caller to write local files only.
+func newBackupBlobClient(s *session.Session, storageAccountResourceID, containerURL string) (*azblob.Client, string, error) {
+	funcName := GetFunctionName()
+
+	if containerURL == "" {
+		// a storage account alone does not say which container to write to
+		if storageAccountResourceID != "" {
+			return nil, "", fmt.Errorf("%s - a container url is required to back up to Azure Storage", funcName)
+		}
+
+		return nil, "", nil
+	}
+
+	parts, err := azblob.ParseURL(containerURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s - failed to parse container url: %w", funcName, err)
+	}
+
+	if parts.ContainerName == "" {
+		return nil, "", fmt.Errorf("%s - container url %s does not name a container", funcName, containerURL)
+	}
+
+	if storageAccountResourceID == "" {
+		if s.ClientCredential == nil {
+			if err = s.GetClientCredential(); err != nil {
+				return nil, "", fmt.Errorf("%s - %w", funcName, err)
+			}
+		}
+
+		// URLParts.Scheme is documented as "https://" but is returned bare, so
+		// normalise rather than concatenating blind
+		serviceURL := fmt.Sprintf("%s://%s/", strings.TrimSuffix(parts.Scheme, "://"), parts.Host)
+
+		client, cerr := azblob.NewClient(serviceURL, s.ClientCredential, nil)
+		if cerr != nil {
+			return nil, "", fmt.Errorf("%s - failed to create blob client: %w", funcName, cerr)
+		}
+
+		return client, parts.ContainerName, nil
+	}
+
+	sari := config.ParseResourceID(storageAccountResourceID)
+
+	storageAccountsClient, err := armstorage.NewAccountsClient(sari.SubscriptionID, s.ClientCredential, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s - failed to create storage account client: %w", funcName, err)
+	}
+
+	sac, err := storageAccountsClient.ListKeys(context.Background(), sari.ResourceGroup, sari.Name, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s - failed to list keys for storage account %s: %w", funcName, sari.Name, err)
+	}
+
+	if len(sac.Keys) == 0 {
+		return nil, "", fmt.Errorf("%s - storage account %s returned no keys", funcName, sari.Name)
+	}
+
+	credential, err := azblob.NewSharedKeyCredential(sari.Name, *sac.Keys[0].Value)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s - invalid credentials: %w", funcName, err)
+	}
+
+	client, err := azblob.NewClientWithSharedKeyCredential(
+		fmt.Sprintf("https://%s.blob.core.windows.net/", sari.Name), credential, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s - failed to create blob client: %w", funcName, err)
+	}
+
+	return client, parts.ContainerName, nil
 }
 
 // partitionRIDsByWAFType splits a mixed list of WAF resource ids into a Front
@@ -279,32 +316,43 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 
 	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
 
-	// write to storage account
-	if blobClient != nil {
-		ctx := context.Background()
-
-		if !quiet {
-			logging.Infof("uploading file with blob name: %s\n", fName)
-		}
-
-		// Modern SDK: Upload blob directly using the service client with container name and blob name
-		_, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
-			BlockSize:   blockBlobUploadBlockSize,
-			Concurrency: blockBlobParallelism,
-		})
-		if oerr != nil {
-			return oerr
-		}
-	}
-
+	// write locally first: the local copy is the cheaper and more reliable of
+	// the two destinations, and must not be lost to an upload failure
 	if path != "" {
-		err = writeBackupToFile(pj, cwd, fName, quiet, path)
-		if err != nil {
-			return fmt.Errorf("%s - %w", funcName, err)
+		if oerr = writeBackupToFile(pj, cwd, fName, quiet, path); oerr != nil {
+			return fmt.Errorf("%s - %w", funcName, oerr)
 		}
 	}
 
-	return
+	return uploadBackupToContainer(pj, fName, containerName, blobClient, failFast, quiet)
+}
+
+// uploadBackupToContainer uploads a serialised backup to blob storage. A nil
+// client means no Azure Storage destination was requested, so there is nothing
+// to do. Upload failures honour failFast, matching the rest of the backup path:
+// the local copy has already been written by this point.
+func uploadBackupToContainer(pj []byte, fName, containerName string, blobClient *azblob.Client, failFast, quiet bool) error {
+	if blobClient == nil {
+		return nil
+	}
+
+	if !quiet {
+		logging.Infof("uploading file with blob name: %s\n", fName)
+	}
+
+	_, err := blobClient.UploadBuffer(context.Background(), containerName, fName, pj, &azblob.UploadBufferOptions{
+		BlockSize:   blockBlobUploadBlockSize,
+		Concurrency: blockBlobParallelism,
+	})
+	if err != nil {
+		if failFast {
+			return fmt.Errorf("%s - failed to upload %s: %w", GetFunctionName(), fName, err)
+		}
+
+		logging.Errorf("failed to upload %s to container %s: %s", fName, containerName, err)
+	}
+
+	return nil
 }
 
 func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (err error) {
@@ -415,28 +463,14 @@ func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, contain
 
 	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
 
-	if blobClient != nil {
-		ctx := context.Background()
-
-		if !quiet {
-			logging.Infof("uploading file with blob name: %s\n", fName)
-		}
-
-		if _, oerr = blobClient.UploadBuffer(ctx, containerName, fName, pj, &azblob.UploadBufferOptions{
-			BlockSize:   blockBlobUploadBlockSize,
-			Concurrency: blockBlobParallelism,
-		}); oerr != nil {
-			return oerr
-		}
-	}
-
+	// local first, for the reasons given in BackupPolicy
 	if path != "" {
 		if err := writeBackupToFile(pj, cwd, fName, quiet, path); err != nil {
 			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
-	return nil
+	return uploadBackupToContainer(pj, fName, containerName, blobClient, failFast, quiet)
 }
 
 func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/logging"
 
@@ -26,74 +28,6 @@ type RestorePoliciesInput struct {
 	Force            bool
 	FailFast         bool
 }
-
-// TODO: rGroup would be to override the resource group (in the filename) to restore to
-// func restorePolicy(SubID, rGroup, name string, failFast, quiet bool, path string) (err error) {
-//	t := time.Now().UTC().Format("20060102150405")
-//	var p frontdoor.WebApplicationFirewallPolicy
-//
-//	var cwd string
-//
-//	if !quiet {
-//		cwd, err = os.Getwd()
-//		if err != nil {
-//			return
-//		}
-//		msg := fmt.Sprintf("backing up Policy: %s", name)
-//		statusOutput := PadToWidth(msg, " ", 0, true)
-//		width, _, _ := terminal.GetSize(0)
-//		if len(statusOutput) == width {
-//			fmt.Printf(statusOutput[0:width-3] + "   \r")
-//		} else {
-//			fmt.Print(statusOutput)
-//		}
-//
-//	}
-//	p, err = getRawPolicy(SubID, rGroup, name)
-//	if err != nil {
-//		if failFast {
-//			return err
-//		}
-//		log.Println(err)
-//	}
-//
-//	var pj []byte
-//	pj, err = json.MarshalIndent(p, "", "    ")
-//	if err != nil {
-//		if failFast {
-//			return err
-//		}
-//		log.Println(err)
-//	}
-//	fName := fmt.Sprintf("%s+%s+%s+%s.json", SubID, rGroup, name, t)
-//	var f *os.File
-//	fp := filepath.Join(path, fName)
-//	f, err = os.Create(fp)
-//	if err != nil {
-//		return
-//	}
-//	_, err = f.Write(pj)
-//	if err != nil {
-//		f.Close()
-//		return
-//	}
-//
-//	_ = f.Close()
-//
-//	if !quiet {
-//		op := filepath.Clean(fp)
-//		if strings.HasPrefix(op, cwd) {
-//			op, err = filepath.Rel(cwd, op)
-//			if err != nil {
-//				return
-//			}
-//			op = "./" + op
-//		}
-//		log.Printf("restore written to: %s", op)
-//	}
-//	return
-//
-// }
 
 func (i *RestorePoliciesInput) Validate() error {
 	funcName := GetFunctionName()
@@ -370,6 +304,35 @@ func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy,
 	return results, nil
 }
 
+// ensurePolicyProperties returns p's properties, creating them if absent, so a
+// restore onto a policy that carries none does not panic.
+func ensurePolicyProperties(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.WebApplicationFirewallPolicyProperties {
+	if p.Properties == nil {
+		p.Properties = &armfrontdoor.WebApplicationFirewallPolicyProperties{}
+	}
+
+	return p.Properties
+}
+
+// backupCustomRules and backupManagedRules read a backup's rules without
+// assuming it has properties. A backup legitimately holds none when the policy
+// it captured had none, in which case the restore clears the target's.
+func backupCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.CustomRuleList {
+	if p.Properties == nil {
+		return nil
+	}
+
+	return policyCustomRuleList(p)
+}
+
+func backupManagedRules(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontdoor.ManagedRuleSetList {
+	if p.Properties == nil {
+		return nil
+	}
+
+	return policyManagedRuleSetList(p)
+}
+
 // BuildRestoredPolicy accepts two policies (existing and backup) and options on which parts (Custom and or Managed rules) to replace
 // without options, the Original will have both Custom and Managed rules parts replaced
 // options allow for Custom or Managed rules in Original to replaced with those in backup
@@ -394,7 +357,17 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 
 	switch {
 	case i.CustomRulesOnly:
-		copyOfOriginalPolicy.Policy.Properties.CustomRules.Rules = backup.Policy.Properties.CustomRules.Rules
+		props := ensurePolicyProperties(&copyOfOriginalPolicy.Policy)
+		if props.CustomRules == nil {
+			props.CustomRules = &armfrontdoor.CustomRuleList{}
+		}
+
+		if src := backupCustomRules(&backup.Policy); src != nil {
+			props.CustomRules.Rules = src.Rules
+		} else {
+			props.CustomRules.Rules = nil
+		}
+
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
 		return WrappedPolicy{
@@ -405,11 +378,7 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 			PolicyID:       copyOfOriginalPolicy.PolicyID,
 		}, nil
 	case i.ManagedRulesOnly:
-		if backup.Policy.Properties.ManagedRules == nil {
-			copyOfOriginalPolicy.Policy.Properties.ManagedRules = nil
-		} else {
-			copyOfOriginalPolicy.Policy.Properties.ManagedRules = backup.Policy.Properties.ManagedRules
-		}
+		ensurePolicyProperties(&copyOfOriginalPolicy.Policy).ManagedRules = backupManagedRules(&backup.Policy)
 
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
@@ -424,9 +393,9 @@ func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInpu
 		// if both Original and backup are provided, then return Original with both Custom and Managed rules replaced
 		rID := config.ParseResourceID(copyOfOriginalPolicy.PolicyID)
 
-		copyOfOriginalPolicy.Policy.Properties.CustomRules = backup.Policy.Properties.CustomRules
-
-		copyOfOriginalPolicy.Policy.Properties.ManagedRules = backup.Policy.Properties.ManagedRules
+		props := ensurePolicyProperties(&copyOfOriginalPolicy.Policy)
+		props.CustomRules = backupCustomRules(&backup.Policy)
+		props.ManagedRules = backupManagedRules(&backup.Policy)
 
 		return WrappedPolicy{
 			SubscriptionID: rID.SubscriptionID,

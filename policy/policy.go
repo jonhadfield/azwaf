@@ -38,28 +38,11 @@ const (
 	MaxFrontDoorsToFetch = 100
 	// MaxCustomRules is the hard limit on the number of allowed Custom rules
 	MaxCustomRules = 90
-	// MaxLogNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxLogNetsRules = 10
-	// MaxBlockNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxBlockNetsRules = 40
-	// MaxAllowNetsRules is the maximum number of Custom rules to create from Azure's hard limit of 90 per Policy
-	MaxAllowNetsRules = 10
 	// MaxIPMatchValues is Azure's hard limit on IPMatch values per rule
 	MaxIPMatchValues = 600
 
-	// LogNetsPrefix is the prefix for Custom Rules used for logging IP networks
-	LogNetsPrefix = "LogNets"
-	// LogNetsPriorityStart is the first Custom rule priority number
-	// Manual log rules should be numbered below 1000
-	LogNetsPriorityStart = 1000
-
 	// AllowNetsPrefix is the prefix for Custom Rules used for allowing IP networks
 	AllowNetsPrefix = "AllowNets"
-	// AllowNetsPriorityStart is the first Custom rule priority number
-	// Manual allow rules should be numbered 2000-2999
-	AllowNetsPriorityStart = 3000
-
-	BlockNetsPriorityStart = 5000
 
 	// MaxMatchValuesPerColumn is the number of match values to output per column when showing policies and rules
 	MaxMatchValuesPerColumn = 3
@@ -71,8 +54,6 @@ const (
 )
 
 const (
-	// Azure limits - https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-front-door-classic-limits
-	MaxConditionsPerCustomRule        = 10
 	maxExclusionLimit                 = 100
 	maxExclusionLimitWarningThreshold = 95
 	ScopeRuleSet                      = "ruleSet"
@@ -84,11 +65,8 @@ const (
 	errExclusionAlreadyExists = "already exists"
 	errRuleNotFound           = "rule not found"
 	errRuleGroupNotFound      = "rule group not found"
-	errInvalidMatchVariable   = "invalid match variable"
 	errPolicyNotDefined       = "policy not defined"
 	WAFResourceIDHashMapName  = "WAFResourceIDHashMap"
-	defaultRuleSetPrefix      = "Microsoft_DefaultRuleSet"
-	botManagerRuleSetPrefix   = "Microsoft_BotManagerRuleSet"
 )
 
 var ErrInvalidRuleType = errors.New("invalid rule type")
@@ -372,28 +350,21 @@ type BaseCLIInput struct {
 	DryRun         bool
 }
 
-type LogIPsInput struct {
-	RID      config.ResourceID
-	Output   bool
-	DryRun   bool
-	Filepath string
-	Nets     IPNets
-	MaxRules int
-	Debug    bool
-}
-
 type DeleteCustomRulesCLIInput struct {
-	BaseCLIInput   BaseCLIInput
-	SubscriptionID string
-	PolicyID       string
-	DryRun         bool
-	ConfigPath     string
-	RID            config.ResourceID
-	Name           string
-	NameMatch      *regexp.Regexp
-	Priority       string
-	MaxRules       int
-	Debug          bool
+	// BaseCLIInput is embedded, not a named field: it previously sat alongside
+	// duplicate SubscriptionID/DryRun/ConfigPath/Debug fields that the CLI
+	// never populated, so reads of the outer twins silently saw zero values
+	// and --dry-run pushed anyway.
+	BaseCLIInput
+	// Session optionally provides a pre-configured session; when nil a new
+	// one is created. Tests inject a fake-backed session here.
+	Session   *session.Session
+	PolicyID  string
+	RID       config.ResourceID
+	Name      string
+	NameMatch *regexp.Regexp
+	Priority  string
+	MaxRules  int
 }
 
 type DeleteCustomRulesPrefixesInput struct {
@@ -564,16 +535,6 @@ type WrappedPolicy struct {
 	WAFType        string `json:",omitempty"`
 }
 
-type WrappedManagedRuleSet struct {
-	Date           time.Time
-	SubscriptionID string
-	ResourceGroup  string
-	Name           string
-	ManagedRuleSet armfrontdoor.ManagedRuleSet
-	PolicyID       string
-	AppVersion     string
-}
-
 type GeneratePolicyPatchInput struct {
 	Original interface{}
 	New      armfrontdoor.WebApplicationFirewallPolicy
@@ -686,8 +647,37 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput
 	return output, nil
 }
 
+// validatePolicyLimits checks a policy against the Azure limits azwaf can
+// determine locally. Without it an over-limit policy is only rejected once it
+// reaches the API, and the caller has already paid for a fetch, a diff and an
+// auto-backup by then.
+func validatePolicyLimits(p *armfrontdoor.WebApplicationFirewallPolicy) error {
+	if count := len(policyCustomRules(p)); count > MaxCustomRules {
+		return fmt.Errorf("policy has %d custom rules, exceeding Azure's limit of %d",
+			count, MaxCustomRules)
+	}
+
+	// each scope is capped independently, so report the specific one that is
+	// over rather than a total that maps to no single limit
+	for _, scope := range policyExclusionScopes(p) {
+		if scope.count > maxExclusionLimit {
+			return fmt.Errorf("%s %s has %d exclusions, exceeding Azure's limit of %d per scope",
+				scope.scope, scope.name, scope.count, maxExclusionLimit)
+		}
+	}
+
+	return nil
+}
+
 func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 	funcName := GetFunctionName()
+
+	// reject before spending a fetch, a diff and a backup on a policy the API
+	// will refuse. This runs ahead of the dry-run return so a dry run reports
+	// the problem too
+	if err := validatePolicyLimits(&input.PolicyPostChange); err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
+	}
 
 	// get existing policy before change to allow for diff and backups
 	preChange, err := GetRawPolicy(input.Session, input.SubscriptionID, input.ResourceGroup, input.PolicyName)
@@ -727,5 +717,6 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 		ResourceGroup: input.ResourceGroup,
 		Policy:        input.PolicyPostChange,
 		Debug:         input.Debug,
+		Async:         input.Async,
 	})
 }
