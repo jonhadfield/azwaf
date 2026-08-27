@@ -107,7 +107,9 @@ func (s *Session) InitialiseCache() {
 
 	// if we don't have a session or we do, and the cache is initialised, then return it
 	if s == nil {
-		panic("%s called with null session")
+		logging.Errorf("%s - called with null session", funcName)
+
+		return
 	}
 
 	home, err := os.UserHomeDir()

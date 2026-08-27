@@ -91,7 +91,13 @@ const (
 func PushPolicy(s *session.Session, i *PushPolicyInput) error {
 	funcName := GetFunctionName()
 
-	logging.Debugf("pushing policy %s...", *i.Policy.Name)
+	logging.Debugf("pushing policy %s...", i.Name)
+
+	// backstop for callers that reach PushPolicy without going through
+	// ProcessPolicyChanges, so no path can push an over-limit policy
+	if err := validatePolicyLimits(&i.Policy); err != nil {
+		return fmt.Errorf("%s - %w", funcName, err)
+	}
 
 	ctx := context.Background()
 
@@ -189,87 +195,6 @@ func LoadWrappedPolicyFromFile(f string) (WrappedPolicy, error) {
 	}
 
 	return wp, nil
-}
-
-type Action struct {
-	ActionType string `yaml:"action"`
-	Policy     string
-	Paths      []string `yaml:"paths"`
-	MaxRules   int      `yaml:"max-rules"`
-	Nets       IPNets
-}
-
-func LoadBackupsFromPaths(paths []string) ([]WrappedPolicy, error) {
-	funcName := GetFunctionName()
-
-	if len(paths) == 0 {
-		return nil, fmt.Errorf("%s - no paths provided", funcName)
-	}
-
-	var all []WrappedPolicy
-
-	for _, p := range paths {
-		wps, err := LoadBackupsFromPath(p)
-		if err != nil {
-			return nil, fmt.Errorf("%s - %w", funcName, err)
-		}
-
-		all = append(all, wps...)
-	}
-
-	logging.Debugf("loaded %d Policy backups", len(all))
-
-	return all, nil
-}
-
-func LoadBackupsFromPath(rootPath string) ([]WrappedPolicy, error) {
-	funcName := GetFunctionName()
-
-	info, err := os.Stat(rootPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%s - %w", funcName, err)
-		}
-
-		return nil, fmt.Errorf("%s - %w", funcName, err)
-	}
-
-	if !info.IsDir() {
-		if !strings.EqualFold(filepath.Ext(info.Name()), ".json") {
-			return nil, fmt.Errorf("%s - %s is not a json file", funcName, rootPath)
-		}
-
-		wp, err := LoadWrappedPolicyFromFile(rootPath)
-		if err != nil {
-			return nil, fmt.Errorf("%s - %w", funcName, err)
-		}
-
-		return []WrappedPolicy{wp}, nil
-	}
-
-	files, err := os.ReadDir(rootPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s - %w", funcName, err)
-	}
-
-	var wps []WrappedPolicy
-
-	for _, file := range files {
-		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".json") {
-			continue
-		}
-
-		wp, err := LoadWrappedPolicyFromFile(filepath.Join(rootPath, file.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("%s - %w", funcName, err)
-		}
-
-		wps = append(wps, wp)
-	}
-
-	logging.Debugf("loaded %d Policy backups", len(wps))
-
-	return wps, nil
 }
 
 // LoadedBackups separates loaded backup files by WAF type.

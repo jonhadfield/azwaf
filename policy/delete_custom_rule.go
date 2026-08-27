@@ -20,7 +20,6 @@ type customRuleMatchesNameOrPriorityInput struct {
 	priority int
 }
 
-// func customRuleMatchesNameOrPriority(dcri *DeleteCustomRulesPrefixesInput, cr *armfrontdoor.CustomRule) bool {
 func customRuleMatchesNameOrPriority(mi customRuleMatchesNameOrPriorityInput, cr *armfrontdoor.CustomRule) bool {
 	// check where a priority was provided and a name match exists
 	if mi.prioritySet && mi.nameMatch != nil {
@@ -52,7 +51,6 @@ func stripCustomRulesMatchingNameOrPriority(prioritySet bool, priority int, name
 	var res []*armfrontdoor.CustomRule
 
 	for _, cr := range ecrs {
-		// if customRuleMatchesNameOrPriority(dcri, cr) {
 		if customRuleMatchesNameOrPriority(customRuleMatchesNameOrPriorityInput{
 			prioritySet: prioritySet,
 			priority:    priority,
@@ -94,12 +92,6 @@ func (input *DeleteCustomRulesCLIInput) ParseConfig() (output DeleteCustomRulesP
 	return
 }
 
-// func StripCustomRulesPrefixes(s *session.Session, in DeleteCustomRulesPrefixesInput) (err error) {
-// 	checkDebug(in.Debug)
-//
-// 	return DeleteCustomRulesPrefixes(s, in)
-// }
-
 func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool, err error) {
 	funcName := GetFunctionName()
 
@@ -114,10 +106,10 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 	}
 
 	// remove all but those starting with supplied prefix
-	preLen := len(policyCopy.Properties.CustomRules.Rules)
+	preLen := len(policyCustomRules(&policyCopy))
 
 	// generate slice of existing Custom rules that do NOT match the regex nor priority
-	ecrs := stripCustomRulesMatchingNameOrPriority(in.PrioritySet, in.Priority, in.NameMatch, in.Policy.Properties.CustomRules.Rules)
+	ecrs := stripCustomRulesMatchingNameOrPriority(in.PrioritySet, in.Priority, in.NameMatch, policyCustomRules(in.Policy))
 	if len(ecrs) == preLen {
 		logging.Debug("nothing to do")
 
@@ -155,9 +147,11 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 	funcName := GetFunctionName()
 
-	s, err := session.New()
-	if err != nil {
-		return err
+	s := cliInput.Session
+	if s == nil {
+		if s, err = session.New(); err != nil {
+			return err
+		}
 	}
 
 	policyID, err := GetWAFPolicyResourceID(s, GetWAFPolicyResourceIDInput{
@@ -211,6 +205,7 @@ func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
 		ResourceGroup:    policyID.ResourceGroup,
 		PolicyPostChange: *getPolicyOutput.Policy,
 		DryRun:           cliInput.DryRun,
+		Backup:           cliInput.AutoBackup,
 		Debug:            dcri.Debug,
 	})
 }

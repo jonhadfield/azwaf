@@ -17,13 +17,14 @@ func TestGetMatchingDefaultRuleDefinitionMissing(t *testing.T) {
 	defs, err := LoadManagedRulesetDefinitions()
 	require.NoError(t, err)
 
-	matchingDefs := getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
+	matchingDefs, mderr := getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
 		mrsdl:  defs,
 		ruleID: "944259",
 		// groupName:      "",
 		ruleSetType:    "Microsoft_DefaultRuleSet",
 		ruleSetVersion: "1.1",
 	})
+	require.NoError(t, mderr)
 
 	require.Nil(t, matchingDefs.RuleSetDefinition)
 	require.Nil(t, matchingDefs.RuleGroupDefinition)
@@ -34,13 +35,14 @@ func TestGetMatchingDefaultRuleDefinition(t *testing.T) {
 	defs, err := LoadManagedRulesetDefinitions()
 	require.NoError(t, err)
 
-	matchingDefs := getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
+	matchingDefs, mderr := getMatchingDefaultDefinitions(&getMatchingDefaultDefinitionsInput{
 		mrsdl:  defs,
 		ruleID: "944250",
 		// groupName:      "",
 		ruleSetType:    "Microsoft_DefaultRuleSet",
 		ruleSetVersion: "1.1",
 	})
+	require.NoError(t, mderr)
 
 	require.NotNil(t, matchingDefs.RuleSetDefinition)
 	require.NotNil(t, matchingDefs.RuleGroupDefinition)

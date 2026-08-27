@@ -1,9 +1,6 @@
 package policy
 
-const (
-	actionBlock = "Block"
-	actionAllow = "Allow"
-)
+const actionBlock = "Block"
 
 var ValidRuleExclusionMatchVariables = [...]string{
 	"RequestCookieNames",

@@ -59,47 +59,15 @@ func CmdDelete(versionOutput string) *cli.Command {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					input := c.Args().First()
-					if input != "" {
-						// TODO: check if extended or not and allow specification of custom-rule?
-						if err := policy.ValidateResourceID(input, false); err != nil {
-							// nolint:errcheck
-							_ = cli.ShowSubcommandHelp(c)
+					in, err := newDeleteManagedRuleExclusionInput(c, versionOutput)
+					if err != nil {
+						// nolint:errcheck
+						_ = cli.ShowSubcommandHelp(c)
 
-							return err
-						}
-
-						subID := c.String(FlagSubscriptionID)
-						if policy.IsRIDHash(input) && subID == "" {
-							// nolint:errcheck
-							_ = cli.ShowSubcommandHelp(c)
-
-							return fmt.Errorf("using a policy hash requires a subscription id")
-						}
-
-						dmre := policy.DeleteManagedRuleExclusionCLIInput{
-							SubscriptionID:        subID,
-							PolicyID:              input,
-							RuleSet:               c.String("rule-set"),
-							RuleGroup:             c.String("rule-group"),
-							RuleID:                c.String("rule-id"),
-							ShowDiff:              c.Bool(FlagShowDiff),
-							ExclusionRuleVariable: c.String("match-variable"),
-							ExclusionRuleOperator: c.String("match-operator"),
-							ExclusionRuleSelector: c.String("match-selector"),
-						}
-
-						dmre.AutoBackup = c.Bool(FlagAutoBackup)
-						dmre.DryRun = c.Bool(FlagDryRun)
-						dmre.AppVersion = versionOutput
-
-						return policy.DeleteManagedRuleExclusion(&dmre)
+						return err
 					}
 
-					// nolint:errcheck
-					_ = cli.ShowSubcommandHelp(c)
-
-					return fmt.Errorf("invalid usage")
+					return policy.DeleteManagedRuleExclusion(in)
 				},
 			},
 			{
@@ -113,42 +81,77 @@ func CmdDelete(versionOutput string) *cli.Command {
 					&cli.StringFlag{Name: "priority", Usage: "custom-rule priority", Aliases: []string{"p"}},
 				},
 				Action: func(c *cli.Context) error {
-					if c.String("name") == "" && c.String("priority") == "" {
+					in, err := newDeleteCustomRulesInput(c, versionOutput)
+					if err != nil {
 						// nolint:errcheck
 						_ = cli.ShowSubcommandHelp(c)
 
-						return fmt.Errorf("name and/or priority must be defined")
+						return err
 					}
 
-					input := c.Args().First()
-					if input != "" {
-						// TODO: check if extended or not and allow specification of custom-rule?
-						if err := policy.ValidateResourceID(input, false); err != nil {
-							return cli.ShowSubcommandHelp(c)
-						}
-
-						return policy.DeleteCustomRulesCLI(&policy.DeleteCustomRulesCLIInput{
-							BaseCLIInput: policy.BaseCLIInput{
-								AppVersion:     versionOutput,
-								AutoBackup:     c.Bool(FlagAutoBackup),
-								Debug:          c.Bool("debug"),
-								ConfigPath:     c.String(FlagConfig),
-								SubscriptionID: c.String(FlagSubscriptionID),
-								Quiet:          c.Bool("quiet"),
-								DryRun:         c.Bool(FlagDryRun),
-							},
-							PolicyID: input,
-							Name:     c.String("name"),
-							Priority: c.String("priority"),
-						})
-					}
-
-					// nolint:errcheck
-					_ = cli.ShowSubcommandHelp(c)
-
-					return fmt.Errorf("invalid usage")
+					return policy.DeleteCustomRulesCLI(in)
 				},
 			},
 		},
+	}
+}
+
+// newDeleteCustomRulesInput builds the input for `delete custom-rule` from the
+// CLI context.
+//
+// The policy name is deliberately passed through untouched: aliases, hashes and
+// full resource ids are all resolved (and validated) later by
+// policy.GetWAFPolicyResourceID. Validating the raw argument here would reject
+// aliases, which contain no "/".
+func newDeleteCustomRulesInput(c *cli.Context, versionOutput string) (*policy.DeleteCustomRulesCLIInput, error) {
+	if c.String("name") == "" && c.String("priority") == "" {
+		return nil, fmt.Errorf("name and/or priority must be defined")
+	}
+
+	input := c.Args().First()
+	if input == "" {
+		return nil, fmt.Errorf("missing policy id / hash")
+	}
+
+	return &policy.DeleteCustomRulesCLIInput{
+		BaseCLIInput: baseCLIInput(c, versionOutput),
+		PolicyID:     input,
+		Name:         c.String("name"),
+		Priority:     c.String("priority"),
+	}, nil
+}
+
+// newDeleteManagedRuleExclusionInput builds the input for
+// `delete managed-rule-exclusion` from the CLI context. See the note on
+// newDeleteCustomRulesInput about not validating the raw policy name here.
+func newDeleteManagedRuleExclusionInput(c *cli.Context, versionOutput string) (*policy.DeleteManagedRuleExclusionCLIInput, error) {
+	input := c.Args().First()
+	if input == "" {
+		return nil, fmt.Errorf("missing policy id / hash")
+	}
+
+	return &policy.DeleteManagedRuleExclusionCLIInput{
+		BaseCLIInput:          baseCLIInput(c, versionOutput),
+		PolicyID:              input,
+		RuleSet:               c.String("rule-set"),
+		RuleGroup:             c.String("rule-group"),
+		RuleID:                c.String("rule-id"),
+		ShowDiff:              c.Bool(FlagShowDiff),
+		ExclusionRuleVariable: c.String("match-variable"),
+		ExclusionRuleOperator: c.String("match-operator"),
+		ExclusionRuleSelector: c.String("match-selector"),
+	}, nil
+}
+
+// baseCLIInput collects the global flags shared by every command.
+func baseCLIInput(c *cli.Context, versionOutput string) policy.BaseCLIInput {
+	return policy.BaseCLIInput{
+		AppVersion:     versionOutput,
+		AutoBackup:     c.Bool(FlagAutoBackup),
+		Debug:          c.Bool("debug"),
+		ConfigPath:     c.String(FlagConfig),
+		SubscriptionID: c.String(FlagSubscriptionID),
+		Quiet:          c.Bool("quiet"),
+		DryRun:         c.Bool(FlagDryRun),
 	}
 }
