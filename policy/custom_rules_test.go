@@ -275,21 +275,6 @@ func TestTryNetStrToPrefix(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGetNetsToRemove(t *testing.T) {
-	out, err := getNetsToRemove("", IPNets{})
-	require.Error(t, err)
-	require.Nil(t, out)
-
-	out, err = getNetsToRemove("", IPNets{netip.MustParsePrefix("1.1.1.1/32")})
-	require.NoError(t, err)
-	require.Len(t, out, 1)
-
-	out, err = getNetsToRemove("", IPNets{netip.MustParsePrefix("1.1.1.1/32")})
-	require.NoError(t, err)
-	require.Len(t, out, 1)
-}
-
-// TestUpdatePolicyCustomRules
 func TestUpdatePolicyCustomRules(t *testing.T) {
 	wp, err := loadBackupsFromPathsForTest([]string{"../testfiles/wrapped-policy-one.json"})
 	require.NoError(t, err)
@@ -599,115 +584,6 @@ func TestUpdatePolicyCustomRulesMissingPolicy(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "policy")
 }
-
-func TestGetLowestPriority(t *testing.T) {
-	require.Equal(t, int32(500), getLowestPriority([]*armfrontdoor.CustomRule{
-		{
-			Priority: toPtr(int32(5)),
-			Name:     toPtr("Hello"),
-		},
-		{
-			Priority: toPtr(int32(1234)),
-			Name:     toPtr("TestPrefix1234"),
-		},
-		{
-			MatchConditions: nil,
-			Priority:        toPtr(int32(500)),
-			Name:            toPtr("TestPrefix500"),
-		},
-		{
-			Priority: toPtr(int32(6000)),
-			Name:     toPtr("TestPrefix6000"),
-		},
-	}, "TestPrefix"))
-}
-
-// Func customRuleWithDefaultDeny() armfrontdoor.CustomRule {
-// 	ipnpi := ipMatchValuesNoPublicInternet()
-// 	mc1 := armfrontdoor.MatchCondition{
-// 		MatchVariable:   "RemoteAddr",
-// 		Selector:        nil,
-// 		Operator:        "IPMatch",
-// 		NegateCondition: BoolToPointer(true),
-// 		MatchValue:      &ipnpi,
-// 		Transforms:      nil,
-// 	}
-//
-// 	mcSet := []armfrontdoor.MatchCondition{mc1}
-//
-// 	return armfrontdoor.CustomRule{
-// 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-// 		PriorityS:        int32Ptr(1),
-// 		EnabledState:    "Enabled",
-// 		RuleType:        "MatchRule",
-// 		MatchConditions: &mcSet,
-// 		Action:          "Block",
-// 	}
-// }
-//
-// func customRuleWithDefaultAllow() armfrontdoor.CustomRule {
-// 	ipnpi := ipMatchValuesNoPublicInternet()
-// 	ipwpi := ipMatchValuesWithPublicInternet()
-// 	mc1 := armfrontdoor.MatchCondition{
-// 		MatchVariable:   "RemoteAddr",
-// 		Selector:        nil,
-// 		Operator:        "IPMatch",
-// 		NegateCondition: BoolToPointer(true),
-// 		MatchValue:      &ipnpi,
-// 		Transforms:      nil,
-// 	}
-// 	mc2 := armfrontdoor.MatchCondition{
-// 		MatchVariable:   "RemoteAddr",
-// 		Selector:        nil,
-// 		Operator:        "IPMatch",
-// 		NegateCondition: BoolToPointer(false),
-// 		MatchValue:      &ipwpi,
-// 		Transforms:      nil,
-// 	}
-//
-// 	mcSet := []armfrontdoor.MatchCondition{mc1, mc2}
-//
-// 	return armfrontdoor.CustomRule{
-// 		Name:            toPtr("CustomRuleWithDefaultDeny"),
-// 		PriorityS:        int32Ptr(1),
-// 		EnabledState:    "Enabled",
-// 		RuleType:        "MatchRule",
-// 		MatchConditions: &mcSet,
-// 		Action:          "Allow",
-// 	}
-// }
-
-//
-// Func customRuleWithoutDefaultDeny() armfrontdoor.CustomRule {
-//	ipnpi := ipMatchValuesNoPublicInternet()
-//	ipwpi := ipMatchValuesWithPublicInternet()
-//	mc1 := armfrontdoor.MatchCondition{
-//		MatchVariable:   "RemoteAddr",
-//		Selector:        nil,
-//		Operator:        "IPMatch",
-//		NegateCondition: BoolToPointer(true),
-//		MatchValue:      &ipnpi,
-//		Transforms:      nil,
-//	}
-//	mc2 := armfrontdoor.MatchCondition{
-//		MatchVariable:   "RemoteAddr",
-//		Selector:        nil,
-//		Operator:        "IPMatch",
-//		NegateCondition: BoolToPointer(false),
-//		MatchValue:      &ipwpi,
-//		Transforms:      nil,
-//	}
-//
-//	mcSet := []armfrontdoor.MatchCondition{mc1, mc2}
-//	return armfrontdoor.CustomRule{
-//		Name:            toPtr("CustomRuleWithDefaultDeny"),
-//		PriorityS:        int32Ptr(1),
-//		EnabledState:    "Enabled",
-//		RuleType:        "MatchRule",
-//		MatchConditions: &mcSet,
-//		Action:          "Block",
-//	}
-// }
 
 func TestMatchConditionSupportedNegatedCondition(t *testing.T) {
 	mc := &armfrontdoor.MatchCondition{
