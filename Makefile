@@ -48,6 +48,13 @@ lint:
 
 ci: lint test
 
+# where `make install` puts the binary
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+# sudo only when neither the target directory nor its parent is writable: a
+# not-yet-created ~/.local/bin needs no privileges, a root-owned /usr/local/bin does
+SUDO := $(shell test -w "$(BINDIR)" 2>/dev/null || test -w "$(dir $(BINDIR))" 2>/dev/null || echo sudo)
+
 BUILD_TAG := $(shell git describe --tags 2>/dev/null)
 BUILD_SHA := $(shell git rev-parse --short HEAD)
 BUILD_DATE := $(shell date -u '+%Y/%m/%d:%H:%M:%S')
@@ -69,11 +76,25 @@ build-all:
 build-linux:
 	GOOS=linux CGO_ENABLED=0 GOARCH=amd64 go build -ldflags '-s -w -X "main.version=[$(BUILD_TAG)-$(BUILD_SHA)] $(BUILD_DATE) UTC"' -o ".local_dist/azwaf_linux_amd64" cmd/azwaf/*.go
 
-mac-install: build
-	install .local_dist/azwaf /usr/local/bin/azwaf
+# install builds azwaf and installs it to $(BINDIR), on both macOS and Linux.
+# Override the location with: make install PREFIX=~/.local
+#
+# sudo is used only when $(BINDIR) is not writable by the current user, which is
+# the difference between the two platforms in practice: /usr/local/bin is
+# usually user-owned on macOS with Homebrew, and root-owned on Linux.
+install: build
+	$(SUDO) install -d "$(BINDIR)"
+	$(SUDO) install -m 0755 .local_dist/azwaf "$(BINDIR)/azwaf"
+	@echo "installed $(BINDIR)/azwaf"
 
-linux-install: build
-	sudo install .local_dist/azwaf /usr/local/bin/azwaf
+uninstall:
+	$(SUDO) rm -f "$(BINDIR)/azwaf"
+	@echo "removed $(BINDIR)/azwaf"
+
+# kept so anything scripted against the old names keeps working
+mac-install: install
+
+linux-install: install
 
 find-updates:
 	go list -u -m -json all | go-mod-outdated -update -direct
@@ -86,5 +107,7 @@ gosec:
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: install uninstall mac-install linux-install build build-all clean test lint fmt ci
 
 .DEFAULT_GOAL := build
