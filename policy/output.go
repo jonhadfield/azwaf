@@ -2,11 +2,9 @@ package policy
 
 import (
 	"encoding/json"
-	errors2 "errors"
 	"fmt"
 	"hash/adler32"
 	"os"
-	"os/exec"
 	"reflect"
 	"slices"
 	"sort"
@@ -19,8 +17,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/alexeyco/simpletable"
 	"github.com/gookit/color"
-
-	"github.com/jonhadfield/findexec"
 
 	"github.com/jonhadfield/azwaf/session"
 )
@@ -1491,65 +1487,16 @@ func wrapLine(line string, max int) []string {
 	return lines
 }
 
+// DisplayStringDiffWithDiffTool prints a unified diff of the two strings.
 func DisplayStringDiffWithDiffTool(orig, updated string) error {
-	origPath, err := os.CreateTemp("", "*")
+	out, err := diffTempFiles([]byte(orig), []byte(updated))
 	if err != nil {
 		return err
-	}
-
-	defer func() {
-		_ = os.Remove(origPath.Name())
-	}()
-
-	newPath, err := os.CreateTemp("", "*")
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		_ = os.Remove(newPath.Name())
-	}()
-
-	_, err = origPath.WriteString(orig)
-	if err != nil {
-		return err
-	}
-
-	_, err = newPath.WriteString(updated)
-	if err != nil {
-		return err
-	}
-
-	diffBinary := findexec.Find("diff", "")
-	if diffBinary == "" {
-		return errors2.New("failed to find compare binary")
-	}
-
-	// #nosec
-	cmd := exec.Command(
-		diffBinary,
-		"-u",
-		origPath.Name(),
-		newPath.Name(),
-	)
-
-	out, oErr := cmd.CombinedOutput()
-
-	var exitCode int
-
-	if oErr != nil {
-		if exitError, ok := oErr.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
-		}
-	}
-
-	if exitCode == diffErrorExitCode {
-		return fmt.Errorf("failed to compare policies")
 	}
 
 	fmt.Println(string(out))
 
-	return err
+	return nil
 }
 
 func TrimString(in string, maxLen int, suffix string) string {
