@@ -261,10 +261,37 @@ func partitionRIDsByWAFType(rids []string) (fd, appgw []string) {
 }
 
 // BackupPolicy takes a WrappedPolicy as input and creates a json file that can later be restored
-func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
-	funcName := GetFunctionName()
-	now := time.Now().UTC()
-	dateString := now.UTC().Format("20060102150405")
+// BackupPolicy writes a Front Door policy, with its metadata, as a json file.
+func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
+	return backupWrapped(p, backupDestination{
+		blobClient:    blobClient,
+		containerName: containerName,
+		path:          path,
+		failFast:      failFast,
+		quiet:         quiet,
+	})
+}
+
+// backupSubject is what backupWrapped needs from either policy type. The two
+// wrapped types share no fields as far as Go is concerned, so the metadata is
+// reached through this rather than duplicating the function per type.
+type backupSubject interface {
+	// prepareForBackup stamps the backup date and, where it is not already
+	// set, the default WAF type, returning what is needed to name and
+	// describe the backup.
+	prepareForBackup(now time.Time) backupInfo
+}
+
+// backupInfo is the metadata a backup is named and logged with.
+type backupInfo struct {
+	// kind names the policy type for the status line: "Policy" or "AppGW Policy".
+	kind           string
+	name           string
+	subscriptionID string
+	resourceGroup  string
+}
+
+func (p *WrappedPolicy) prepareForBackup(now time.Time) backupInfo {
 	p.Date = now
 
 	// tag every backup with its WAF type so restore can dispatch correctly.
@@ -273,9 +300,51 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 		p.WAFType = WAFTypeFrontDoor
 	}
 
+	return backupInfo{
+		kind:           "Policy",
+		name:           p.Name,
+		subscriptionID: p.SubscriptionID,
+		resourceGroup:  p.ResourceGroup,
+	}
+}
+
+func (p *WrappedAppGWPolicy) prepareForBackup(now time.Time) backupInfo {
+	p.Date = now
+
+	if p.WAFType == "" {
+		p.WAFType = WAFTypeAppGW
+	}
+
+	return backupInfo{
+		kind:           "AppGW Policy",
+		name:           p.Name,
+		subscriptionID: p.SubscriptionID,
+		resourceGroup:  p.ResourceGroup,
+	}
+}
+
+// backupDestination is where a backup is written: a local directory, a blob
+// container, or both. These five travelled together as positional arguments
+// through every backup function.
+type backupDestination struct {
+	blobClient    *azblob.Client
+	containerName string
+	path          string
+	failFast      bool
+	quiet         bool
+}
+
+// backupWrapped serialises a policy and writes it to the requested
+// destinations. It backs both BackupPolicy and BackupAppGWPolicy, which
+// previously held near-identical copies of it.
+func backupWrapped(p backupSubject, dest backupDestination) error {
+	funcName := GetFunctionName()
+	now := time.Now().UTC()
+	info := p.prepareForBackup(now)
+
 	var cwd string
 
-	if !quiet {
+	if !dest.quiet {
 		var oerr error
 
 		cwd, oerr = os.Getwd()
@@ -283,48 +352,55 @@ func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName str
 			return oerr
 		}
 
-		msg := fmt.Sprintf("backing up Policy: %s", p.Name)
-		statusOutput := PadToWidth(msg, " ", 0, true)
-		fd := int(os.Stdout.Fd())
-
-		width, _, terr := terminal.GetSize(fd)
-		if terr != nil {
-			// stdout is not a terminal (piped output, tests): use a default
-			// width rather than failing the backup
-			width = defaultTerminalWidth
-		}
-
-		if len(statusOutput) == width {
-			fmt.Print(statusOutput[0:width-3] + "   \r")
-		} else {
-			fmt.Print(statusOutput)
-		}
+		printBackupStatus(fmt.Sprintf("backing up %s: %s", info.kind, info.name))
 	}
 
-	pj, oerr := json.MarshalIndent(p, "", "    ")
-	if oerr != nil {
-		if failFast {
-			return oerr
+	pj, err := json.MarshalIndent(p, "", "    ")
+	if err != nil {
+		if dest.failFast {
+			return err
 		}
 
-		logging.Errorf("failed to marshal policy %s: %s", p.Name, oerr)
+		logging.Errorf("failed to marshal %s %s: %s", info.kind, info.name, err)
 
 		// nothing valid to write for this policy; skip it rather than
 		// uploading empty content
 		return nil
 	}
 
-	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
+	fName := fmt.Sprintf("%s+%s+%s+%s.json", info.subscriptionID, info.resourceGroup, info.name,
+		now.Format("20060102150405"))
 
 	// write locally first: the local copy is the cheaper and more reliable of
 	// the two destinations, and must not be lost to an upload failure
-	if path != "" {
-		if oerr = writeBackupToFile(pj, cwd, fName, quiet, path); oerr != nil {
-			return fmt.Errorf("%s - %w", funcName, oerr)
+	if dest.path != "" {
+		if err = writeBackupToFile(pj, cwd, fName, dest.quiet, dest.path); err != nil {
+			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
-	return uploadBackupToContainer(pj, fName, containerName, blobClient, failFast, quiet)
+	return uploadBackupToContainer(pj, fName, dest.containerName, dest.blobClient, dest.failFast, dest.quiet)
+}
+
+// printBackupStatus writes the progress line, trimming it when it exactly fills
+// the terminal width.
+func printBackupStatus(msg string) {
+	statusOutput := PadToWidth(msg, " ", 0, true)
+
+	width, _, err := terminal.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		// stdout is not a terminal (piped output, tests): use a default
+		// width rather than failing the backup
+		width = defaultTerminalWidth
+	}
+
+	if len(statusOutput) == width {
+		fmt.Print(statusOutput[0:width-3] + "   \r")
+
+		return
+	}
+
+	fmt.Print(statusOutput)
 }
 
 // uploadBackupToContainer uploads a serialised backup to blob storage. A nil
@@ -410,67 +486,15 @@ func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, contain
 
 // BackupAppGWPolicy is the AppGW analogue of BackupPolicy. It writes the
 // supplied WrappedAppGWPolicy as JSON to disk and/or Azure Blob Storage.
+// BackupAppGWPolicy is the Application Gateway equivalent of BackupPolicy.
 func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
-	funcName := GetFunctionName()
-	now := time.Now().UTC()
-	dateString := now.UTC().Format("20060102150405")
-	p.Date = now
-
-	if p.WAFType == "" {
-		p.WAFType = WAFTypeAppGW
-	}
-
-	var cwd string
-
-	if !quiet {
-		var oerr error
-
-		cwd, oerr = os.Getwd()
-		if oerr != nil {
-			return oerr
-		}
-
-		msg := fmt.Sprintf("backing up AppGW Policy: %s", p.Name)
-		statusOutput := PadToWidth(msg, " ", 0, true)
-		fd := int(os.Stdout.Fd())
-
-		width, _, terr := terminal.GetSize(fd)
-		if terr != nil {
-			// stdout is not a terminal (piped output, tests): use a default
-			// width rather than failing the backup
-			width = defaultTerminalWidth
-		}
-
-		if len(statusOutput) == width {
-			fmt.Print(statusOutput[0:width-3] + "   \r")
-		} else {
-			fmt.Print(statusOutput)
-		}
-	}
-
-	pj, oerr := json.MarshalIndent(p, "", "    ")
-	if oerr != nil {
-		if failFast {
-			return oerr
-		}
-
-		logging.Errorf("failed to marshal AppGW policy %s: %s", p.Name, oerr)
-
-		// nothing valid to write for this policy; skip it rather than
-		// uploading empty content
-		return nil
-	}
-
-	fName := fmt.Sprintf("%s+%s+%s+%s.json", p.SubscriptionID, p.ResourceGroup, p.Name, dateString)
-
-	// local first, for the reasons given in BackupPolicy
-	if path != "" {
-		if err := writeBackupToFile(pj, cwd, fName, quiet, path); err != nil {
-			return fmt.Errorf("%s - %w", funcName, err)
-		}
-	}
-
-	return uploadBackupToContainer(pj, fName, containerName, blobClient, failFast, quiet)
+	return backupWrapped(p, backupDestination{
+		blobClient:    blobClient,
+		containerName: containerName,
+		path:          path,
+		failFast:      failFast,
+		quiet:         quiet,
+	})
 }
 
 func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
