@@ -367,7 +367,9 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     ~~`marshalPolicy` / `marshalAppGWOriginal`~~ *— merged into `marshalOriginal`. See the note
     below on what that trades*; `getIPNetsForPrefix` /
     `getIPNetsForRuleIPMatchConditions`; `rebuildIPMatchConditions` / `prepareMatchConditions`;
-    the four client getters in `session/clients.go`; the diff-via-temp-file logic in
+    ~~the four client getters in `session/clients.go`~~ *— collapsed onto a generic
+    `getOrCreateClient`, 136 lines removed against 54 added. See the note below on what it
+    normalised*; the diff-via-temp-file logic in
     `policy/output.go:1401` vs `policy/compare.go:18`.
 
   *Note on `marshalOriginal`: the two it replaced were the same switch over **disjoint** type
@@ -377,6 +379,24 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   site each, and both call sites pass a concrete type, so the split was not buying safety the
   compiler was not already providing. If that type discipline is wanted back, the two thin
   wrappers are cheap to reinstate over the shared switch.*
+
+  *Note on the client getters: the four had drifted, and the duplication was hiding it. None
+  applied the same guards:*
+
+  | Getter | nil session | empty subscription id | retry/telemetry options |
+  | --- | --- | --- | --- |
+  | `GetFrontDoorPoliciesClient` | yes | no | yes |
+  | `GetAppGWPoliciesClient` | yes | yes | yes |
+  | `GetManagedRuleSetsClient` | no | yes | no |
+  | `GetFrontDoorsClient` | no | no | no |
+
+  *Collapsing normalised all three columns, which is a behaviour change in three ways: two
+  getters return an error on a nil session where they previously panicked; two reject an empty
+  subscription id where they previously built a client that could never work; and two now get the
+  3-retry, 30-second-max-delay, telemetry-tagged options the other two already had, in place of
+  SDK defaults. The last is the one to be aware of — it changes how those two clients behave
+  against Azure — but the divergence looked accidental rather than designed. Error text now names
+  the client kind rather than the Go function; nothing asserted the old wording.*
 
 - [ ] **Speculative generality / dead code** — declared, never used outside their own
   declaration: `LoadBackupsFromPaths` + `LoadBackupsFromPath` (`policy/data.go:202`, `:225`,

@@ -5,54 +5,21 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
-	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
 
-func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
-	funcName := helpers.GetFunctionName()
-	startTime := time.Now()
-
-	logging.Debugf("%s | Starting GetFrontDoorPoliciesClient for subscription: %s", funcName, subID)
-
-	if s == nil {
-		return errors.New("session is nil")
-	}
-
-	if s.FrontDoorPoliciesClients == nil {
-		s.FrontDoorPoliciesClients = make(map[string]*armfrontdoor.PoliciesClient)
-	}
-
-	if s.FrontDoorPoliciesClients[subID] != nil {
-		logging.Debugf("%s | Re-using existing client (took: %v)", funcName, time.Since(startTime))
-		return nil
-	}
-
-	logging.Debugf("%s | Creating new policies client for subscription: %s", funcName, subID)
-
-	if s.ClientCredential == nil {
-		credStartTime := time.Now()
-		logging.Debugf("%s | Getting client credentials...", funcName)
-		err = s.GetClientCredential()
-		credDuration := time.Since(credStartTime)
-		logging.Debugf("%s | Client credential retrieval took: %v", funcName, credDuration)
-		if err != nil {
-			logging.Errorf("%s | Failed to get client credentials: %v", funcName, err)
-			return
-		}
-	}
-
-	clientCreateStartTime := time.Now()
-	logging.Debugf("%s | Creating Azure Frontdoor client with optimized settings...", funcName)
-
-	// Create client options with custom retry and timeout settings
-	clientOptions := &arm.ClientOptions{
+// azwafClientOptions is the retry and telemetry configuration every Azure
+// client is built with. Two of the four getters passed nil and so ran on SDK
+// defaults, which looked accidental rather than intended.
+func azwafClientOptions() *arm.ClientOptions {
+	return &arm.ClientOptions{
 		ClientOptions: policy.ClientOptions{
 			Retry: policy.RetryOptions{
 				MaxRetries:    3,
@@ -64,41 +31,27 @@ func (s *Session) GetFrontDoorPoliciesClient(subID string) (err error) {
 			},
 		},
 	}
-
-	frontDoorPoliciesClient, merr := armfrontdoor.NewPoliciesClient(subID, s.ClientCredential, clientOptions)
-	clientCreateDuration := time.Since(clientCreateStartTime)
-
-	if merr != nil {
-		logging.Errorf("%s | Failed to create client after %v: %s", funcName, clientCreateDuration, merr.Error())
-		return fmt.Errorf("%s - %s", funcName, merr.Error())
-	}
-
-	s.FrontDoorPoliciesClients[subID] = frontDoorPoliciesClient
-	totalDuration := time.Since(startTime)
-	logging.Debugf("%s | Successfully created client in %v (client creation: %v)", funcName, totalDuration, clientCreateDuration)
-
-	return
 }
 
-// GetAppGWPoliciesClient creates (or returns a cached) Application Gateway WAF
-// policies client for the given subscription.
-func (s *Session) GetAppGWPoliciesClient(subID string) error {
-	funcName := helpers.GetFunctionName()
-
-	if s == nil {
-		return errors.New("session is nil")
-	}
-
+// getOrCreateClient returns early when a client for subID is already cached and
+// otherwise builds one, storing it for next time.
+//
+// The four getters each had a copy of this, and had drifted: two checked for a
+// nil session, two checked for an empty subscription id, and two passed client
+// options. None checked all three.
+func getOrCreateClient[T any](s *Session, subID, kind string, clients *map[string]*T,
+	newClient func(string, azcore.TokenCredential, *arm.ClientOptions) (*T, error),
+) error {
 	if subID == "" {
-		return fmt.Errorf("%s - subscription id is mandatory", funcName)
+		return fmt.Errorf("%s client - subscription id is mandatory", kind)
 	}
 
-	if s.AppGWPoliciesClients == nil {
-		s.AppGWPoliciesClients = make(map[string]*armnetwork.WebApplicationFirewallPoliciesClient)
+	if *clients == nil {
+		*clients = make(map[string]*T)
 	}
 
-	if s.AppGWPoliciesClients[subID] != nil {
-		logging.Debugf("re-using application gateway waf policies client for subscription: %s", subID)
+	if (*clients)[subID] != nil {
+		logging.Debugf("re-using %s client for subscription: %s", kind, subID)
 
 		return nil
 	}
@@ -109,65 +62,46 @@ func (s *Session) GetAppGWPoliciesClient(subID string) error {
 		}
 	}
 
-	logging.Debugf("creating application gateway waf policies client for subscription: %s", subID)
+	logging.Debugf("creating %s client for subscription: %s", kind, subID)
 
-	clientOptions := &arm.ClientOptions{
-		ClientOptions: policy.ClientOptions{
-			Retry: policy.RetryOptions{
-				MaxRetries:    3,
-				RetryDelay:    time.Second,
-				MaxRetryDelay: time.Second * 30,
-			},
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: "azwaf",
-			},
-		},
+	c, err := newClient(subID, s.ClientCredential, azwafClientOptions())
+	if err != nil {
+		return fmt.Errorf("%s client - %w", kind, err)
 	}
 
-	c, merr := armnetwork.NewWebApplicationFirewallPoliciesClient(subID, s.ClientCredential, clientOptions)
-	if merr != nil {
-		return fmt.Errorf("%s - %s", funcName, merr.Error())
-	}
-
-	s.AppGWPoliciesClients[subID] = c
+	(*clients)[subID] = c
 
 	return nil
 }
 
-func (s *Session) GetManagedRuleSetsClient(subID string) (err error) {
-	funcName := helpers.GetFunctionName()
-
-	if subID == "" {
-		return fmt.Errorf("%s - subscription id is mandatory", funcName)
+// GetFrontDoorPoliciesClient caches a Front Door WAF policies client per subscription.
+func (s *Session) GetFrontDoorPoliciesClient(subID string) error {
+	// checked here rather than in the helper: taking the address of a field on
+	// a nil session panics before the call is made
+	if s == nil {
+		return errors.New("session is nil")
 	}
 
-	if s.FrontDoorsManagedRuleSetsClients == nil {
-		s.FrontDoorsManagedRuleSetsClients = make(map[string]*armfrontdoor.ManagedRuleSetsClient)
+	return getOrCreateClient(s, subID, "front door policies", &s.FrontDoorPoliciesClients,
+		armfrontdoor.NewPoliciesClient)
+}
+
+// GetAppGWPoliciesClient caches an Application Gateway WAF policies client per subscription.
+func (s *Session) GetAppGWPoliciesClient(subID string) error {
+	if s == nil {
+		return errors.New("session is nil")
 	}
 
-	if s.FrontDoorsManagedRuleSetsClients[subID] != nil {
-		logging.Debugf("re-using arm front door rules sets client for subscription: %s", subID)
+	return getOrCreateClient(s, subID, "application gateway waf policies", &s.AppGWPoliciesClients,
+		armnetwork.NewWebApplicationFirewallPoliciesClient)
+}
 
-		return nil
+// GetManagedRuleSetsClient caches a Front Door managed rule sets client per subscription.
+func (s *Session) GetManagedRuleSetsClient(subID string) error {
+	if s == nil {
+		return errors.New("session is nil")
 	}
 
-	logging.Debugf("creating arm front door managed rule sets client for subscription: %s", subID)
-
-	if s.ClientCredential == nil {
-		err = s.GetClientCredential()
-		if err != nil {
-			return
-		}
-	}
-
-	logging.Debugf("creating new manage rule sets client for sub: %s", subID)
-
-	frontDoorManagedRuleSetsClient, merr := armfrontdoor.NewManagedRuleSetsClient(subID, s.ClientCredential, nil)
-	if merr != nil {
-		return fmt.Errorf("%s - %w", helpers.GetFunctionName(), merr)
-	}
-
-	s.FrontDoorsManagedRuleSetsClients[subID] = frontDoorManagedRuleSetsClient
-
-	return
+	return getOrCreateClient(s, subID, "front door managed rule sets", &s.FrontDoorsManagedRuleSetsClients,
+		armfrontdoor.NewManagedRuleSetsClient)
 }
