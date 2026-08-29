@@ -89,9 +89,18 @@ git clone https://github.com/jonhadfield/azwaf.git
 cd azwaf
 
 make build           # produces .local_dist/azwaf
-make mac-install     # installs to /usr/local/bin (macOS)
-make linux-install   # installs to /usr/local/bin (Linux)
+make install         # builds and installs to /usr/local/bin (macOS and Linux)
+make uninstall       # removes it again
 ```
+
+`install` uses `sudo` only when the target directory needs it, so a user-local
+install works without privileges:
+
+```bash
+make install PREFIX=~/.local
+```
+
+`mac-install` and `linux-install` remain as aliases for `install`.
 
 ### Cross-compile
 
