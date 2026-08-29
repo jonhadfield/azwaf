@@ -141,34 +141,18 @@ func (s *Session) InitialiseCache() {
 
 // GetFrontDoorsClient creates a front doors client for the given Subscription and stores it in the provided session.
 // If an Authorizer instance is missing, it will make a call to create it and then store in the session also.
+// GetFrontDoorsClient caches a Front Doors client per subscription.
 func (s *Session) GetFrontDoorsClient(subID string) (c armfrontdoor.FrontDoorsClient, err error) {
-	if s.FrontDoorsClients == nil {
-		s.FrontDoorsClients = make(map[string]*armfrontdoor.FrontDoorsClient)
+	if s == nil {
+		return c, errors.New("session is nil")
 	}
 
-	if s.FrontDoorsClients[subID] != nil {
-		logging.Debugf("re-using front doors client for Subscription: %s", subID)
-
-		return *s.FrontDoorsClients[subID], nil
+	if err = getOrCreateClient(s, subID, "front doors", &s.FrontDoorsClients,
+		armfrontdoor.NewFrontDoorsClient); err != nil {
+		return c, err
 	}
 
-	if s.ClientCredential == nil {
-		err = s.GetClientCredential()
-		if err != nil {
-			return
-		}
-	}
-
-	logging.Debugf("creating front doors client")
-
-	frontDoorsClient, merr := armfrontdoor.NewFrontDoorsClient(subID, s.ClientCredential, nil)
-	if merr != nil {
-		return c, fmt.Errorf("%s - %w", helpers.GetFunctionName(), merr)
-	}
-
-	s.FrontDoorsClients[subID] = frontDoorsClient
-
-	return
+	return *s.FrontDoorsClients[subID], nil
 }
 
 func (s *Session) GetClientCredential() error {
