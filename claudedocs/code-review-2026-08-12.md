@@ -46,7 +46,7 @@ than defects.
 | P3 | S7 `--quiet` documented as global, honoured by `backup` only | Spec | **doc** | fixed |
 | — | C. Nil-pointer safety across five paths | Spec | code | fixed |
 | — | D. Accessor layer for optional policy fields | Standards | code | fixed |
-| P4 | A-B duplicated code (11 clusters) | Standards | code | 3 collapsed, rest open |
+| P4 | A-B duplicated code (11 clusters) | Standards | code | **all collapsed** |
 | P4 | A-B dead code / speculative generality | Standards | code | open |
 | P4 | A-B primitive obsession, middle man, data clumps | Standards | code | open |
 
@@ -365,8 +365,11 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     Neither had any test, so the cache path, the agreement between the two return shapes and the
     unknown-hash error were pinned first.*;
     ~~`marshalPolicy` / `marshalAppGWOriginal`~~ *— merged into `marshalOriginal`. See the note
-    below on what that trades*; `getIPNetsForPrefix` /
-    `getIPNetsForRuleIPMatchConditions`; `rebuildIPMatchConditions` / `prepareMatchConditions`;
+    below on what that trades*;
+    ~~`getIPNetsForPrefix` / `getIPNetsForRuleIPMatchConditions`~~ and
+    ~~`rebuildIPMatchConditions` / `prepareMatchConditions`~~ *— the last IP-nets pair, collapsed
+    onto `ipNetsFromRule` and `matchConditionsFromNets`; 91 lines removed against 67 added. Both
+    pairs hid a defect, described below*;
     ~~the four client getters in `session/clients.go`~~ *— collapsed onto a generic
     `getOrCreateClient`, 136 lines removed against 54 added. See the note below on what it
     normalised*; ~~the diff-via-temp-file logic in
@@ -378,6 +381,34 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     `compare` surfaced it. It now surfaces it too. Removing the duplicated block orphaned three
     imports in `output.go`, one of which was the `errors2` alias listed under mysterious names
     below, so that is gone as well.*
+
+  *Note on the IP-nets pair. Neither collapse was cosmetic; both differences turned out to
+  matter.*
+
+  *The two collectors walked the same match conditions and split them the same way, differing
+  only in what an unsupported (non-IP) condition meant: `getIPNetsForPrefix` refused the whole
+  rule, `getIPNetsForRuleIPMatchConditions` skipped it. That difference is deliberate and is
+  preserved as the `skipUnsupported` argument to `ipNetsFromRule` — the skipping caller reads an
+  existing rule whose non-IP conditions are carried over separately by `getNonIPMatchConditions`,
+  while the erroring caller is building a rule from scratch and cannot represent a mixed one.
+  Both dereferenced `NegateCondition` and each `MatchValue` unguarded, the same nil-panic class
+  swept elsewhere in this review; a condition with no negate flag set panicked, confirmed before
+  the change. An absent flag now reads as not negated, and a nil match value becomes an empty
+  string that fails prefix parsing with an error rather than a panic. The unused
+  `action *armfrontdoor.ActionType` parameter is nil-checked and then never read — that is
+  unchanged, since it is part of an exported-adjacent signature and removing it is a separate
+  call.*
+
+  *The two generation tails were identical apart from one guard. `prepareMatchConditions`
+  rejected a negated set of 599 or more; `rebuildIPMatchConditions` did not, and needed it just
+  as much. Every generated rule repeats the entire negated set, so the positive budget is
+  `MaxIPMatchValues - len(negated)`. Once that reaches zero the chunker stops splitting — it
+  flushes early only when a chunk **reaches** its budget, and a chunk holding at least one entry
+  never equals zero — so it emits a single positive condition holding every net. Measured on the
+  old code: 600 negated plus 2000 positive nets returned no error and one match condition with
+  2000 values, more than triple Azure's 600-per-condition maximum. The shared
+  `matchConditionsFromNets` applies the guard to both, so that input now errors. The literal
+  `599` is expressed as `MaxIPMatchValues-1`, which is the same number and says why.*
 
   *Note on `marshalOriginal`: the two it replaced were the same switch over **disjoint** type
   sets — Front Door types in one, Application Gateway in the other — so merging them widens what
@@ -915,5 +946,18 @@ been reverted now the code is fixed (S15), so the README's original claim holds 
 
 ### Deliberately not "fixed" in the docs
 
-Every finding on both axes has now been addressed in code or documentation, other than the P4
-smell clusters, which are refactors rather than defects.
+Every finding on both axes has now been addressed in code or documentation. All eleven
+duplicated-code clusters are collapsed. What remains open under P4 is the dead code /
+speculative generality and the primitive obsession / middle man / data clumps groups, which are
+refactors rather than defects.
+
+The duplication pass was framed as tidying and did not stay that way. Six of the eleven clusters
+were concealing a real difference between their two halves: two nil panics in the ProcessScope
+pair, two more in the session client getters along with a wire-behaviour divergence where two
+clients silently used SDK defaults instead of the project's retry and telemetry options, a
+swallowed diff failure in the display path, two nil panics in the IP-nets collectors, and a
+missing size guard that let `rebuildIPMatchConditions` emit a match condition more than three
+times Azure's per-condition limit without complaint. None of these were visible as duplication;
+they were visible only once the two halves had to be written as one. Roughly 850 lines of tests
+were added to code that had none, and every behaviour change above was confirmed against the old
+code before it was made.
