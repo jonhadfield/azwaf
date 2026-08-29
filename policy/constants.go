@@ -1,7 +1,5 @@
 package policy
 
-const actionBlock = "Block"
-
 var ValidRuleExclusionMatchVariables = [...]string{
 	"RequestCookieNames",
 	"RequestHeaderNames",
