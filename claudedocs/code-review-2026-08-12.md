@@ -47,7 +47,7 @@ than defects.
 | — | C. Nil-pointer safety across five paths | Spec | code | fixed |
 | — | D. Accessor layer for optional policy fields | Standards | code | fixed |
 | P4 | A-B duplicated code (11 clusters) | Standards | code | **all collapsed** |
-| P4 | A-B dead code / speculative generality | Standards | code | open |
+| P4 | A-B dead code / speculative generality | Standards | code | **fixed** |
 | P4 | A-B primitive obsession, middle man, data clumps | Standards | code | open |
 
 Three findings turned out to be wrong on inspection and are corrected in place
@@ -436,7 +436,7 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   against Azure — but the divergence looked accidental rather than designed. Error text now names
   the client kind rather than the Go function; nothing asserted the old wording.*
 
-- [ ] **Speculative generality / dead code** — declared, never used outside their own
+- [x] **Speculative generality / dead code** — declared, never used outside their own
   declaration: `LoadBackupsFromPaths` + `LoadBackupsFromPath` (`policy/data.go:202`, `:225`,
   superseded by `LoadAllBackupsFromPaths`), `BotRuleSetStatsOutput`, `LogIPsInput`,
   `WrappedManagedRuleSet`, `Action`, `MaxConditionsPerCustomRule`, `errPolicyNotDefined`,
@@ -510,6 +510,39 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   *`CustomRuleHasDefaultDeny` was **kept** despite having no production caller once
   `HasDefaultDeny` went: it is exported, has real tests, and is the building block the remaining
   TODO needs.*
+
+  *Closed with a second pass driven by `deadcode -test ./...` rather than by re-reading the
+  original list, since the collapses since had moved things. It reported eight unreachable
+  functions in two clusters, and both are now gone.*
+
+  *`RemoveNets` and its closure: `ApplyRemoveAddrs`, `loadPolicyNets`, `buildTrimmedNetworks`,
+  `mergeCustomRules`, `updatePolicyRules`, the four `RemoveNetsInput` / `ApplyRemoveNetsInput` /
+  `ApplyRemoveNetsResult(s)` types, and `getNetsToRemove` / `getLowestPriority`, which no
+  production code called — only their own tests kept them reachable. 287 lines from
+  `custom_rules.go`, 124 from its test file, the latter including an 87-line commented-out
+  `customRuleWithDefaultDeny` fixture.*
+
+  *Worth recording why this needed a decision rather than a sweep. `RemoveNets` was flagged dead
+  only because it had no test: its siblings in the same exported IP-nets API,
+  `GenCustomRulesFromIPNets` and `UpdatePolicyCustomRulesIPMatchPrefixes`, are equally CLI-less
+  but are called from tests, so reachability analysis spares them. The "dead" label was
+  therefore tracking test coverage, not usefulness, and the alternatives were to delete it or to
+  write the missing test and keep all three on the same footing. Removed on the owner's
+  decision; the module is v0.x, so semver permits it, and this matches the earlier call on the
+  exported constants.*
+
+  *`Store.SetFrontDoors` and `Store.SetManagedRuleSetDefinitions` in `internal/azfakes`: seeders
+  for fields only the fake's two list endpoints read. With no caller those endpoints could only
+  ever answer empty, so the fields and the now-pointless locking around them went with the
+  setters, and both handlers say plainly that the list is always empty. The package is
+  `internal/`, so no external consumer was possible.*
+
+  *One knock-on. `actionBlock` had been explicitly cleared as live in this section on the
+  strength of a single reference at `custom_rules.go:336` — which sat inside the deleted
+  closure. It is dead now and is gone too, caught by `unused` rather than by inspection.*
+
+  *`deadcode -test ./...` now reports nothing across the module. `it/` was checked with
+  `-tags integration` again, since build-tagged callers are invisible to both tools.*
 
 - [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,
@@ -947,9 +980,9 @@ been reverted now the code is fixed (S15), so the README's original claim holds 
 ### Deliberately not "fixed" in the docs
 
 Every finding on both axes has now been addressed in code or documentation. All eleven
-duplicated-code clusters are collapsed. What remains open under P4 is the dead code /
-speculative generality and the primitive obsession / middle man / data clumps groups, which are
-refactors rather than defects.
+duplicated-code clusters are collapsed, and the dead code / speculative generality group is
+closed with `deadcode` reporting nothing across the module. What remains open under P4 is the
+primitive obsession / middle man / data clumps group, which is a refactor rather than a defect.
 
 The duplication pass was framed as tidying and did not stay that way. Six of the eleven clusters
 were concealing a real difference between their two halves: two nil panics in the ProcessScope
