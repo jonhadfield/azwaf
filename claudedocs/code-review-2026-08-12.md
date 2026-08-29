@@ -351,10 +351,19 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     cache read, the policy fetch and the hash-map save. It is now a wrapper, 36 lines down to 11.
     Neither had any test, so the cache path, the agreement between the two return shapes and the
     unknown-hash error were pinned first.*;
-    `marshalPolicy` / `marshalAppGWOriginal`; `getIPNetsForPrefix` /
+    ~~`marshalPolicy` / `marshalAppGWOriginal`~~ *— merged into `marshalOriginal`. See the note
+    below on what that trades*; `getIPNetsForPrefix` /
     `getIPNetsForRuleIPMatchConditions`; `rebuildIPMatchConditions` / `prepareMatchConditions`;
     the four client getters in `session/clients.go`; the diff-via-temp-file logic in
     `policy/output.go:1401` vs `policy/compare.go:18`.
+
+  *Note on `marshalOriginal`: the two it replaced were the same switch over **disjoint** type
+  sets — Front Door types in one, Application Gateway in the other — so merging them widens what
+  each caller will accept. In principle a Front Door diff could now be handed an AppGW policy and
+  marshal it rather than erroring. Judged acceptable: both were unexported with a single call
+  site each, and both call sites pass a concrete type, so the split was not buying safety the
+  compiler was not already providing. If that type discipline is wanted back, the two thin
+  wrappers are cheap to reinstate over the shared switch.*
 
 - [ ] **Speculative generality / dead code** — declared, never used outside their own
   declaration: `LoadBackupsFromPaths` + `LoadBackupsFromPath` (`policy/data.go:202`, `:225`,
