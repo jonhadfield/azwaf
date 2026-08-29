@@ -97,66 +97,44 @@ func filterCustomRules(in filterCustomRulesInput) ([]*armfrontdoor.CustomRule, e
 	return filtered, nil
 }
 
-func getIPNetsForPrefix(customRules []*armfrontdoor.CustomRule, action *armfrontdoor.ActionType) ([]netip.Prefix, []netip.Prefix, error) {
+// ipNetsFromRule splits a rule's IP match conditions into the prefixes it
+// matches on and the prefixes it negates.
+//
+// Callers disagree about what a non-IP match condition means. Generating rules
+// from scratch, a mixed rule (IPMatch + GeoMatch) cannot be represented, so it
+// is an error. Reading an existing rule to add to it, the non-IP conditions are
+// carried over untouched by getNonIPMatchConditions, so they are skipped here.
+func ipNetsFromRule(cr *armfrontdoor.CustomRule, skipUnsupported bool) ([]netip.Prefix, []netip.Prefix, error) {
 	var positive, negative []netip.Prefix
 
-	if action == nil {
-		return nil, nil, errors.New("action cannot be nil")
+	if cr == nil {
+		return nil, nil, nil
 	}
 
-	for _, cr := range customRules {
-		cr := cr
-
-		mc := cr.MatchConditions
-
-		// for each match conditions, get the
-		for y := range mc {
-			// ensure match condition is IP as rules with mixed match
-			// conditions (IPMatch + GeoMatch combination)
-			// are not currently supported
-			if !matchConditionSupported(mc[y]) {
-				return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", *cr.Name)
-			}
-
-			for z := range mc[y].MatchValue {
-				n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
-				if tErr != nil {
-					return nil, nil, tErr
-				}
-
-				if *mc[y].NegateCondition {
-					negative = append(negative, n)
-				} else {
-					positive = append(positive, n)
-				}
-			}
-		}
-	}
-
-	return positive, negative, nil
-}
-
-func getIPNetsForRuleIPMatchConditions(cr *armfrontdoor.CustomRule) ([]netip.Prefix, []netip.Prefix, error) {
-	var positive, negative []netip.Prefix
-
-	mc := cr.MatchConditions
-
-	// for each match conditions, get the
-	for y := range mc {
-		// ensure match condition is IP as rules with mixed match
-		// conditions (IPMatch + GeoMatch combination)
-		//  are not currently supported
-		if !matchConditionSupported(mc[y]) {
+	for _, mc := range cr.MatchConditions {
+		if mc == nil {
 			continue
 		}
 
-		for z := range mc[y].MatchValue {
-			n, tErr := tryNetStrToPrefix(*mc[y].MatchValue[z])
-			if tErr != nil {
-				return nil, nil, tErr
+		// rules with mixed match conditions are not currently supported
+		if !matchConditionSupported(mc) {
+			if skipUnsupported {
+				continue
 			}
 
-			if *mc[y].NegateCondition {
+			return nil, nil, fmt.Errorf("rule %s has match condition that does not match constraints", derefOrEmpty(cr.Name))
+		}
+
+		// an absent negate flag means the condition is not negated
+		negated := mc.NegateCondition != nil && *mc.NegateCondition
+
+		for _, mv := range mc.MatchValue {
+			n, err := tryNetStrToPrefix(derefOrEmpty(mv))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if negated {
 				negative = append(negative, n)
 			} else {
 				positive = append(positive, n)
@@ -165,6 +143,30 @@ func getIPNetsForRuleIPMatchConditions(cr *armfrontdoor.CustomRule) ([]netip.Pre
 	}
 
 	return positive, negative, nil
+}
+
+func getIPNetsForPrefix(customRules []*armfrontdoor.CustomRule, action *armfrontdoor.ActionType) ([]netip.Prefix, []netip.Prefix, error) {
+	var positive, negative []netip.Prefix
+
+	if action == nil {
+		return nil, nil, errors.New("action cannot be nil")
+	}
+
+	for _, cr := range customRules {
+		pos, neg, err := ipNetsFromRule(cr, false)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		positive = append(positive, pos...)
+		negative = append(negative, neg...)
+	}
+
+	return positive, negative, nil
+}
+
+func getIPNetsForRuleIPMatchConditions(cr *armfrontdoor.CustomRule) ([]netip.Prefix, []netip.Prefix, error) {
+	return ipNetsFromRule(cr, true)
 }
 
 func getNonIPMatchConditions(cr *armfrontdoor.CustomRule) []*armfrontdoor.MatchCondition {
@@ -847,14 +849,27 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 		return posMatchConditions, negMatchConditions, err
 	}
 
-	// get number of those to negate that must appear in each rule
-	// this will be deducted from max values per rule
-	deDupedNegatedNets := deDupeIPNets(additionalNegativePrefixes)
+	return matchConditionsFromNets(additionalPositivePrefixes, additionalNegativePrefixes)
+}
+
+// matchConditionsFromNets turns two sets of prefixes into the match conditions
+// carrying them, chunked to stay inside Azure's per-rule value limit.
+//
+// Every rule repeats the whole negated set, so the negated set is what is left
+// over for the positive one; past 599 there is no room for a positive value and
+// the chunking would silently emit one oversized condition.
+func matchConditionsFromNets(positive, negative []netip.Prefix) ([]*armfrontdoor.MatchCondition, []*armfrontdoor.MatchCondition, error) {
+	deDupedNegatedNets := deDupeIPNets(negative)
 	sort.Strings(deDupedNegatedNets)
 	logging.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
 
-	deDupedNets := deDupeIPNets(additionalPositivePrefixes)
+	deDupedNets := deDupeIPNets(positive)
 	sort.Strings(deDupedNets)
+	logging.Tracef("total networks after deduplication: %d", len(deDupedNets))
+
+	if len(deDupedNegatedNets) >= MaxIPMatchValues-1 {
+		return nil, nil, fmt.Errorf("%d negated match values specified but cannot exceed %d", len(deDupedNegatedNets), MaxIPMatchValues-1)
+	}
 
 	positiveMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
 		nets:                  &deDupedNets,
@@ -865,12 +880,11 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 		matchOperator: toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return posMatchConditions, negMatchConditions, err
+		return nil, nil, err
 	}
 
 	logging.Tracef("positive match conditions: %d", len(positiveMatchConditions))
 
-	// generate the match conditions to add to each rule
 	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
 		nets:   &deDupedNegatedNets,
 		negate: true,
@@ -880,7 +894,7 @@ func rebuildIPMatchConditions(ruleToDecorate *armfrontdoor.CustomRule, additiona
 		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
 	})
 	if err != nil {
-		return posMatchConditions, negMatchConditions, err
+		return nil, nil, err
 	}
 
 	logging.Tracef("negative match conditions: %d", len(negativeMatchConditions))
@@ -1085,45 +1099,7 @@ func validateGenCustomRulesInput(in GenCustomRulesFromIPNetsInput) error {
 
 // prepareMatchConditions converts provided prefixes into match conditions for rule generation
 func prepareMatchConditions(in GenCustomRulesFromIPNetsInput) ([]*armfrontdoor.MatchCondition, []*armfrontdoor.MatchCondition, error) {
-	deDupedNegatedNets := deDupeIPNets(in.NegativeMatchNets)
-	sort.Strings(deDupedNegatedNets)
-	logging.Tracef("total negated networks after deduplication: %d", len(deDupedNegatedNets))
-
-	deDupedNets := deDupeIPNets(in.PositiveMatchNets)
-	sort.Strings(deDupedNets)
-	logging.Tracef("total networks after deduplication: %d", len(deDupedNets))
-
-	if len(deDupedNegatedNets) >= 599 {
-		return nil, nil, fmt.Errorf("%d negated match values specified but cannot exceed 599", len(deDupedNegatedNets))
-	}
-
-	positiveMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
-		nets:                  &deDupedNets,
-		negate:                false,
-		maxValuesPerCondition: MaxIPMatchValues - len(deDupedNegatedNets),
-		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logging.Tracef("positive match conditions: %d", len(positiveMatchConditions))
-
-	negativeMatchConditions, err := generateMatchConditionsFromNets(generateMatchConditionsFromNetsInput{
-		nets:                  &deDupedNegatedNets,
-		negate:                true,
-		maxValuesPerCondition: MaxIPMatchValues,
-		matchVariable:         toPtr(armfrontdoor.MatchVariableSocketAddr),
-		matchOperator:         toPtr(armfrontdoor.OperatorIPMatch),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logging.Tracef("negative match conditions: %d", len(negativeMatchConditions))
-
-	return positiveMatchConditions, negativeMatchConditions, nil
+	return matchConditionsFromNets(in.PositiveMatchNets, in.NegativeMatchNets)
 }
 
 // buildCustomRules iterates over match conditions and creates the resulting custom rules
