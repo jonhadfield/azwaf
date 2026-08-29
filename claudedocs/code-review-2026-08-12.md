@@ -346,7 +346,11 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     introduced.*
   - `GetDeleteManagedRuleExclusionProcessScope` (`policy/policy_managed.go:804`) vs
     `GetAddManagedRuleExclusionProcessScope` (`:840`) — the same if-cascade twice.
-  - `GetPolicyResourceIDByHash` / `GetPolicyRIDByHash` (`policy/policy.go:189` / `:226`);
+  - ~~`GetPolicyResourceIDByHash` / `GetPolicyRIDByHash` (`policy/policy.go:189` / `:226`)~~
+    *— collapsed. The first was the second with `config.ParseResourceID` applied, duplicating the
+    cache read, the policy fetch and the hash-map save. It is now a wrapper, 36 lines down to 11.
+    Neither had any test, so the cache path, the agreement between the two return shapes and the
+    unknown-hash error were pinned first.*;
     `marshalPolicy` / `marshalAppGWOriginal`; `getIPNetsForPrefix` /
     `getIPNetsForRuleIPMatchConditions`; `rebuildIPMatchConditions` / `prepareMatchConditions`;
     the four client getters in `session/clients.go`; the diff-via-temp-file logic in

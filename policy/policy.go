@@ -164,41 +164,16 @@ type WAFResourceIDHashMap struct {
 	Entries []WAFResourceIDHashMapEntry
 }
 
+// GetPolicyResourceIDByHash resolves a policy hash to its parsed resource id.
+// It is GetPolicyRIDByHash with the result parsed: the lookup, the cache read
+// and the hash-map save all live there, and were duplicated here.
 func GetPolicyResourceIDByHash(s *session.Session, subID, hash string) (config.ResourceID, error) {
-	var resourceID config.ResourceID
-
-	var err error
-
-	// check cache if we have a match
-	pID, err := GetWAFResourceIDFromCacheByHash(s, hash)
+	rawID, err := GetPolicyRIDByHash(s, subID, hash)
 	if err != nil {
-		logging.Warn(err)
+		return config.ResourceID{}, err
 	}
 
-	if pID != "" {
-		return config.ParseResourceID(pID), nil
-	}
-
-	o, perr := GetAllPolicies(s, GetWrappedPoliciesInput{
-		SubscriptionID: subID,
-	})
-	if perr != nil {
-		return resourceID, perr
-	}
-
-	if err = SaveWAFResourceIDHashMap(s, o); err != nil {
-		return config.ResourceID{}, fmt.Errorf("failed to save waf resource id hash map: %w", err)
-	}
-
-	for _, p := range o {
-		if computeAdler32(*p.ID) == hash {
-			pID = *p.ID
-
-			return config.ParseResourceID(pID), nil
-		}
-	}
-
-	return resourceID, fmt.Errorf("resource with hash %s could not be found", hash)
+	return config.ParseResourceID(rawID), nil
 }
 
 func GetPolicyRIDByHash(s *session.Session, subID, hash string) (string, error) {
