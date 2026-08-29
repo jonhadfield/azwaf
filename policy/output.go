@@ -1421,7 +1421,74 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 			break
 		}
 	}
-	return strings.TrimRight(builder.String(), ", ")
+	return wrapToWidth(strings.TrimRight(builder.String(), ", "), lineLengthLimit)
+}
+
+// wrapToWidth breaks any line longer than max onto further lines, so a long
+// match value cannot widen the column it sits in.
+//
+// The per-type handlers above group values onto lines by count and by a rough
+// length estimate, but nothing there enforces a ceiling: three moderately long
+// values still share a line, and a single value longer than max was never
+// broken at all. This is the backstop.
+//
+// Splits prefer a comma boundary so values stay whole. A single value longer
+// than max on its own is split mid-value, since the alternative is letting it
+// set the table width.
+func wrapToWidth(s string, max int) string {
+	if max <= 0 {
+		return s
+	}
+
+	var out []string
+
+	for _, line := range strings.Split(s, "\n") {
+		out = append(out, wrapLine(line, max)...)
+	}
+
+	return strings.Join(out, "\n")
+}
+
+// wrapLine breaks one line onto as many lines as it needs.
+func wrapLine(line string, max int) []string {
+	if len([]rune(line)) <= max {
+		return []string{line}
+	}
+
+	var (
+		lines   []string
+		current string
+	)
+
+	for _, value := range strings.Split(line, ", ") {
+		// a value that cannot fit on a line of its own is split mid-value
+		for len([]rune(value)) > max {
+			if current != "" {
+				lines = append(lines, current+",")
+				current = ""
+			}
+
+			r := []rune(value)
+			lines = append(lines, string(r[:max]))
+			value = string(r[max:])
+		}
+
+		switch {
+		case current == "":
+			current = value
+		case len([]rune(current))+len([]rune(value))+2 <= max:
+			current += ", " + value
+		default:
+			lines = append(lines, current+",")
+			current = value
+		}
+	}
+
+	if current != "" {
+		lines = append(lines, current)
+	}
+
+	return lines
 }
 
 func DisplayStringDiffWithDiffTool(orig, updated string) error {
