@@ -369,8 +369,15 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     `getIPNetsForRuleIPMatchConditions`; `rebuildIPMatchConditions` / `prepareMatchConditions`;
     ~~the four client getters in `session/clients.go`~~ *— collapsed onto a generic
     `getOrCreateClient`, 136 lines removed against 54 added. See the note below on what it
-    normalised*; the diff-via-temp-file logic in
-    `policy/output.go:1401` vs `policy/compare.go:18`.
+    normalised*; ~~the diff-via-temp-file logic in
+    `policy/output.go:1401` vs `policy/compare.go:18`~~ *— both now go through `diffTempFiles`.
+    The two still differ in what they do with the result, which is the point: `compare` only
+    reports whether there was a difference and prints nothing, while
+    `DisplayStringDiffWithDiffTool` prints the diff. The display side also swallowed any failure
+    to **run** diff — a non-`ExitError` left the exit code at zero and it returned nil — where
+    `compare` surfaced it. It now surfaces it too. Removing the duplicated block orphaned three
+    imports in `output.go`, one of which was the `errors2` alias listed under mysterious names
+    below, so that is gone as well.*
 
   *Note on `marshalOriginal`: the two it replaced were the same switch over **disjoint** type
   sets — Front Door types in one, Application Gateway in the other — so merging them widens what
@@ -483,9 +490,10 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   purely delegates to `dummyWrappedFromAppGW`; `policy.GetFunctionName` (`policy/utils.go:112`)
   just calls `helpers.GetParentFunctionName`.
 
-- [ ] **Mysterious names** — `dummyWrappedFromAppGW`; the `errors2` import alias
-  (`policy/output.go:5`); `getIPNetsForPrefix` takes no prefix; `ProcessCLIInput` vs
-  `ParseConfig` naming the same operation.
+- [ ] **Mysterious names** — `dummyWrappedFromAppGW`; ~~the `errors2` import alias
+  (`policy/output.go:5`)~~ *— gone, orphaned by the diff collapse*; `getIPNetsForPrefix` takes no
+  prefix; ~~`ProcessCLIInput` vs `ParseConfig` naming the same operation~~ *— `ProcessCLIInput`
+  deleted*.
 
 - [ ] **Data clumps** — `(blobClient, containerName, failFast, quiet, path)` threaded
   positionally through five backup functions despite `BackupPoliciesInput` already existing.

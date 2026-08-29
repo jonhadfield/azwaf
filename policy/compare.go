@@ -20,11 +20,6 @@ func compare(original interface{}, updated []byte) (differencesFound bool, err e
 
 	logging.Debugf("%s | finding differences between the current policy version and the proposed", funcName)
 
-	diffBinary := findexec.Find("diff", "")
-	if diffBinary == "" {
-		return false, errors.New("failed to find compare binary")
-	}
-
 	origJSON, err := marshalJSON(original)
 	if err != nil {
 		return false, err
@@ -35,38 +30,58 @@ func compare(original interface{}, updated []byte) (differencesFound bool, err e
 		return false, err
 	}
 
+	// identical input needs no temporary files and no diff process
 	if bytes.Equal(origJSON, newJSON) {
 		return false, nil
 	}
 
-	differencesFound = true
-
-	f1, err := writeTempFile(origJSON)
-	if err != nil {
+	if _, err = diffTempFiles(origJSON, newJSON); err != nil {
 		return false, err
 	}
+
+	return true, nil
+}
+
+// diffTempFiles writes both sides to temporary files and runs diff -u over
+// them, returning its output and removing the files before it returns.
+//
+// compare and DisplayStringDiffWithDiffTool had a copy of this each. They still
+// differ in what they do with the result: compare only wants to know whether
+// there was one, and prints nothing.
+func diffTempFiles(orig, updated []byte) ([]byte, error) {
+	diffBinary := findexec.Find("diff", "")
+	if diffBinary == "" {
+		return nil, errors.New("failed to find compare binary")
+	}
+
+	f1, err := writeTempFile(orig)
+	if err != nil {
+		return nil, err
+	}
+
 	defer func() {
 		_ = os.Remove(f1)
 	}()
 
-	f2, err := writeTempFile(newJSON)
+	f2, err := writeTempFile(updated)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+
 	defer func() {
 		_ = os.Remove(f2)
 	}()
 
-	exitCode, err := runDiff(diffBinary, f1, f2)
+	out, exitCode, err := runDiff(diffBinary, f1, f2)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	if exitCode == 2 {
-		return false, fmt.Errorf("failed to compare: '%s' with '%s'", f1, f2)
+	if exitCode == diffErrorExitCode {
+		return nil, fmt.Errorf("failed to compare: '%s' with '%s'", f1, f2)
 	}
 
-	return differencesFound, nil
+	return out, nil
 }
 
 func marshalJSON(v interface{}) ([]byte, error) {
@@ -100,15 +115,22 @@ func writeTempFile(data []byte) (string, error) {
 	return f.Name(), nil
 }
 
-func runDiff(binary, f1, f2 string) (int, error) {
+// runDiff runs diff -u and returns its output alongside the exit code. diff
+// exits 1 when the files differ, which is not an error.
+func runDiff(binary, f1, f2 string) (out []byte, exitCode int, err error) {
 	// #nosec
 	cmd := exec.Command(binary, "-u", f1, f2)
-	_, err := cmd.CombinedOutput()
+
+	out, err = cmd.CombinedOutput()
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			return exitError.ExitCode(), nil
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			return out, exitError.ExitCode(), nil
 		}
-		return 0, err
+
+		// anything that is not an exit status is a real failure to run diff
+		return nil, 0, err
 	}
-	return 0, nil
+
+	return out, 0, nil
 }
