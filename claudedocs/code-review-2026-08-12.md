@@ -344,8 +344,21 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     hypothesised bug into `handleIPv6Value` makes `ipv6/after_ipv4` fail with "after writing an
     ipv6 value prevType must be "ipv6"", so the tests would catch it if it were ever
     introduced.*
-  - `GetDeleteManagedRuleExclusionProcessScope` (`policy/policy_managed.go:804`) vs
-    `GetAddManagedRuleExclusionProcessScope` (`:840`) — the same if-cascade twice.
+  - ~~`GetDeleteManagedRuleExclusionProcessScope` (`policy/policy_managed.go:804`) vs
+    `GetAddManagedRuleExclusionProcessScope` (`:840`) — the same if-cascade twice.~~
+
+    *Collapsed onto `scopeFromSelectors`. The wrappers keep their own error wording and failure
+    return — the delete side returns `""`, the add side `"unhandled"` — so callers see no change.
+    The cascade also simplified: four overlapping conditions reduce to three once the earlier
+    branches have already excluded the cases they overlap on.*
+
+    ***This one was not just duplication.*** *Both functions dereferenced an optional
+    `*string` rule set unguarded. The delete side checked it for nil once, then dereferenced it
+    anyway two lines later, so a group-scoped delete with no rule set panicked. The add side
+    dereferenced both `RuleSetType` and `RuleSetVersion` before checking anything at all, so it
+    panicked on an empty input. Three cases were confirmed panicking before the change and pass
+    after it. The existing test covered only the delete side, and only combinations where the
+    pointer happened to be set.*
   - ~~`GetPolicyResourceIDByHash` / `GetPolicyRIDByHash` (`policy/policy.go:189` / `:226`)~~
     *— collapsed. The first was the second with `config.ParseResourceID` applied, duplicating the
     cache read, the policy fetch and the hash-map save. It is now a wrapper, 36 lines down to 11.

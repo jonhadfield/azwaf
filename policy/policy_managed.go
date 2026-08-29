@@ -758,73 +758,63 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 }
 
 // GetDeleteManagedRuleExclusionProcessScope returns the scope for deletion of Managed rule exclusions
+// scopeFromSelectors works out which exclusion scope the three selectors name.
+// The second return is false when they name none, which the callers turn into
+// their own error.
+//
+// Both exported wrappers below ran this cascade themselves.
+func scopeFromSelectors(ruleSetType, ruleGroup, ruleID string) (string, bool) {
+	switch {
+	case ruleID != "":
+		// a rule id is the narrowest selector and wins outright
+		return ScopeRule, true
+	case ruleGroup != "":
+		// a group, with or without a rule set, is group scope
+		return ScopeRuleGroup, true
+	case ruleSetType != "":
+		return ScopeRuleSet, true
+	default:
+		return "", false
+	}
+}
+
+// GetDeleteManagedRuleExclusionProcessScope returns the scope a deletion applies to.
 func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusionInput) (scope string, err error) {
 	funcName := GetFunctionName()
 
-	// if nothing set, return error
-	if (input.RuleSetType == nil || *input.RuleSetType == "") && input.RuleGroup == "" && input.RuleID == "" {
+	// RuleSetType is optional, and was previously dereferenced after the nil
+	// check that guarded it, so a group-scoped delete with no rule set panicked
+	ruleSetType := derefOrEmpty(input.RuleSetType)
+
+	if ruleSetType == "" && input.RuleGroup == "" && input.RuleID == "" {
 		return "", fmt.Errorf("%s - a rule id, rule group, or rule set was not provided", funcName)
 	}
 
-	// if rule id defined, then use rule scope
-	if input.RuleID != "" {
-		return ScopeRule, nil
-	}
-
-	// if only ruleset defined then scope is rule set
-	if *input.RuleSetType != "" && (input.RuleGroup == "" && input.RuleID == "") {
-		return ScopeRuleSet, nil
-	}
-
-	// if only group defined, then use group scope
-	if input.RuleGroup != "" && (*input.RuleSetType == "" && input.RuleID == "") {
-		return ScopeRuleGroup, nil
-	}
-
-	// if only rule set and rule group defined then use group scope
-	if *input.RuleSetType != "" && input.RuleGroup != "" && input.RuleID == "" {
-		return ScopeRuleGroup, nil
+	if scope, ok := scopeFromSelectors(ruleSetType, input.RuleGroup, input.RuleID); ok {
+		return scope, nil
 	}
 
 	return "", fmt.Errorf("%s - failed to determine scope based on input: RuleSet %s RuleGroup %s RuleId %s",
 		funcName,
-		valueOrDash(input.RuleSetType),
+		valueOrDash(ruleSetType),
 		valueOrDash(input.RuleGroup),
 		valueOrDash(input.RuleID))
 }
 
-// GetAddManagedRuleExclusionProcessScope returns the scope for deletion of Managed rule exclusions
+// GetAddManagedRuleExclusionProcessScope returns the scope an addition applies to.
 func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) (scope string, err error) {
 	funcName := GetFunctionName()
 
-	ruleSetType := *amrei.RuleSetType
-	ruleSetVersion := *amrei.RuleSetVersion
-	ruleGroup := amrei.RuleGroup
-	ruleID := amrei.RuleID
+	// both pointers were dereferenced before anything checked them
+	ruleSetType := derefOrEmpty(amrei.RuleSetType)
+	ruleSetVersion := derefOrEmpty(amrei.RuleSetVersion)
 
-	// if nothing set, return error
-	if ruleSetType == "" && ruleSetVersion == "" && ruleGroup == "" && ruleID == "" {
+	if ruleSetType == "" && ruleSetVersion == "" && amrei.RuleGroup == "" && amrei.RuleID == "" {
 		return "", fmt.Errorf("%s - rule id, rule group, and rule set are required", funcName)
 	}
 
-	// if rule id defined, then use rule scope
-	if ruleID != "" {
-		return ScopeRule, nil
-	}
-
-	// if only ruleset defined then scope is rule set
-	if ruleSetType != "" && (ruleGroup == "" && ruleID == "") {
-		return ScopeRuleSet, nil
-	}
-
-	// if only group defined, then use group scope
-	if ruleGroup != "" && (ruleSetType == "" && ruleID == "") {
-		return ScopeRuleGroup, nil
-	}
-
-	// if only rule set and rule group defined then use group scope
-	if ruleSetType != "" && ruleGroup != "" && ruleID == "" {
-		return ScopeRuleGroup, nil
+	if scope, ok := scopeFromSelectors(ruleSetType, amrei.RuleGroup, amrei.RuleID); ok {
+		return scope, nil
 	}
 
 	return "unhandled",
@@ -832,8 +822,8 @@ func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) 
 			funcName,
 			valueOrDash(ruleSetType),
 			valueOrDash(ruleSetVersion),
-			valueOrDash(ruleGroup),
-			valueOrDash(ruleID))
+			valueOrDash(amrei.RuleGroup),
+			valueOrDash(amrei.RuleID))
 }
 
 func IsValidExclusionRuleVariable(v armfrontdoor.ManagedRuleExclusionMatchVariable, ci bool) bool {
