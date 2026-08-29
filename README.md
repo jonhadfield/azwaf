@@ -75,10 +75,12 @@ Prebuilt binaries for each release are on the [latest release page](https://gith
 ```bash
 curl -Lo azwaf https://github.com/jonhadfield/azwaf/releases/latest/download/azwaf_darwin_arm64
 chmod +x azwaf
-sudo mv azwaf /usr/local/bin/azwaf
+mv azwaf /usr/local/bin/azwaf
 
 azwaf --version
 ```
+
+Prefix the `mv` with `sudo` if `/usr/local/bin` is not writable by your user — usually the case on Linux, usually not on macOS with Homebrew.
 
 The release page shows a SHA256 digest beside each asset if you want to verify the download. The Windows binary is provisional — it cross-compiles cleanly but has not been run on Windows.
 
