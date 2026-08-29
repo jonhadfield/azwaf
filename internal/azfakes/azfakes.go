@@ -73,8 +73,6 @@ type Store struct {
 	mu              sync.Mutex
 	frontDoor       map[string]*armfrontdoor.WebApplicationFirewallPolicy
 	appGW           map[string]*armnetwork.WebApplicationFirewallPolicy
-	frontDoors      []*armfrontdoor.FrontDoor
-	ruleSetDefs     []*armfrontdoor.ManagedRuleSetDefinition
 	pushedFrontDoor []PushedFrontDoorPolicy
 	pushedAppGW     []PushedAppGWPolicy
 }
@@ -121,21 +119,6 @@ func (st *Store) AddAppGWPolicy(resourceGroup, name string, p armnetwork.WebAppl
 	st.appGW[storeKey(resourceGroup, name)] = &p
 
 	return id
-}
-
-// SetFrontDoors seeds the Front Door instances returned by the list endpoint.
-func (st *Store) SetFrontDoors(fds []*armfrontdoor.FrontDoor) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	st.frontDoors = fds
-}
-
-// SetManagedRuleSetDefinitions seeds the managed rule set definitions
-// returned by the list endpoint.
-func (st *Store) SetManagedRuleSetDefinitions(defs []*armfrontdoor.ManagedRuleSetDefinition) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	st.ruleSetDefs = defs
 }
 
 // FrontDoorPolicy returns the stored Front Door policy, if present.
@@ -283,13 +266,8 @@ func (st *Store) frontDoorPoliciesServer() *fdfake.PoliciesServer {
 func (st *Store) frontDoorsServer() *fdfake.FrontDoorsServer {
 	return &fdfake.FrontDoorsServer{
 		NewListPager: func(_ *armfrontdoor.FrontDoorsClientListOptions) (resp azfake.PagerResponder[armfrontdoor.FrontDoorsClientListResponse]) {
-			st.mu.Lock()
-			fds := st.frontDoors
-			st.mu.Unlock()
-
-			resp.AddPage(http.StatusOK, armfrontdoor.FrontDoorsClientListResponse{
-				ListResult: armfrontdoor.ListResult{Value: fds},
-			}, nil)
+			// the store has no Front Doors to seed, so the list is always empty
+			resp.AddPage(http.StatusOK, armfrontdoor.FrontDoorsClientListResponse{}, nil)
 
 			return
 		},
@@ -299,13 +277,8 @@ func (st *Store) frontDoorsServer() *fdfake.FrontDoorsServer {
 func (st *Store) managedRuleSetsServer() *fdfake.ManagedRuleSetsServer {
 	return &fdfake.ManagedRuleSetsServer{
 		NewListPager: func(_ *armfrontdoor.ManagedRuleSetsClientListOptions) (resp azfake.PagerResponder[armfrontdoor.ManagedRuleSetsClientListResponse]) {
-			st.mu.Lock()
-			defs := st.ruleSetDefs
-			st.mu.Unlock()
-
-			resp.AddPage(http.StatusOK, armfrontdoor.ManagedRuleSetsClientListResponse{
-				ManagedRuleSetDefinitionList: armfrontdoor.ManagedRuleSetDefinitionList{Value: defs},
-			}, nil)
+			// no rule set definitions to seed, so the list is always empty
+			resp.AddPage(http.StatusOK, armfrontdoor.ManagedRuleSetsClientListResponse{}, nil)
 
 			return
 		},
