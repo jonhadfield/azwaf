@@ -293,10 +293,23 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
     *Noted, not fixed: the comparator dereferences `*rules[i].Priority` unguarded, so a custom
     rule with no priority panics mid-sort. Same nil-safety class as the `appendCustomRuleRows`
     and `PushPolicy` derefs recorded elsewhere.*
-  - `DeleteCustomRulesCLIInput.ProcessCLIInput` (`policy/delete_managed_exclusion.go:32`) and
-    `.ParseConfig` (`policy/delete_custom_rule.go:75`) are identical methods on the same type.
-  - `BackupPolicy` (`policy/backup.go:227`) vs `BackupAppGWPolicy` (`:365`) — ~90% identical,
-    as are `backupPolicies` / `backupAppGWPolicies`.
+  - ~~`DeleteCustomRulesCLIInput.ProcessCLIInput` (`policy/delete_managed_exclusion.go:32`) and
+    `.ParseConfig` (`policy/delete_custom_rule.go:75`) are identical methods on the same type.~~
+
+    *Confirmed byte-identical apart from the method name, with `ProcessCLIInput` having no caller
+    anywhere — including `it/`, which is behind a build tag and so invisible to `go build ./...`.
+    Deleted. It was the only user of the `regexp` and `strconv` imports in that file, which went
+    with it.*
+  - ~~`BackupPolicy` (`policy/backup.go:227`) vs `BackupAppGWPolicy` (`:365`) — ~90% identical,
+    as are `backupPolicies` / `backupAppGWPolicies`.~~
+
+    *Both now delegate to `backupWrapped`, with the per-type differences — the default WAF type
+    and the word used in the status line — carried by a `prepareForBackup` method behind a
+    `backupSubject` interface. Exported signatures are unchanged. The duplicated terminal-width
+    status line became `printBackupStatus`, and the five arguments that travelled together
+    became a `backupDestination` struct, which also settles the data-clump item below. Close to
+    line-neutral: the gain is one place to change, not fewer lines. `backupPolicies` /
+    `backupAppGWPolicies` are the thin loops over each and remain separate.*
   - `handleIPv4Value` (`policy/output.go:1218`) vs `handleIPv6Value` (`:1287`) — 135
     near-identical lines. ~~**`:1280` sets `*prevType = "ipv4"` inside the ipv6 branch** — likely
     a copy-paste bug worth checking on its own.~~
