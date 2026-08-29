@@ -241,7 +241,7 @@ func GenerateAppGWPolicyPatch(original interface{}, newPolicy armnetwork.WebAppl
 
 	var output GeneratePolicyPatchOutput
 
-	originalBytes, err := marshalAppGWOriginal(original)
+	originalBytes, err := marshalOriginal(original)
 	if err != nil {
 		return output, fmt.Errorf("%s - %w", funcName, err)
 	}
@@ -257,17 +257,4 @@ func GenerateAppGWPolicyPatch(original interface{}, newPolicy armnetwork.WebAppl
 	}
 
 	return calculatePatchStats(patch), nil
-}
-
-func marshalAppGWOriginal(original interface{}) ([]byte, error) {
-	switch v := original.(type) {
-	case []byte:
-		return v, nil
-	case armnetwork.WebApplicationFirewallPolicy:
-		return json.MarshalIndent(v, "", "    ")
-	case WrappedAppGWPolicy:
-		return json.MarshalIndent(v.Policy, "", "    ")
-	default:
-		return nil, fmt.Errorf("unexpected original type for AppGW policy: %T", original)
-	}
 }

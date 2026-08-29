@@ -16,6 +16,7 @@ import (
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
 	"github.com/jonhadfield/azwaf/cache"
 
@@ -528,7 +529,15 @@ type GeneratePolicyPatchOutput struct {
 	ManagedRuleReplacements int
 }
 
-func marshalPolicy(original interface{}) ([]byte, error) {
+// marshalOriginal renders a policy as indented json for diffing. It accepts
+// either WAF type, in raw or wrapped form, and passes an already-encoded byte
+// slice straight back.
+//
+// The Front Door and Application Gateway paths had a copy of this each, over
+// their own type sets. They are unexported with one call site apiece, both
+// passing a concrete type, so the split bought no safety the compiler was not
+// already providing.
+func marshalOriginal(original interface{}) ([]byte, error) {
 	switch v := original.(type) {
 	case []byte:
 		return v, nil
@@ -536,8 +545,12 @@ func marshalPolicy(original interface{}) ([]byte, error) {
 		return json.MarshalIndent(v, "", "    ")
 	case WrappedPolicy:
 		return json.MarshalIndent(v.Policy, "", "    ")
+	case armnetwork.WebApplicationFirewallPolicy:
+		return json.MarshalIndent(v, "", "    ")
+	case WrappedAppGWPolicy:
+		return json.MarshalIndent(v.Policy, "", "    ")
 	default:
-		return nil, fmt.Errorf("UnexpectedType %s", reflect.TypeOf(original).String())
+		return nil, fmt.Errorf("unexpected policy type: %s", reflect.TypeOf(original).String())
 	}
 }
 
@@ -602,7 +615,7 @@ func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput
 
 	var output GeneratePolicyPatchOutput
 
-	originalBytes, err := marshalPolicy(i.Original)
+	originalBytes, err := marshalOriginal(i.Original)
 	if err != nil {
 		return output, fmt.Errorf("%s - %w", funcName, err)
 	}
