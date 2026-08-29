@@ -71,7 +71,7 @@ make linux-install   # installs to /usr/local/bin (Linux)
 ### Cross-compile
 
 ```bash
-make build-all       # darwin/amd64, linux/amd64, linux/arm, linux/arm64, *bsd/amd64
+make build-all       # darwin/amd64+arm64, linux/amd64+arm+arm64, *bsd/amd64, windows/amd64
 make build-linux     # linux/amd64 only
 ```
 
