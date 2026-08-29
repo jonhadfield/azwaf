@@ -2,6 +2,7 @@
 
 A focused command-line client for managing Azure **Front Door WAF** policies — list, inspect, copy, back up, restore, and tame managed-ruleset exclusions, all without wrestling the Azure portal. **Backup and restore** also support **Azure Application Gateway WAF** policies.
 
+[![Latest Release](https://img.shields.io/github/v/release/jonhadfield/azwaf)](https://github.com/jonhadfield/azwaf/releases/latest)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/jonhadfield/azwaf)](https://golang.org)
 [![License](https://img.shields.io/github/license/jonhadfield/azwaf)](LICENSE)
 
@@ -56,6 +57,30 @@ Built on the modern Azure SDK for Go, with cached lookups via [BuntDB](https://g
 - Go **1.24+** (only required to build from source)
 - An Azure subscription with one or more Front Door or Application Gateway WAF policies
 - Azure credentials available via Azure CLI, environment variables, managed identity, or another mechanism the [Azure Identity for Go](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) chain supports
+
+### Download a binary
+
+Prebuilt binaries for each release are on the [latest release page](https://github.com/jonhadfield/azwaf/releases/latest). Pick the asset matching your platform:
+
+| Platform | Asset |
+| --- | --- |
+| macOS (Apple Silicon) | `azwaf_darwin_arm64` |
+| macOS (Intel) | `azwaf_darwin_amd64` |
+| Linux x86-64 | `azwaf_linux_amd64` |
+| Linux ARM64 | `azwaf_linux_arm64` |
+| Linux ARM | `azwaf_linux_arm` |
+| FreeBSD / NetBSD / OpenBSD x86-64 | `azwaf_freebsd_amd64`, `azwaf_netbsd_amd64`, `azwaf_openbsd_amd64` |
+| Windows x86-64 | `azwaf_windows_amd64.exe` |
+
+```bash
+curl -Lo azwaf https://github.com/jonhadfield/azwaf/releases/latest/download/azwaf_darwin_arm64
+chmod +x azwaf
+sudo mv azwaf /usr/local/bin/azwaf
+
+azwaf --version
+```
+
+The release page shows a SHA256 digest beside each asset if you want to verify the download. The Windows binary is provisional — it cross-compiles cleanly but has not been run on Windows.
 
 ### Build from source
 
