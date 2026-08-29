@@ -2,8 +2,6 @@ package policy
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
@@ -30,28 +28,6 @@ type DeleteManagedRuleExclusionCLIInput struct {
 	ExclusionRuleVariable string
 	ExclusionRuleOperator string
 	ExclusionRuleSelector string
-}
-
-func (input *DeleteCustomRulesCLIInput) ProcessCLIInput() (output DeleteCustomRulesPrefixesInput, err error) {
-	output.RID = input.RID
-	output.Debug = input.Debug
-	output.MaxRules = input.MaxRules
-
-	// if a priority was passed by the cli then convert to int32 and store
-	if input.Priority != "" {
-		output.Priority, err = strconv.Atoi(input.Priority)
-		if err != nil {
-			err = fmt.Errorf("priority is invalid")
-		}
-
-		output.PrioritySet = true
-	}
-
-	if input.Name != "" {
-		output.NameMatch = regexp.MustCompile(input.Name)
-	}
-
-	return
 }
 
 func (input *DeleteManagedRuleExclusionCLIInput) ParseConfig() (dmrei *DeleteManagedRuleExclusionInput, err error) {
