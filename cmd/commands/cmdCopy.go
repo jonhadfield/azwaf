@@ -1,7 +1,9 @@
 package commands
 
 import (
-	"github.com/urfave/cli/v2"
+	"context"
+
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -21,7 +23,7 @@ func CmdCopy(versionOutput string) *cli.Command {
 			&cli.BoolFlag{Name: FlagDryRun, Usage: "don't push generated policy", Aliases: []string{"d"}},
 			&cli.BoolFlag{Name: "async", Usage: "push resulting policy without waiting for completion", Aliases: []string{"a"}},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			copyRulesInput := policy.CopyRulesInput{
 				BaseCLIInput: policy.BaseCLIInput{
 					AppVersion:     versionOutput,

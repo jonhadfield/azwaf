@@ -1,9 +1,10 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -12,10 +13,10 @@ func CmdDelete(versionOutput string) *cli.Command {
 	return &cli.Command{
 		Name:  "delete",
 		Usage: "delete custom and managed rules from a policy",
-		Action: func(c *cli.Context) error {
-			return cli.ShowAppHelp(c)
+		Action: func(_ context.Context, c *cli.Command) error {
+			return cli.DefaultShowRootCommandHelp(c)
 		},
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:    "managed-rule-exclusion",
 				Usage:   "azwaf get managed-rule-exclusion [ --rule-set | --rule-group | --rule-id ] --match-variable=x --match-operator=x --match-selector=x",
@@ -58,11 +59,11 @@ func CmdDelete(versionOutput string) *cli.Command {
 						Aliases: []string{"s", "selector"}, Required: true,
 					},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					in, err := newDeleteManagedRuleExclusionInput(c, versionOutput)
 					if err != nil {
 						// nolint:errcheck
-						_ = cli.ShowSubcommandHelp(c)
+						_ = cli.DefaultShowSubcommandHelp(c)
 
 						return err
 					}
@@ -80,11 +81,11 @@ func CmdDelete(versionOutput string) *cli.Command {
 					&cli.StringFlag{Name: "name", Usage: "custom-rule name (regex match)", Aliases: []string{"n"}},
 					&cli.StringFlag{Name: "priority", Usage: "custom-rule priority", Aliases: []string{"p"}},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					in, err := newDeleteCustomRulesInput(c, versionOutput)
 					if err != nil {
 						// nolint:errcheck
-						_ = cli.ShowSubcommandHelp(c)
+						_ = cli.DefaultShowSubcommandHelp(c)
 
 						return err
 					}
@@ -103,7 +104,7 @@ func CmdDelete(versionOutput string) *cli.Command {
 // full resource ids are all resolved (and validated) later by
 // policy.GetWAFPolicyResourceID. Validating the raw argument here would reject
 // aliases, which contain no "/".
-func newDeleteCustomRulesInput(c *cli.Context, versionOutput string) (*policy.DeleteCustomRulesCLIInput, error) {
+func newDeleteCustomRulesInput(c *cli.Command, versionOutput string) (*policy.DeleteCustomRulesCLIInput, error) {
 	if c.String("name") == "" && c.String("priority") == "" {
 		return nil, fmt.Errorf("name and/or priority must be defined")
 	}
@@ -124,7 +125,7 @@ func newDeleteCustomRulesInput(c *cli.Context, versionOutput string) (*policy.De
 // newDeleteManagedRuleExclusionInput builds the input for
 // `delete managed-rule-exclusion` from the CLI context. See the note on
 // newDeleteCustomRulesInput about not validating the raw policy name here.
-func newDeleteManagedRuleExclusionInput(c *cli.Context, versionOutput string) (*policy.DeleteManagedRuleExclusionCLIInput, error) {
+func newDeleteManagedRuleExclusionInput(c *cli.Command, versionOutput string) (*policy.DeleteManagedRuleExclusionCLIInput, error) {
 	input := c.Args().First()
 	if input == "" {
 		return nil, fmt.Errorf("missing policy id / hash")
@@ -144,7 +145,7 @@ func newDeleteManagedRuleExclusionInput(c *cli.Context, versionOutput string) (*
 }
 
 // baseCLIInput collects the global flags shared by every command.
-func baseCLIInput(c *cli.Context, versionOutput string) policy.BaseCLIInput {
+func baseCLIInput(c *cli.Command, versionOutput string) policy.BaseCLIInput {
 	return policy.BaseCLIInput{
 		AppVersion:     versionOutput,
 		AutoBackup:     c.Bool(FlagAutoBackup),

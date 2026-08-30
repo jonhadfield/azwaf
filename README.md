@@ -183,9 +183,9 @@ azwaf show managed-rule-exclusions prod-waf --shadows
 
 ### Global flags
 
-These must be given **before** the command name — `azwaf --subscription-id <id> backup …`, not
-`azwaf backup --subscription-id <id>`. Passing one after the command fails with
-`flag provided but not defined`.
+These may be given **either before or after** the command name — `azwaf --subscription-id <id>
+backup …` and `azwaf backup --subscription-id <id>` both work. Earlier versions accepted them
+only before the command; that restriction was lifted when azwaf moved to `urfave/cli` v3.
 
 | Flag | Aliases | Default | Description |
 | --- | --- | --- | --- |
@@ -195,11 +195,12 @@ These must be given **before** the command name — `azwaf --subscription-id <id
 | `--debug` | | `false` | Enable debug logging, equivalent to `AZWAF_LOG=debug` |
 | `--auto-backup` | | `true` | Auto-snapshot the policy to `~/.azwaf/backups/` before any mutation |
 
-> **Careful with `-s`.** Several commands define their own `-s`, which takes precedence once you
-> are past the command name: it means `--storage-account-id` on `backup`, `--show-diff` on
-> `restore`, `--source` on `copy`, and `--match-selector` on `add exclusion` and
-> `delete managed-rule-exclusion`. Only `azwaf -s <id> <command>` sets the subscription; prefer
-> the unambiguous `--subscription-id`, or set `AZURE_SUBSCRIPTION_ID`.
+> **Careful with `-s`.** Several commands define their own `-s`, which still takes precedence
+> once you are past the command name — this did not change with the position rule above. It
+> means `--storage-account-id` on `backup`, `--show-diff` on `restore`, `--source` on `copy`,
+> and `--match-selector` on `add exclusion` and `delete managed-rule-exclusion`. Only
+> `azwaf -s <id> <command>` sets the subscription; prefer the unambiguous `--subscription-id`
+> after the command name, or set `AZURE_SUBSCRIPTION_ID`.
 
 ---
 

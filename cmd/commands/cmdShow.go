@@ -1,9 +1,10 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -12,13 +13,13 @@ func CmdShow() *cli.Command {
 	return &cli.Command{
 		Name:  "show",
 		Usage: "show policy",
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			// nolint:errcheck
-			_ = cli.ShowAppHelp(c)
+			_ = cli.DefaultShowRootCommandHelp(c)
 
 			return nil
 		},
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:  "policy",
 				Usage: "azwaf show policy <policy resource id>",
@@ -30,7 +31,7 @@ func CmdShow() *cli.Command {
 					&cli.BoolFlag{Name: "stats", Usage: "show stats", Value: false},
 					&cli.BoolFlag{Name: "shadows", Usage: "show shadows", Value: false},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					config := policy.ShowPolicyInput{
 						ConfigPath:     c.String(FlagConfig),
 						SubscriptionID: c.String(FlagSubscriptionID),
@@ -44,7 +45,7 @@ func CmdShow() *cli.Command {
 
 					if err := config.Validate(); err != nil {
 						// nolint:errcheck
-						if serr := cli.ShowSubcommandHelp(c); serr != nil {
+						if serr := cli.DefaultShowSubcommandHelp(c); serr != nil {
 							return serr
 						}
 
@@ -64,12 +65,12 @@ func CmdShow() *cli.Command {
 					&cli.StringFlag{Name: "rule-group", Usage: "show exclusions for specific group", Aliases: []string{"group"}},
 					&cli.BoolFlag{Name: "shadows", Usage: "show rule and rule group exclusions that shadow wider scopes", Value: false},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					policyID := c.Args().First()
 
 					if policyID == "" {
 						// nolint:errcheck
-						_ = cli.ShowSubcommandHelp(c)
+						_ = cli.DefaultShowSubcommandHelp(c)
 
 						return fmt.Errorf("policy id must be specified")
 					}

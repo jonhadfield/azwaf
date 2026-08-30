@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/jonhadfield/azwaf/cmd/commands"
 	"github.com/jonhadfield/azwaf/logging"
@@ -50,51 +50,49 @@ func main() {
 		fmt.Printf("\nerror: %s\n", err)
 	}
 
-	app := cli.NewApp()
-	app.EnableBashCompletion = true
-
-	app.Name = appName
-	app.Version = versionOutput
-	app.Compiled = time.Now()
-	app.Authors = []*cli.Author{
-		{
-			Name:  "Jon Hadfield",
-			Email: "jon@lessknown.co.uk",
+	cmd := &cli.Command{
+		Name:                  appName,
+		Version:               versionOutput,
+		EnableShellCompletion: true,
+		Authors: []any{
+			"Jon Hadfield <jon@lessknown.co.uk>",
 		},
-	}
-	app.HelpName = ""
-	app.Description = "azwaf is a client for managing Azure WAF policies.\n\nFront Door WAF policies are supported across all commands. Application\nGateway WAF policies are supported by 'backup' and 'restore' only.\n\nwaf policy ids can be substituted for shorter \"hashes\" that can\nbe found by running: 'azwaf list policies'"
-	app.Usage = "azwaf [global options] command [command options] [arguments...]"
-	app.Flags = []cli.Flag{
-		&cli.StringFlag{
-			Name:     commands.FlagSubscriptionID,
-			Usage:    "specify the suscription id containing the policies",
-			EnvVars:  []string{"AZURE_SUBSCRIPTION_ID"},
-			Aliases:  []string{"s", "subscription"},
-			Required: false,
+		Description: "azwaf is a client for managing Azure WAF policies.\n\nFront Door WAF policies are supported across all commands. Application\nGateway WAF policies are supported by 'backup' and 'restore' only.\n\nwaf policy ids can be substituted for shorter \"hashes\" that can\nbe found by running: 'azwaf list policies'",
+		Usage:       "azwaf [global options] command [command options] [arguments...]",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     commands.FlagSubscriptionID,
+				Usage:    "specify the suscription id containing the policies",
+				Sources:  cli.EnvVars("AZURE_SUBSCRIPTION_ID"),
+				Aliases:  []string{"s", "subscription"},
+				Required: false,
+			},
+			&cli.StringFlag{
+				Name: commands.FlagConfig, Usage: "path to configuration file",
+				Value: filepath.Join(home, ".config", appName, configFile),
+			},
+			&cli.BoolFlag{Name: "quiet", Usage: "suppress output"},
+			// several commands already read this; without registering it here the
+			// value was always false and the debug plumbing unreachable
+			&cli.BoolFlag{Name: "debug", Usage: "enable debug logging (equivalent to AZWAF_LOG=debug)"},
+			// v3 omits a bool's default from help text; state it explicitly, since
+			// this one defaults to on and users need to know backups happen
+			// unless they pass --auto-backup=false
+			&cli.BoolFlag{Name: commands.FlagAutoBackup, Usage: "backup policy before applying any changes", Value: autoBackup, DefaultText: "true"},
 		},
-		&cli.StringFlag{
-			Name: commands.FlagConfig, Usage: "path to configuration file",
-			Value: filepath.Join(home, ".config", appName, configFile),
+		Commands: []*cli.Command{
+			commands.CmdAdd(versionOutput),
+			commands.CmdBackup(versionOutput),
+			commands.CmdCopy(versionOutput),
+			commands.CmdDelete(versionOutput),
+			commands.CmdGet(),
+			commands.CmdList(),
+			commands.CmdRestore(versionOutput),
+			commands.CmdShow(),
 		},
-		&cli.BoolFlag{Name: "quiet", Usage: "suppress output"},
-		// several commands already read this; without registering it here the
-		// value was always false and the debug plumbing unreachable
-		&cli.BoolFlag{Name: "debug", Usage: "enable debug logging (equivalent to AZWAF_LOG=debug)"},
-		&cli.BoolFlag{Name: commands.FlagAutoBackup, Usage: "backup policy before applying any changes", Value: autoBackup},
-	}
-	app.Commands = []*cli.Command{
-		commands.CmdAdd(versionOutput),
-		commands.CmdBackup(versionOutput),
-		commands.CmdCopy(versionOutput),
-		commands.CmdDelete(versionOutput),
-		commands.CmdGet(),
-		commands.CmdList(),
-		commands.CmdRestore(versionOutput),
-		commands.CmdShow(),
 	}
 
-	if err = app.Run(os.Args); err != nil {
+	if err = cmd.Run(context.Background(), os.Args); err != nil {
 		// it's a stdlib error
 		fmt.Printf("\nerror: %s\n", err)
 
