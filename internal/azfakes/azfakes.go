@@ -23,8 +23,8 @@ import (
 	azpolicy "github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 	fdfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor/fake"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
-	netfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7/fake"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v8"
+	netfake "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v8/fake"
 	"github.com/tidwall/buntdb"
 
 	"github.com/jonhadfield/azwaf/session"
