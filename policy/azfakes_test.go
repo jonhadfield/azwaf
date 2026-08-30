@@ -192,7 +192,7 @@ func TestAppGWRestoreRoundTripAgainstFakeAzure(t *testing.T) {
 	}
 
 	backupsDir := t.TempDir()
-	require.NoError(t, BackupAppGWPolicy(&backup, nil, "", true, true, backupsDir))
+	require.NoError(t, BackupAppGWPolicy(&backup, BackupDestination{Path: backupsDir, FailFast: true, Quiet: true}))
 
 	loaded, err := LoadAllBackupsFromPaths([]string{backupsDir})
 	require.NoError(t, err)
