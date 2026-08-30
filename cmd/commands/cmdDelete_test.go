@@ -1,40 +1,62 @@
 package commands
 
 import (
-	"flag"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
 
-// deleteCtx builds a cli.Context carrying the flags the delete subcommands read,
-// plus the given positional argument.
-func deleteCtx(t *testing.T, args map[string]string, positional string) *cli.Context {
+// deleteCmd builds a *cli.Command carrying the flags the delete subcommands
+// read, plus the given positional argument.
+//
+// v2 allowed a Context to be assembled straight from a flag.FlagSet. v3 has no
+// such constructor, so the flags are declared on a throwaway command and parsed
+// by actually running it, which exercises the real parser rather than a
+// hand-built flag set.
+func deleteCmd(t *testing.T, args map[string]string, positional string) *cli.Command {
 	t.Helper()
 
-	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	var flags []cli.Flag
+
 	for _, name := range []string{
 		"name", "priority", FlagConfig, FlagSubscriptionID,
 		"rule-set", "rule-group", "rule-id",
 		"match-variable", "match-operator", "match-selector",
 	} {
-		set.String(name, "", "")
+		flags = append(flags, &cli.StringFlag{Name: name})
 	}
 
 	for _, name := range []string{FlagDryRun, FlagShowDiff, FlagAutoBackup, "debug", "quiet"} {
-		set.Bool(name, false, "")
+		flags = append(flags, &cli.BoolFlag{Name: name})
 	}
 
+	var captured *cli.Command
+
+	root := &cli.Command{
+		Name:  "test",
+		Flags: flags,
+		Action: func(_ context.Context, cmd *cli.Command) error {
+			captured = cmd
+
+			return nil
+		},
+	}
+
+	argv := []string{"test"}
 	for k, v := range args {
-		require.NoError(t, set.Set(k, v))
+		argv = append(argv, "--"+k, v)
 	}
 
-	require.NoError(t, set.Parse([]string{positional}))
+	argv = append(argv, positional)
 
-	return cli.NewContext(cli.NewApp(), set, nil)
+	require.NoError(t, root.Run(context.Background(), argv))
+	require.NotNil(t, captured)
+
+	return captured
 }
 
 // An alias contains no "/". Both delete subcommands used to run
@@ -42,7 +64,7 @@ func deleteCtx(t *testing.T, args map[string]string, positional string) *cli.Con
 // they could be looked up in the config file. The name must now reach the input
 // untouched, for resolution further down.
 func TestNewDeleteCustomRulesInputPassesAliasThrough(t *testing.T) {
-	in, err := newDeleteCustomRulesInput(deleteCtx(t, map[string]string{
+	in, err := newDeleteCustomRulesInput(deleteCmd(t, map[string]string{
 		"name":             "^DropMe$",
 		FlagConfig:         "/tmp/azwaf-config.yaml",
 		FlagSubscriptionID: "10000000-0000-0000-0000-000000000001",
@@ -61,7 +83,7 @@ func TestNewDeleteCustomRulesInputPassesAliasThrough(t *testing.T) {
 }
 
 func TestNewDeleteManagedRuleExclusionInputPassesAliasThrough(t *testing.T) {
-	in, err := newDeleteManagedRuleExclusionInput(deleteCtx(t, map[string]string{
+	in, err := newDeleteManagedRuleExclusionInput(deleteCmd(t, map[string]string{
 		"rule-set":         "Microsoft_DefaultRuleSet_2.1",
 		"match-variable":   "RequestHeaderNames",
 		"match-operator":   "Equals",
@@ -81,25 +103,25 @@ func TestNewDeleteManagedRuleExclusionInputPassesAliasThrough(t *testing.T) {
 // now lives in GetWAFPolicyResourceID, so the builder must not pre-empt it.
 func TestNewDeleteInputsPassHashThroughWithoutSubscription(t *testing.T) {
 	crIn, err := newDeleteCustomRulesInput(
-		deleteCtx(t, map[string]string{"name": "^DropMe$"}, "0e1b2c3d"), "v-test")
+		deleteCmd(t, map[string]string{"name": "^DropMe$"}, "0e1b2c3d"), "v-test")
 	require.NoError(t, err)
 	require.Equal(t, "0e1b2c3d", crIn.PolicyID)
 
 	mreIn, err := newDeleteManagedRuleExclusionInput(
-		deleteCtx(t, map[string]string{"rule-set": "Microsoft_DefaultRuleSet_2.1"}, "0e1b2c3d"), "v-test")
+		deleteCmd(t, map[string]string{"rule-set": "Microsoft_DefaultRuleSet_2.1"}, "0e1b2c3d"), "v-test")
 	require.NoError(t, err)
 	require.Equal(t, "0e1b2c3d", mreIn.PolicyID)
 }
 
 func TestNewDeleteInputsRejectMissingArguments(t *testing.T) {
-	_, err := newDeleteCustomRulesInput(deleteCtx(t, map[string]string{"name": "^DropMe$"}, ""), "v-test")
+	_, err := newDeleteCustomRulesInput(deleteCmd(t, map[string]string{"name": "^DropMe$"}, ""), "v-test")
 	require.ErrorContains(t, err, "missing policy id")
 
 	// name and priority both unset
-	_, err = newDeleteCustomRulesInput(deleteCtx(t, nil, "prod-waf"), "v-test")
+	_, err = newDeleteCustomRulesInput(deleteCmd(t, nil, "prod-waf"), "v-test")
 	require.ErrorContains(t, err, "name and/or priority")
 
-	_, err = newDeleteManagedRuleExclusionInput(deleteCtx(t, nil, ""), "v-test")
+	_, err = newDeleteManagedRuleExclusionInput(deleteCmd(t, nil, ""), "v-test")
 	require.ErrorContains(t, err, "missing policy id")
 }
 
@@ -108,17 +130,17 @@ func TestNewDeleteInputsRejectMissingArguments(t *testing.T) {
 // false and the debug plumbing behind it was unreachable.
 func TestNewDeleteInputsPropagateDebug(t *testing.T) {
 	crIn, err := newDeleteCustomRulesInput(
-		deleteCtx(t, map[string]string{"name": "^DropMe$", "debug": "true"}, "prod-waf"), "v-test")
+		deleteCmd(t, map[string]string{"name": "^DropMe$", "debug": "true"}, "prod-waf"), "v-test")
 	require.NoError(t, err)
 	require.True(t, crIn.Debug)
 
 	mreIn, err := newDeleteManagedRuleExclusionInput(
-		deleteCtx(t, map[string]string{"rule-set": "Microsoft_DefaultRuleSet_2.1", "debug": "true"}, "prod-waf"), "v-test")
+		deleteCmd(t, map[string]string{"rule-set": "Microsoft_DefaultRuleSet_2.1", "debug": "true"}, "prod-waf"), "v-test")
 	require.NoError(t, err)
 	require.True(t, mreIn.Debug)
 
 	// and default to off
-	offIn, err := newDeleteCustomRulesInput(deleteCtx(t, map[string]string{"name": "^DropMe$"}, "prod-waf"), "v-test")
+	offIn, err := newDeleteCustomRulesInput(deleteCmd(t, map[string]string{"name": "^DropMe$"}, "prod-waf"), "v-test")
 	require.NoError(t, err)
 	require.False(t, offIn.Debug)
 }

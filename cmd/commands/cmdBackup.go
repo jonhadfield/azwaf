@@ -1,7 +1,9 @@
 package commands
 
 import (
-	"github.com/urfave/cli/v2"
+	"context"
+
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -16,7 +18,7 @@ func CmdBackup(versionOutput string) *cli.Command {
 			&cli.StringFlag{Name: "container-url", Usage: "container url to backup to, ex: https://mystorageacc.blob.core.windows.net/mycontainer", Aliases: []string{"c"}, Required: false},
 			&cli.BoolFlag{Name: "fail-fast", Usage: "exit if any error encountered", Aliases: []string{"f"}, Required: false},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			input := c.Args().Slice()
 
 			config := policy.BackupPoliciesInput{
