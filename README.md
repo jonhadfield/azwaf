@@ -54,7 +54,7 @@ Built on the modern Azure SDK for Go, with cached lookups via [BuntDB](https://g
 
 ### Prerequisites
 
-- Go **1.24+** (only required to build from source)
+- Go **1.27+** (only required to build from source)
 - An Azure subscription with one or more Front Door or Application Gateway WAF policies
 - Azure credentials available via Azure CLI, environment variables, managed identity, or another mechanism the [Azure Identity for Go](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) chain supports
 
