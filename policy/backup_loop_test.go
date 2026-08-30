@@ -40,7 +40,7 @@ func TestBackupPoliciesLoopFailFastBacksUpEveryPolicy(t *testing.T) {
 
 	// regression: the loop previously returned after the FIRST policy even on
 	// success, silently skipping the rest under --fail-fast
-	require.NoError(t, backupPolicies(policies, nil, "", true, true, dir))
+	require.NoError(t, backupPolicies(policies, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 	files, err := os.ReadDir(dir)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestBackupPoliciesLoopFailFastReturnsError(t *testing.T) {
 	missingDir := filepath.Join(t.TempDir(), "does", "not", "exist")
 	policies := []WrappedPolicy{wrappedFDPolicyForLoopTest("fd-one")}
 
-	err := backupPolicies(policies, nil, "", true, true, missingDir)
+	err := backupPolicies(policies, BackupDestination{Path: missingDir, FailFast: true, Quiet: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to create file")
 }
@@ -72,7 +72,7 @@ func TestBackupPoliciesLoopFailSlowContinuesPastErrors(t *testing.T) {
 	}
 
 	// fail-slow: errors are logged, every policy is attempted, no error returned
-	require.NoError(t, backupPolicies(policies, nil, "", false, true, missingDir))
+	require.NoError(t, backupPolicies(policies, BackupDestination{Path: missingDir, Quiet: true}))
 }
 
 func TestBackupAppGWPoliciesLoopBacksUpEveryPolicy(t *testing.T) {
@@ -82,7 +82,7 @@ func TestBackupAppGWPoliciesLoopBacksUpEveryPolicy(t *testing.T) {
 		wrappedAppGWPolicyForLoopTest("agw-two"),
 	}
 
-	require.NoError(t, backupAppGWPolicies(policies, nil, "", true, true, dir))
+	require.NoError(t, backupAppGWPolicies(policies, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 	files, err := os.ReadDir(dir)
 	require.NoError(t, err)
@@ -104,9 +104,9 @@ func TestBackupAppGWPoliciesLoopErrorSemantics(t *testing.T) {
 	}
 
 	// fail-fast surfaces the error
-	err := backupAppGWPolicies(policies, nil, "", true, true, missingDir)
+	err := backupAppGWPolicies(policies, BackupDestination{Path: missingDir, FailFast: true, Quiet: true})
 	require.Error(t, err)
 
 	// fail-slow logs and continues
-	require.NoError(t, backupAppGWPolicies(policies, nil, "", false, true, missingDir))
+	require.NoError(t, backupAppGWPolicies(policies, BackupDestination{Path: missingDir, Quiet: true}))
 }

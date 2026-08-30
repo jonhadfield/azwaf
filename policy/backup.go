@@ -62,6 +62,19 @@ func (in *BackupPoliciesInput) Validate() error {
 // supported; the resource type embedded in each resource id determines which
 // API the policy is fetched from. When no resource ids are supplied, every WAF
 // policy of either type within the subscription is backed up.
+// destination pairs the storage client with the three settings
+// BackupPoliciesInput already carried, so the five travel together from here
+// down rather than as positional arguments.
+func (in *BackupPoliciesInput) destination(blobClient *azblob.Client, containerName string) BackupDestination {
+	return BackupDestination{
+		BlobClient:    blobClient,
+		ContainerName: containerName,
+		Path:          in.Path,
+		FailFast:      in.FailFast,
+		Quiet:         in.Quiet,
+	}
+}
+
 func BackupPolicies(in *BackupPoliciesInput) error {
 	funcName := helpers.GetFunctionName()
 
@@ -155,11 +168,13 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 		return err
 	}
 
-	if err = backupPolicies(fdPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path); err != nil {
+	dest := in.destination(blobClient, containerName)
+
+	if err = backupPolicies(fdPolicies, dest); err != nil {
 		return err
 	}
 
-	return backupAppGWPolicies(appgwPolicies, blobClient, containerName, in.FailFast, in.Quiet, in.Path)
+	return backupAppGWPolicies(appgwPolicies, dest)
 }
 
 // newBackupBlobClient builds the client used to upload backups to Azure
@@ -263,14 +278,12 @@ func partitionRIDsByWAFType(rids []string) (fd, appgw []string) {
 
 // BackupPolicy takes a WrappedPolicy as input and creates a json file that can later be restored
 // BackupPolicy writes a Front Door policy, with its metadata, as a json file.
-func BackupPolicy(p *WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
-	return backupWrapped(p, backupDestination{
-		blobClient:    blobClient,
-		containerName: containerName,
-		path:          path,
-		failFast:      failFast,
-		quiet:         quiet,
-	})
+// BackupPolicy backs up a single Front Door policy. It and BackupAppGWPolicy
+// are typed entry points onto backupWrapped, which cannot take a concrete type
+// because the two wrapped policy types share no fields as far as Go is
+// concerned.
+func BackupPolicy(p *WrappedPolicy, dest BackupDestination) error {
+	return backupWrapped(p, dest)
 }
 
 // backupSubject is what backupWrapped needs from either policy type. The two
@@ -327,25 +340,32 @@ func (p *WrappedAppGWPolicy) prepareForBackup(now time.Time) backupInfo {
 // backupDestination is where a backup is written: a local directory, a blob
 // container, or both. These five travelled together as positional arguments
 // through every backup function.
-type backupDestination struct {
-	blobClient    *azblob.Client
-	containerName string
-	path          string
-	failFast      bool
-	quiet         bool
+// BackupDestination is where a backup is written: a local directory, a blob
+// container, or both. These five values travelled together through every
+// backup function as positional arguments, which made call sites like
+// (nil, "", true, false, dir) impossible to read at a glance.
+type BackupDestination struct {
+	// BlobClient is nil when no Azure Storage destination was requested.
+	BlobClient    *azblob.Client
+	ContainerName string
+	// Path is the local directory to write to; empty skips the local copy.
+	Path string
+	// FailFast turns a per-policy failure into an error rather than a log line.
+	FailFast bool
+	Quiet    bool
 }
 
 // backupWrapped serialises a policy and writes it to the requested
 // destinations. It backs both BackupPolicy and BackupAppGWPolicy, which
 // previously held near-identical copies of it.
-func backupWrapped(p backupSubject, dest backupDestination) error {
+func backupWrapped(p backupSubject, dest BackupDestination) error {
 	funcName := helpers.GetFunctionName()
 	now := time.Now().UTC()
 	info := p.prepareForBackup(now)
 
 	var cwd string
 
-	if !dest.quiet {
+	if !dest.Quiet {
 		var oerr error
 
 		cwd, oerr = os.Getwd()
@@ -358,7 +378,7 @@ func backupWrapped(p backupSubject, dest backupDestination) error {
 
 	pj, err := json.MarshalIndent(p, "", "    ")
 	if err != nil {
-		if dest.failFast {
+		if dest.FailFast {
 			return err
 		}
 
@@ -374,13 +394,13 @@ func backupWrapped(p backupSubject, dest backupDestination) error {
 
 	// write locally first: the local copy is the cheaper and more reliable of
 	// the two destinations, and must not be lost to an upload failure
-	if dest.path != "" {
-		if err = writeBackupToFile(pj, cwd, fName, dest.quiet, dest.path); err != nil {
+	if dest.Path != "" {
+		if err = writeBackupToFile(pj, cwd, fName, dest); err != nil {
 			return fmt.Errorf("%s - %w", funcName, err)
 		}
 	}
 
-	return uploadBackupToContainer(pj, fName, dest.containerName, dest.blobClient, dest.failFast, dest.quiet)
+	return uploadBackupToContainer(pj, fName, dest)
 }
 
 // printBackupStatus writes the progress line, trimming it when it exactly fills
@@ -408,34 +428,34 @@ func printBackupStatus(msg string) {
 // client means no Azure Storage destination was requested, so there is nothing
 // to do. Upload failures honour failFast, matching the rest of the backup path:
 // the local copy has already been written by this point.
-func uploadBackupToContainer(pj []byte, fName, containerName string, blobClient *azblob.Client, failFast, quiet bool) error {
-	if blobClient == nil {
+func uploadBackupToContainer(pj []byte, fName string, dest BackupDestination) error {
+	if dest.BlobClient == nil {
 		return nil
 	}
 
-	if !quiet {
+	if !dest.Quiet {
 		logging.Infof("uploading file with blob name: %s\n", fName)
 	}
 
-	_, err := blobClient.UploadBuffer(context.Background(), containerName, fName, pj, &azblob.UploadBufferOptions{
+	_, err := dest.BlobClient.UploadBuffer(context.Background(), dest.ContainerName, fName, pj, &azblob.UploadBufferOptions{
 		BlockSize:   blockBlobUploadBlockSize,
 		Concurrency: blockBlobParallelism,
 	})
 	if err != nil {
-		if failFast {
+		if dest.FailFast {
 			return fmt.Errorf("%s - failed to upload %s: %w", helpers.GetFunctionName(), fName, err)
 		}
 
-		logging.Errorf("failed to upload %s to container %s: %s", fName, containerName, err)
+		logging.Errorf("failed to upload %s to container %s: %s", fName, dest.ContainerName, err)
 	}
 
 	return nil
 }
 
-func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (err error) {
+func writeBackupToFile(pj []byte, cwd, fName string, dest BackupDestination) (err error) {
 	funcName := helpers.GetFunctionName()
 
-	fp := filepath.Join(path, fName)
+	fp := filepath.Join(dest.Path, fName)
 	// #nosec
 	f, err := os.Create(fp)
 	if err != nil {
@@ -451,7 +471,7 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 
 	_ = f.Close()
 
-	if !quiet {
+	if !dest.Quiet {
 		op := filepath.Clean(fp)
 		if strings.HasPrefix(op, cwd) {
 			op, err = filepath.Rel(cwd, op)
@@ -469,12 +489,12 @@ func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (e
 }
 
 // backupPolicies accepts a list of WrappedPolicys and calls BackupPolicy with each
-func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) (err error) {
+func backupPolicies(policies []WrappedPolicy, dest BackupDestination) (err error) {
 	for x := range policies {
 		// return only on error: previously this returned unconditionally under
 		// fail-fast, silently skipping every policy after the first
-		if err = BackupPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
-			if failFast {
+		if err = BackupPolicy(&policies[x], dest); err != nil {
+			if dest.FailFast {
 				return err
 			}
 
@@ -488,20 +508,15 @@ func backupPolicies(policies []WrappedPolicy, blobClient *azblob.Client, contain
 // BackupAppGWPolicy is the AppGW analogue of BackupPolicy. It writes the
 // supplied WrappedAppGWPolicy as JSON to disk and/or Azure Blob Storage.
 // BackupAppGWPolicy is the Application Gateway equivalent of BackupPolicy.
-func BackupAppGWPolicy(p *WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
-	return backupWrapped(p, backupDestination{
-		blobClient:    blobClient,
-		containerName: containerName,
-		path:          path,
-		failFast:      failFast,
-		quiet:         quiet,
-	})
+// BackupAppGWPolicy backs up a single Application Gateway policy.
+func BackupAppGWPolicy(p *WrappedAppGWPolicy, dest BackupDestination) error {
+	return backupWrapped(p, dest)
 }
 
-func backupAppGWPolicies(policies []WrappedAppGWPolicy, blobClient *azblob.Client, containerName string, failFast, quiet bool, path string) error {
+func backupAppGWPolicies(policies []WrappedAppGWPolicy, dest BackupDestination) error {
 	for x := range policies {
-		if err := BackupAppGWPolicy(&policies[x], blobClient, containerName, failFast, quiet, path); err != nil {
-			if failFast {
+		if err := BackupAppGWPolicy(&policies[x], dest); err != nil {
+			if dest.FailFast {
 				return err
 			}
 
