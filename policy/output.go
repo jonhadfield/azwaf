@@ -672,12 +672,12 @@ func exclusionLimitWarnings(policy *armfrontdoor.WebApplicationFirewallPolicy) [
 			warnings = append(warnings, exclusionLimitWarning{
 				atLimit: true,
 				message: fmt.Sprintf("[WARNING] %s %s has reached the maximum exclusion limit: %d/%d",
-					scope.scope, scope.name, scope.count, maxExclusionLimit),
+					scope.scope.Lower(), scope.name, scope.count, maxExclusionLimit),
 			})
 		case scope.count >= maxExclusionLimitWarningThreshold:
 			warnings = append(warnings, exclusionLimitWarning{
 				message: fmt.Sprintf("[WARNING] %s %s nearing maximum exclusion limit: %d/%d",
-					scope.scope, scope.name, scope.count, maxExclusionLimit),
+					scope.scope.Lower(), scope.name, scope.count, maxExclusionLimit),
 			})
 		}
 	}
@@ -717,8 +717,8 @@ func outputShadows(ruleShadows, ruleGroupShadows []shadow) {
 	if len(ruleShadows) > 0 {
 		for x := range ruleShadows {
 			table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-				{Text: fmt.Sprintf("%s: %s", printScope(ruleShadows[x].shadowType), ruleShadows[x].shadowName)},
-				{Text: fmt.Sprintf("%s: %s", printScope(ruleShadows[x].shadowsType), ruleShadows[x].shadowsName)},
+				{Text: fmt.Sprintf("%s: %s", ruleShadows[x].shadowType.Title(), ruleShadows[x].shadowName)},
+				{Text: fmt.Sprintf("%s: %s", ruleShadows[x].shadowsType.Title(), ruleShadows[x].shadowsName)},
 				{Text: string(*ruleShadows[x].exclusion.MatchVariable)},
 				{Text: string(*ruleShadows[x].exclusion.SelectorMatchOperator)},
 				{Text: *ruleShadows[x].exclusion.Selector},
@@ -729,8 +729,8 @@ func outputShadows(ruleShadows, ruleGroupShadows []shadow) {
 	if len(ruleGroupShadows) > 0 {
 		for x := range ruleGroupShadows {
 			table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
-				{Text: fmt.Sprintf("%s: %s", printScope(ruleGroupShadows[x].shadowType), ruleGroupShadows[x].shadowName)},
-				{Text: fmt.Sprintf("%s: %s", printScope(ruleGroupShadows[x].shadowsType), ruleGroupShadows[x].shadowsName)},
+				{Text: fmt.Sprintf("%s: %s", ruleGroupShadows[x].shadowType.Title(), ruleGroupShadows[x].shadowName)},
+				{Text: fmt.Sprintf("%s: %s", ruleGroupShadows[x].shadowsType.Title(), ruleGroupShadows[x].shadowsName)},
 				{Text: string(*ruleGroupShadows[x].exclusion.MatchVariable)},
 				{Text: string(*ruleGroupShadows[x].exclusion.SelectorMatchOperator)},
 				{Text: *ruleGroupShadows[x].exclusion.Selector},
@@ -740,19 +740,6 @@ func outputShadows(ruleShadows, ruleGroupShadows []shadow) {
 
 	table.SetStyle(simpletable.StyleRounded)
 	table.Println()
-}
-
-func printScope(scope string) string {
-	switch scope {
-	case ScopeRule:
-		return "Rule"
-	case ScopeRuleGroup:
-		return "Rule Group"
-	case ScopeRuleSet:
-		return "Rule Set"
-	default:
-		return ""
-	}
 }
 
 func outputPolicyRuleSetStats(statsList *[]RuleSetStatsOutput) {
@@ -970,7 +957,7 @@ func formatPolicyResourceState(resourceState *armfrontdoor.PolicyResourceState) 
 }
 
 type OutputManagedRuleExclusionsTableInput struct {
-	narrowestScope                 string
+	narrowestScope                 ExclusionScope
 	ruleOverride                   *armfrontdoor.ManagedRuleOverride
 	groupExclusions, setExclusions []*armfrontdoor.ManagedRuleExclusion
 }
@@ -1014,7 +1001,7 @@ func OutputManagedRuleExclusionsTable(in *OutputManagedRuleExclusionsTableInput)
 	}
 
 	// TODO: move to a getRuleGroupExclusionsRows func
-	if slices.Contains([]string{ScopeRule, ScopeRuleGroup}, in.narrowestScope) {
+	if slices.Contains([]ExclusionScope{ScopeRule, ScopeRuleGroup}, in.narrowestScope) {
 		if len(in.groupExclusions) == 0 {
 			table.Body.Cells = append(table.Body.Cells, []*simpletable.Cell{
 				{Text: "RuleGroup"},
@@ -1318,34 +1305,39 @@ func handleGeoValue(builder *strings.Builder, val string, valsWritten *int) {
 	}
 }
 
-func handleURLValue(builder *strings.Builder, val string, prevType *string) {
+func handleURLValue(builder *strings.Builder, val string, prevType *ipFamily) {
 	if _, err := fmt.Fprintf(builder, "%s\n", val); err != nil {
 		logging.Errorf("builder failed to write string - %s", err.Error())
 	}
 
-	*prevType = ""
+	*prevType = ipFamilyNone
 }
 
-// ipTypeV4 and ipTypeV6 are the values prevType carries between match values,
-// naming the family of the value most recently written inline.
+// ipFamily names the family of the match value most recently written inline.
+// The zero value is load-bearing rather than merely absent: it means no value
+// is being held on the open line, which is why handleIPValue treats it as a
+// fresh start and skips the wrapping checks.
+type ipFamily string
+
 const (
-	ipTypeV4 = "ipv4"
-	ipTypeV6 = "ipv6"
+	ipFamilyNone ipFamily = ""
+	ipFamilyV4   ipFamily = "ipv4"
+	ipFamilyV6   ipFamily = "ipv6"
 )
 
 // handleIPValue writes one IP match value, wrapping the line when the current
-// one is full. valType names the family being written — ipTypeV4 or ipTypeV6 —
+// one is full. valType names the family being written — ipFamilyV4 or ipFamilyV6 —
 // and is what prevType carries forward.
 //
-// The empty prevType case deliberately skips the wrapping checks: handleURLValue
+// The ipFamilyNone case deliberately skips the wrapping checks: handleURLValue
 // clears prevType without resetting valsWritten, so a value can arrive here with
 // a line already part-written, and the two-function version this replaced put it
 // inline regardless. Folding it in with the others would change where lines break.
-func handleIPValue(builder *strings.Builder, val string, prevType *string, valsWritten *int, prevLen, nextLen int, valType string) {
+func handleIPValue(builder *strings.Builder, val string, prevType *ipFamily, valsWritten *int, prevLen, nextLen int, valType ipFamily) {
 	switch *prevType {
-	case "":
+	case ipFamilyNone:
 		writeIPValueInline(builder, val, prevType, valsWritten, valType)
-	case ipTypeV4, ipTypeV6:
+	case ipFamilyV4, ipFamilyV6:
 		// end the line on the third value, or on the second where the next one
 		// would push it past the limit
 		if *valsWritten == 2 || (*valsWritten == 1 && prevLen+len(val)+nextLen > lineLengthLimit) {
@@ -1354,7 +1346,7 @@ func handleIPValue(builder *strings.Builder, val string, prevType *string, valsW
 			}
 
 			*valsWritten = 0
-			*prevType = ""
+			*prevType = ipFamilyNone
 
 			return
 		}
@@ -1366,7 +1358,7 @@ func handleIPValue(builder *strings.Builder, val string, prevType *string, valsW
 }
 
 // writeIPValueInline appends a value to the current line.
-func writeIPValueInline(builder *strings.Builder, val string, prevType *string, valsWritten *int, valType string) {
+func writeIPValueInline(builder *strings.Builder, val string, prevType *ipFamily, valsWritten *int, valType ipFamily) {
 	if _, err := fmt.Fprintf(builder, "%s, ", val); err != nil {
 		logging.Errorf("builder failed to write string - err: %s", err.Error())
 	}
@@ -1385,7 +1377,7 @@ func writeIPValueInline(builder *strings.Builder, val string, prevType *string, 
 func wrapMatchValues(mvs []*string, showFull bool) string {
 	builder := strings.Builder{}
 
-	var prevType string
+	var prevType ipFamily
 	var valsWritten int
 
 	for i, mv := range mvs {
@@ -1404,9 +1396,9 @@ func wrapMatchValues(mvs []*string, showFull bool) string {
 		case isURL:
 			handleURLValue(&builder, val, &prevType)
 		case isIPv4:
-			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipTypeV4)
+			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipFamilyV4)
 		case isIPv6:
-			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipTypeV6)
+			handleIPValue(&builder, val, &prevType, &valsWritten, prevLen, nextLen, ipFamilyV6)
 		default:
 			logging.Errorf("unknown type for %s", val)
 		}

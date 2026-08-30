@@ -13,7 +13,7 @@ func TestProcessScopeCombinations(t *testing.T) {
 	for _, tc := range []struct {
 		name                         string
 		ruleSetType, ruleGroup, rule string
-		want                         string
+		want                         ExclusionScope
 	}{
 		{"rule id alone", "", "", "942100", ScopeRule},
 		{"rule id wins over everything", "rs", "grp", "942100", ScopeRule},

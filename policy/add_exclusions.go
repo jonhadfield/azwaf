@@ -32,7 +32,7 @@ type AddManagedRuleExclusionInput struct {
 	ShowDiff              bool
 	AppVersion            string
 	// helper attribute: used to assess scope of change
-	Scope string
+	Scope ExclusionScope
 }
 
 type AddManagedRuleExclusionCLIInput struct {
@@ -249,10 +249,10 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 	checkDebug(input.Debug)
 	logging.Tracef("%s | scope: %s", funcName, input.Scope)
 
-	switch {
-	case input.Scope == "":
+	switch input.Scope {
+	case "":
 		return fmt.Errorf("%s - %s", funcName, errScopeUndefined)
-	case input.Scope == ScopeRuleSet:
+	case ScopeRuleSet:
 		if err = appendExclusion(appendExclusionInput{
 			appendScope:           input.Scope,
 			managedRuleExclusions: &mrs.Exclusions,
@@ -262,14 +262,14 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 		}); err != nil {
 			return
 		}
-	case strings.EqualFold(input.Scope, ScopeRuleGroup):
+	case ScopeRuleGroup:
 		// TODO: turn into function
 		var ruleGroupFound bool
 
 		for _, mrgo := range mrs.RuleGroupOverrides {
 			logging.Tracef("%s | comparing %s with %s", funcName, *mrgo.RuleGroupName, input.RuleGroup)
 
-			if strings.EqualFold(input.Scope, ScopeRuleGroup) && !strings.EqualFold(*mrgo.RuleGroupName, input.RuleGroup) {
+			if input.Scope == ScopeRuleGroup && !strings.EqualFold(*mrgo.RuleGroupName, input.RuleGroup) {
 				// if we're adding to a rulegroup and it doesn't match, then continue
 				continue
 			}
@@ -292,7 +292,7 @@ func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.
 		if !ruleGroupFound {
 			return fmt.Errorf("%s - %s %s", funcName, input.RuleGroup, errRuleGroupNotFound)
 		}
-	case strings.EqualFold(input.Scope, ScopeRule):
+	case ScopeRule:
 		if err = addManagedRuleGroupOverrideRuleExclusions(&addManagedRuleGroupOverrideRuleExclusionsInput{
 			session:               input.Session,
 			ruleID:                input.RuleID,
@@ -498,7 +498,7 @@ func getRuleDefinition(in *getRuleDefinitionInput) (ruleDef *armfrontdoor.Manage
 }
 
 type appendExclusionInput struct {
-	appendScope           string
+	appendScope           ExclusionScope
 	managedRuleExclusions *[]*armfrontdoor.ManagedRuleExclusion
 	matchVariable         armfrontdoor.ManagedRuleExclusionMatchVariable
 	matchOperator         armfrontdoor.ManagedRuleExclusionSelectorMatchOperator
@@ -523,7 +523,7 @@ func appendExclusion(input appendExclusionInput) error {
 		})
 
 		if mre {
-			scopeOutput := strings.ToLower(printScope(input.appendScope))
+			scopeOutput := input.appendScope.Lower()
 			return fmt.Errorf("%s - %s exclusion already exists", funcName, scopeOutput)
 		}
 	}
