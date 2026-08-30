@@ -11,9 +11,13 @@ func TestGetFunctionName(t *testing.T) {
 	require.Equal(t, "helpers.TestGetFunctionName", GetFunctionName())
 }
 
-func callParent() string { return GetParentFunctionName() }
+// Callers in policy/ used to reach this through a two-hop wrapper that counted
+// stack frames. They now call it directly, so pin that it names the immediate
+// caller wherever it is invoked from, including inside a method.
+type namer struct{}
 
-func TestGetParentFunctionName(t *testing.T) {
-	// GetParentFunctionName should return the parent caller's name
-	require.Equal(t, "helpers.TestGetParentFunctionName", callParent())
+func (namer) name() string { return GetFunctionName() }
+
+func TestGetFunctionNameNamesTheImmediateCaller(t *testing.T) {
+	require.Equal(t, "helpers.namer.name", namer{}.name())
 }

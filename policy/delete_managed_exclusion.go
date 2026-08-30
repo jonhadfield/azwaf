@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -64,7 +65,7 @@ func (input *DeleteManagedRuleExclusionCLIInput) ParseConfig() (dmrei *DeleteMan
 }
 
 func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleSet *armfrontdoor.ManagedRuleSet) (newMRS *armfrontdoor.ManagedRuleSet, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	// required when running tests without init
 	checkDebug(dcri.Debug)
 	logging.Tracef("%s | scope: %s", funcName, dcri.Scope)
@@ -194,7 +195,7 @@ func exclusionParamsDefined(dcri *DeleteManagedRuleExclusionInput) bool {
 }
 
 func stripManagedRuleGroupOverrideExclusions(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleExclusions []*armfrontdoor.ManagedRuleExclusion) (newManagedRuleExclusions []*armfrontdoor.ManagedRuleExclusion) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// return if no exclusions to compare
 	if len(existingManagedRuleExclusions) == 0 {
@@ -250,7 +251,7 @@ type matchManagedRuleGroupOverrideExclusionInput struct {
 }
 
 func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideExclusionInput) (match bool) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Tracef("comparing my input.Variable: %s with %v", input.variable, valueOrDash(input.existingManagedRuleExclusion.MatchVariable))
 	logging.Tracef("comparing my input.Operator: %s with %v", input.operator, valueOrDash(input.existingManagedRuleExclusion.SelectorMatchOperator))
@@ -280,7 +281,7 @@ func matchManagedRuleGroupOverrideExclusion(input matchManagedRuleGroupOverrideE
 // ===
 // Return nil if empty
 func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleOverride *armfrontdoor.ManagedRuleOverride) (newManagedRuleOverride *armfrontdoor.ManagedRuleOverride) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if existingManagedRuleOverride == nil {
 		return nil
@@ -325,7 +326,7 @@ func stripManagedRuleOverride(dcri *DeleteManagedRuleExclusionInput, existingMan
 // ===
 // Return nil if empty
 func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleGroupOverrides []*armfrontdoor.ManagedRuleOverride) (newManagedRuleGroupOverrides []*armfrontdoor.ManagedRuleOverride) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	newManagedRuleGroupOverrides = []*armfrontdoor.ManagedRuleOverride{}
 
@@ -372,7 +373,7 @@ func stripManagedRuleGroupOverrideRules(dcri *DeleteManagedRuleExclusionInput, e
 }
 
 func stripManagedRuleGroupOverride(dcri *DeleteManagedRuleExclusionInput, existingManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride) (newManagedRuleGroupOverride *armfrontdoor.ManagedRuleGroupOverride, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if existingManagedRuleGroupOverride == nil {
 		return nil, fmt.Errorf("%s - rule group override is missing", funcName)
@@ -425,7 +426,7 @@ func stripManagedRuleGroupOverride(dcri *DeleteManagedRuleExclusionInput, existi
 }
 
 func stripMatchingMREs(dcri *DeleteManagedRuleExclusionInput, existingMRSList *armfrontdoor.ManagedRuleSetList) (newMRSList *armfrontdoor.ManagedRuleSetList, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	newMRSList = &armfrontdoor.ManagedRuleSetList{}
 	newMRSList.ManagedRuleSets = []*armfrontdoor.ManagedRuleSet{}

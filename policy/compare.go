@@ -12,11 +12,12 @@ import (
 
 	"github.com/jonhadfield/findexec"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
 
 func compare(original interface{}, updated []byte) (differencesFound bool, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Debugf("%s | finding differences between the current policy version and the proposed", funcName)
 

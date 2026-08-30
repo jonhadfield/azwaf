@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -34,7 +35,7 @@ type CopyRulesInput struct {
 
 // CopyRules copies managed and custom rules between policies with matching rule sets
 func CopyRules(i CopyRulesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	if strings.EqualFold(i.Source, i.Target) {
 		return fmt.Errorf("%s - source and target must be different", funcName)
 	}
@@ -146,7 +147,7 @@ func CopyRules(i CopyRulesInput) error {
 
 // copyWrappedPolicyRules takes two policies and copies the chosen sections from source to the target
 func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, managedRulesOnly bool, appVersion string) (*WrappedPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	updatedTarget, err := copyPolicyRules(&source.Policy, &target.Policy, customRulesOnly, managedRulesOnly)
 	if err != nil {
@@ -172,7 +173,7 @@ func copyWrappedPolicyRules(source, target *WrappedPolicy, customRulesOnly, mana
 
 // copyPolicyRules takes two policies and copies the chosen sections from source to the target
 func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, customRulesOnly, managedRulesOnly bool) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if customRulesOnly && managedRulesOnly {
 		return nil, fmt.Errorf("please choose only one of custom-only and managed-only, or neither to copy both")
@@ -214,7 +215,7 @@ func copyPolicyRules(source, target *armfrontdoor.WebApplicationFirewallPolicy, 
 }
 
 func (c *CopyRulesInput) Validate() error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if c.CustomRulesOnly && c.ManagedRulesOnly {
 		return fmt.Errorf("%s - please choose only one of custom-only and managed-only, or neither to copy both", funcName)
@@ -237,7 +238,7 @@ func (c *CopyRulesInput) Validate() error {
 
 // CopyPolicy takes an instance of a policy and returns a duplicate
 func CopyPolicy(original armfrontdoor.WebApplicationFirewallPolicy) (armfrontdoor.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	originalBytes, err := json.Marshal(original)
 	if err != nil {
@@ -254,7 +255,7 @@ func CopyPolicy(original armfrontdoor.WebApplicationFirewallPolicy) (armfrontdoo
 
 // CopyWrappedPolicy takes an instance of a wrapped policy and returns a duplicate
 func CopyWrappedPolicy(original *WrappedPolicy) (*WrappedPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var duplicate *WrappedPolicy
 

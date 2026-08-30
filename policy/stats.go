@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/jonhadfield/azwaf/helpers"
 )
 
 type RuleSetStatsOutput struct {
@@ -32,7 +33,7 @@ type RuleSetStatsOutput struct {
 
 // getPolicyStats returns counts for all items in a rule set
 func getPolicyStats(policy *armfrontdoor.WebApplicationFirewallPolicy, mrsd []*armfrontdoor.ManagedRuleSetDefinition) ([]RuleSetStatsOutput, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var stats []RuleSetStatsOutput
 

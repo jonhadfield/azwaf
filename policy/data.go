@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -19,7 +20,7 @@ import (
 // GetFrontDoorByID returns a front door instance for the provided id.
 // It includes endpoints with any associated waf Policies.
 func GetFrontDoorByID(s *session.Session, frontDoorID string) (FrontDoor, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	ctx := context.Background()
 
 	rID := config.ParseResourceID(frontDoorID)
@@ -89,7 +90,7 @@ const (
 
 // PushPolicy creates or updates a waf Policy with the provided Policy instance.
 func PushPolicy(s *session.Session, i *PushPolicyInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Debugf("pushing policy %s...", i.Name)
 
@@ -154,7 +155,7 @@ type FrontDoor struct {
 type FrontDoors []FrontDoor
 
 func LoadPolicyFromFile(f string) (armfrontdoor.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// #nosec
 	data, err := os.ReadFile(f)
@@ -173,7 +174,7 @@ func LoadPolicyFromFile(f string) (armfrontdoor.WebApplicationFirewallPolicy, er
 }
 
 func LoadWrappedPolicyFromFile(f string) (WrappedPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	logging.Debugf("%s | loading file %s", funcName, f)
 	// #nosec
 	data, err := os.ReadFile(f)
@@ -214,7 +215,7 @@ type wafTypePeek struct {
 // type based on the WAFType field embedded in the backup. Backups produced by
 // older versions of azwaf have no WAFType and are treated as FrontDoor.
 func LoadAllBackupsFromPaths(paths []string) (LoadedBackups, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if len(paths) == 0 {
 		return LoadedBackups{}, fmt.Errorf("%s - no paths provided", funcName)
@@ -238,7 +239,7 @@ func LoadAllBackupsFromPaths(paths []string) (LoadedBackups, error) {
 }
 
 func loadAllBackupsFromPath(rootPath string) (LoadedBackups, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	info, err := os.Stat(rootPath)
 	if err != nil {
@@ -278,7 +279,7 @@ func loadAllBackupsFromPath(rootPath string) (LoadedBackups, error) {
 }
 
 func loadBackupFile(path string) (LoadedBackups, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	logging.Debugf("%s | loading file %s", funcName, path)
 
 	// #nosec

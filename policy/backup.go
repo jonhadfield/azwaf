@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
@@ -42,7 +43,7 @@ type BackupPoliciesInput struct {
 func (in *BackupPoliciesInput) Validate() error {
 	if in.SubscriptionID == "" && len(in.RIDs) == 0 {
 		return fmt.Errorf("%s - subscription-id required if resource ids not specified",
-			GetFunctionName())
+			helpers.GetFunctionName())
 	}
 
 	// a subscription id is optional when resource ids are supplied (each id
@@ -62,7 +63,7 @@ func (in *BackupPoliciesInput) Validate() error {
 // API the policy is fetched from. When no resource ids are supplied, every WAF
 // policy of either type within the subscription is backed up.
 func BackupPolicies(in *BackupPoliciesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if err := in.Validate(); err != nil {
 		return err
@@ -174,7 +175,7 @@ func BackupPolicies(in *BackupPoliciesInput) error {
 // Returns a nil client when no Azure Storage destination was requested, leaving
 // the caller to write local files only.
 func newBackupBlobClient(s *session.Session, storageAccountResourceID, containerURL string) (*azblob.Client, string, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if containerURL == "" {
 		// a storage account alone does not say which container to write to
@@ -338,7 +339,7 @@ type backupDestination struct {
 // destinations. It backs both BackupPolicy and BackupAppGWPolicy, which
 // previously held near-identical copies of it.
 func backupWrapped(p backupSubject, dest backupDestination) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	now := time.Now().UTC()
 	info := p.prepareForBackup(now)
 
@@ -422,7 +423,7 @@ func uploadBackupToContainer(pj []byte, fName, containerName string, blobClient 
 	})
 	if err != nil {
 		if failFast {
-			return fmt.Errorf("%s - failed to upload %s: %w", GetFunctionName(), fName, err)
+			return fmt.Errorf("%s - failed to upload %s: %w", helpers.GetFunctionName(), fName, err)
 		}
 
 		logging.Errorf("failed to upload %s to container %s: %s", fName, containerName, err)
@@ -432,7 +433,7 @@ func uploadBackupToContainer(pj []byte, fName, containerName string, blobClient 
 }
 
 func writeBackupToFile(pj []byte, cwd, fName string, quiet bool, path string) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	fp := filepath.Join(path, fName)
 	// #nosec

@@ -12,6 +12,7 @@ import (
 	"github.com/wI2L/jsondiff"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
 )
@@ -60,7 +61,7 @@ type WrappedAppGWPolicy struct {
 
 // GetRawAppGWPolicy retrieves a single Application Gateway WAF policy.
 func GetRawAppGWPolicy(s *session.Session, subscription, resourceGroup, name string) (*armnetwork.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if err := s.GetAppGWPoliciesClient(subscription); err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
@@ -85,7 +86,7 @@ func GetRawAppGWPolicy(s *session.Session, subscription, resourceGroup, name str
 // GetAllAppGWPolicies lists every Application Gateway WAF policy in the
 // subscription, optionally filtered by FilterResourceIDs.
 func GetAllAppGWPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armnetwork.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if err := s.GetAppGWPoliciesClient(i.SubscriptionID); err != nil {
 		return nil, fmt.Errorf("%s - %w", funcName, err)
@@ -137,7 +138,7 @@ func GetAllAppGWPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armne
 // GetWrappedAppGWPoliciesFromRawIDs mirrors GetWrappedPoliciesFromRawIDs but
 // for AppGW. Filter resource ids must already be parsed AppGW WAF policy ids.
 func GetWrappedAppGWPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput) ([]WrappedAppGWPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var rids []config.ResourceID
 
@@ -198,7 +199,7 @@ type PushAppGWPolicyInput struct {
 // PushAppGWPolicy creates or updates an Application Gateway WAF policy.
 // The AppGW SDK exposes CreateOrUpdate as a synchronous call.
 func PushAppGWPolicy(s *session.Session, i *PushAppGWPolicyInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Debugf("pushing AppGW WAF policy %s...", i.Name)
 
@@ -220,7 +221,7 @@ func PushAppGWPolicy(s *session.Session, i *PushAppGWPolicyInput) error {
 
 // LoadWrappedAppGWPolicyFromFile loads a WrappedAppGWPolicy backup file.
 func LoadWrappedAppGWPolicyFromFile(data []byte) (WrappedAppGWPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var wp WrappedAppGWPolicy
 	if err := json.Unmarshal(data, &wp); err != nil {
@@ -237,7 +238,7 @@ func LoadWrappedAppGWPolicyFromFile(data []byte) (WrappedAppGWPolicy, error) {
 // GenerateAppGWPolicyPatch reuses the JSON-path-based diff stats from the FD
 // patch generator so restore confirmation prompts work consistently.
 func GenerateAppGWPolicyPatch(original interface{}, newPolicy armnetwork.WebApplicationFirewallPolicy) (GeneratePolicyPatchOutput, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var output GeneratePolicyPatchOutput
 

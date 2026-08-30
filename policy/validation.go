@@ -11,11 +11,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
 
 func commonCLIInputValidation(subscriptionID, policyID string) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if err := ValidateResourceID(policyID, false); err != nil {
 		return fmt.Errorf("%s - %w", funcName, err)
@@ -40,14 +41,14 @@ func (in ListPoliciesInput) Validate() error {
 	}
 
 	if in.Max == 0 {
-		return fmt.Errorf("%s - invalid maximum number of policies to return", GetFunctionName())
+		return fmt.Errorf("%s - invalid maximum number of policies to return", helpers.GetFunctionName())
 	}
 
 	return nil
 }
 
 func validateSubscriptionID(subscriptionID string) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if subscriptionID == "" {
 		return errors.New("subscription-id is required")
@@ -74,7 +75,7 @@ func (in *ShowPolicyInput) Validate() error {
 		return fmt.Errorf(
 			"%s - --custom-only and --managed-only cannot be combined: together they hide everything. "+
 				"Omit both to show the whole policy, or add --stats",
-			GetFunctionName())
+			helpers.GetFunctionName())
 	}
 
 	return nil
@@ -119,7 +120,7 @@ func MatchValuesHasMatchAll(mvs []*string, matchVariable armfrontdoor.MatchVaria
 	}
 
 	logging.Debugf("%s | match variable %s with operator %s not supported for checking if match-all is true",
-		GetFunctionName(), matchVariable, operator)
+		helpers.GetFunctionName(), matchVariable, operator)
 
 	return
 }

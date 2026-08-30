@@ -48,7 +48,7 @@ than defects.
 | — | D. Accessor layer for optional policy fields | Standards | code | fixed |
 | P4 | A-B duplicated code (11 clusters) | Standards | code | **all collapsed** |
 | P4 | A-B dead code / speculative generality | Standards | code | **fixed** |
-| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | primitive obsession fixed, rest open |
+| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | data clumps open, rest fixed |
 
 Three findings turned out to be wrong on inspection and are corrected in place
 rather than acted on: **S2** (described as silent data loss; it was a hard
@@ -278,7 +278,7 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
 
 ### B. Baseline smells (judgement calls)
 
-- [ ] **Duplicated code** — the dominant smell:
+- [x] **Duplicated code** — the dominant smell:
   - ~~`sortRulesByPriority` (`policy/custom_rules.go:739`) and `sortCustomRulesByPriority`
     (`:990`) are identical.~~
 
@@ -575,11 +575,35 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   as convertible to tagged switches, which is the shape the finding was asking for. Both
   converted.*
 
-- [ ] **Middle man** — `WrappedAppGWPolicy.toFDLikeBackup` (`policy/appgw_restore.go:213`)
+- [x] **Middle man** — `WrappedAppGWPolicy.toFDLikeBackup` (`policy/appgw_restore.go:213`)
   purely delegates to `dummyWrappedFromAppGW`; `policy.GetFunctionName` (`policy/utils.go:112`)
   just calls `helpers.GetParentFunctionName`.
 
-- [ ] **Mysterious names** — `dummyWrappedFromAppGW`; ~~the `errors2` import alias
+  *The first pair is now one method, `asWrappedPolicy`, which also settles the mysterious name
+  below. The tell was the call site: the same conversion was written two different ways in a
+  single expression — `dummyWrappedFromAppGW(matched), backup.toFDLikeBackup()` — because one
+  half was a function and the other a method. It now reads `matched.asWrappedPolicy(),
+  backup.asWrappedPolicy()`.*
+
+  *The second was a three-function chain: `policy.GetFunctionName` called
+  `helpers.GetParentFunctionName`, which called `callerName(3)`. The frame count was the whole
+  point of the wrapper — it existed so that skipping three frames landed on the right caller —
+  which made it fragile rather than merely redundant. `helpers.GetFunctionName` already does the
+  job with `runtime.Caller(1)`, and `session`, `config` and `cmd` already called it directly in
+  ten places; only `policy` went the long way round. All 80-odd sites in `policy` plus one in
+  `cmd/commands/cmdRestore.go` now call it directly, and `policy.GetFunctionName`,
+  `helpers.GetParentFunctionName` and `callerName` are gone. Three functions became one, and the
+  frame arithmetic went with them.*
+
+  *These names appear in user-visible error messages, so the swap was checked rather than
+  assumed: seven representative errors were captured before and after — covering a plain
+  function, a value method, a pointer method and both ProcessScope functions — and every
+  embedded name resolves identically. `helpers` gained a test pinning that
+  `GetFunctionName` names its immediate caller from inside a method, which is the property the
+  deleted chain had been arranging by hand.*
+
+- [x] **Mysterious names** — ~~`dummyWrappedFromAppGW`~~ *— now `asWrappedPolicy`, a method on
+  the type it converts; see the middle man note above*; ~~the `errors2` import alias
   (`policy/output.go:5`)~~ *— gone, orphaned by the diff collapse*; `getIPNetsForPrefix` takes no
   prefix; ~~`ProcessCLIInput` vs `ParseConfig` naming the same operation~~ *— `ProcessCLIInput`
   deleted*.
@@ -1007,7 +1031,7 @@ been reverted now the code is fixed (S15), so the README's original claim holds 
 Every finding on both axes has now been addressed in code or documentation. All eleven
 duplicated-code clusters are collapsed, and the dead code / speculative generality group is
 closed with `deadcode` reporting nothing across the module. What remains open under P4 is the
-middle man / mysterious names / data clumps group, which is a refactor rather than a defect.
+data clumps group, which is a refactor rather than a defect.
 Primitive obsession is closed: it turned out to be hiding an inconsistent set of scope
 comparisons, six sites split between `==` and `strings.EqualFold`.
 
