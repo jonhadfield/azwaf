@@ -5,6 +5,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/session"
 )
 
@@ -14,7 +15,7 @@ type ShowPolicyInput struct {
 }
 
 func ShowPolicy(in ShowPolicyInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s, err := session.New()
 	if err != nil {

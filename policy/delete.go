@@ -7,6 +7,7 @@ import (
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
 
@@ -16,7 +17,7 @@ func displayStringDiffWithLib(orig, latest string) {
 }
 
 func DisplayPolicyDiff(original, latest interface{}) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var err error
 

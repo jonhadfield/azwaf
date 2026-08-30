@@ -9,6 +9,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
 )
@@ -93,7 +94,7 @@ func (input *DeleteCustomRulesCLIInput) ParseConfig() (output DeleteCustomRulesP
 }
 
 func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if in.Policy == nil {
 		return false, fmt.Errorf("%s - missing policy from input", funcName)
@@ -145,7 +146,7 @@ func DeleteCustomRulesPrefixes(in DeleteCustomRulesPrefixesInput) (modified bool
 }
 
 func DeleteCustomRulesCLI(cliInput *DeleteCustomRulesCLIInput) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s := cliInput.Session
 	if s == nil {

@@ -109,10 +109,6 @@ func parseRuleSetName(rsName string) (rsType, rsVersion string, err error) {
 	return rsName[:pos], rsName[pos+1:], nil
 }
 
-func GetFunctionName() string {
-	return helpers.GetParentFunctionName()
-}
-
 func toPtr[T any](v T) *T {
 	return &v
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/stretchr/testify/require"
@@ -155,16 +156,16 @@ func TestIsValidExclusionRuleVariable(t *testing.T) {
 // }
 
 func TestGetFunctionName(t *testing.T) {
-	require.Equal(t, "policy.TestGetFunctionName", GetFunctionName())
+	require.Equal(t, "policy.TestGetFunctionName", helpers.GetFunctionName())
 }
 
 // func TestConvertToResourceIDs(t *testing.T) {
 // 	ConvertToResourceIDs()
-// 	require.Equal(t, "policy.TestGetFunctionName", GetFunctionName())
+// 	require.Equal(t, "policy.TestGetFunctionName", helpers.GetFunctionName())
 // }
 // func TestConvertToResourceIDs(t *testing.T) {
 // 	ConvertToResourceIDs()
-// 	require.Equal(t, "policy.TestGetFunctionName", GetFunctionName())
+// 	require.Equal(t, "policy.TestGetFunctionName", helpers.GetFunctionName())
 // }
 
 func inc(ip net.IP) {

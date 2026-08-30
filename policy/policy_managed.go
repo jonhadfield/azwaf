@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -86,7 +87,7 @@ type getMatchingDefaultDefinitionsOutput struct {
 
 // getMatchingDefaultDefinitions returns the API's default definitions of the given rule, rule group, and/or rule set provided
 func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (output getMatchingDefaultDefinitionsOutput, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	//  ruleset details are required
 	if input.ruleSetType == "" || input.ruleSetVersion == "" {
@@ -151,7 +152,7 @@ type getDefinitionsMatchingExistingRuleSetInput struct {
 
 // match early option indicates if we should match on ruleset type and version if supplied
 func getDefinitionMatchingExistingRuleSet(input *getDefinitionsMatchingExistingRuleSetInput) (match bool, output getMatchingDefinitionsOutput, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	if input.scope == "" {
 		return false, output, fmt.Errorf("%s - scope must be provided", funcName)
 	}
@@ -202,7 +203,7 @@ func getDefinitionMatchingExistingRuleSet(input *getDefinitionsMatchingExistingR
 }
 
 func GetRuleSetDefinitionsMatchingPolicy(s *session.Session, policy *armfrontdoor.WebApplicationFirewallPolicy) (rsds []*armfrontdoor.ManagedRuleSetDefinition, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if policy == nil {
 		return rsds, fmt.Errorf("%s - policy not provided", funcName)
@@ -251,7 +252,7 @@ func getRuleSetDefinitionMatchingRuleSetTypeVersion(rsds []*armfrontdoor.Managed
 }
 
 func getDefinitionsMatchingGroupName(s *session.Session, policy *armfrontdoor.WebApplicationFirewallPolicy, groupName, ruleSetType, ruleSetVersion string) (matchingDefinitions getMatchingDefaultDefinitionsOutput, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if groupName == "" {
 		err = fmt.Errorf("%s - rule group name not passed", funcName)
@@ -282,7 +283,7 @@ func getDefinitionsMatchingGroupName(s *session.Session, policy *armfrontdoor.We
 }
 
 func getDefinitionsMatchingRuleID(s *session.Session, policy *armfrontdoor.WebApplicationFirewallPolicy, ruleID, ruleSetType, ruleSetVersion string) (matchingDefinitions getMatchingDefaultDefinitionsOutput, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if ruleID == "" {
 		err = fmt.Errorf("%s - rule id not passed", funcName)
@@ -364,7 +365,7 @@ func (input *ShowExclusionsCLIInput) Validate() error {
 }
 
 func ShowExclusions(in *ShowExclusionsCLIInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Tracef("%s showing exclusions", funcName)
 
@@ -443,7 +444,7 @@ func getMatchingRuleSet(input getMatchingRuleSetInput) (ruleSet *armfrontdoor.Ma
 }
 
 func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s, err := session.New()
 	if err != nil {
@@ -504,7 +505,7 @@ func ShowManagedRuleExclusions(ruleID string, policyID config.ResourceID) error 
 }
 
 func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s, err := session.New()
 	if err != nil {
@@ -647,7 +648,7 @@ func HasMatchingExclusions(one, two *armfrontdoor.ManagedRuleExclusion) bool {
 }
 
 func ShowManagedRuleSetExclusions(ruleSetType, ruleSetVersion string, policyID config.ResourceID) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s, err := session.New()
 	if err != nil {
@@ -725,7 +726,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 	if s == nil {
 		err = fmt.Errorf(
 			"%s - Session is required to retrieve cached/latest definitions",
-			GetFunctionName())
+			helpers.GetFunctionName())
 
 		return
 	}
@@ -748,7 +749,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 	for pager.More() {
 		nextResult, merr := pager.NextPage(ctx)
 		if merr != nil {
-			return nil, fmt.Errorf("%s - %w", GetFunctionName(), merr)
+			return nil, fmt.Errorf("%s - %w", helpers.GetFunctionName(), merr)
 		}
 
 		rsds = append(rsds, nextResult.Value...)
@@ -780,7 +781,7 @@ func scopeFromSelectors(ruleSetType, ruleGroup, ruleID string) (ExclusionScope, 
 
 // GetDeleteManagedRuleExclusionProcessScope returns the scope a deletion applies to.
 func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusionInput) (scope ExclusionScope, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// RuleSetType is optional, and was previously dereferenced after the nil
 	// check that guarded it, so a group-scoped delete with no rule set panicked
@@ -803,7 +804,7 @@ func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusion
 
 // GetAddManagedRuleExclusionProcessScope returns the scope an addition applies to.
 func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) (scope ExclusionScope, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// both pointers were dereferenced before anything checked them
 	ruleSetType := derefOrEmpty(amrei.RuleSetType)
@@ -851,14 +852,14 @@ func NormaliseExclusionInput(inVar, inOp string) (outVar armfrontdoor.ManagedRul
 
 	match, outVar = NormaliseMatchVariable(inVar)
 	if !match {
-		err = fmt.Errorf("%s - please use one of: %s", GetFunctionName(), strings.Join(ValidRuleExclusionMatchVariables[:], ", "))
+		err = fmt.Errorf("%s - please use one of: %s", helpers.GetFunctionName(), strings.Join(ValidRuleExclusionMatchVariables[:], ", "))
 
 		return
 	}
 
 	match, outOp = NormaliseMatchOperator(inOp)
 	if !match {
-		err = fmt.Errorf("%s - please use one of: %s", GetFunctionName(), strings.Join(ValidRuleExclusionMatchOperators[:], ", "))
+		err = fmt.Errorf("%s - please use one of: %s", helpers.GetFunctionName(), strings.Join(ValidRuleExclusionMatchOperators[:], ", "))
 	}
 
 	return

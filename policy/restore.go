@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/jonhadfield/azwaf/session"
@@ -30,7 +31,7 @@ type RestorePoliciesInput struct {
 }
 
 func (i *RestorePoliciesInput) Validate() error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// check target policy if specified
 	if i.TargetPolicy != "" {
@@ -48,7 +49,7 @@ func (i *RestorePoliciesInput) Validate() error {
 // to the matching API based on its embedded WAFType field (or the resource
 // type of an explicit --target).
 func RestorePolicies(i *RestorePoliciesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if err := i.Validate(); err != nil {
 		return err
@@ -121,7 +122,7 @@ func RestorePolicies(i *RestorePoliciesInput) error {
 // alongside it. It mutates i.TargetPolicy, so callers must pass a copy of the
 // input if they use it afterwards.
 func restoreFrontDoorBackups(s *session.Session, i *RestorePoliciesInput, wps []WrappedPolicy) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	explicitTarget := i.TargetPolicy != ""
 
@@ -205,7 +206,7 @@ func loadExistingPolicies(s *session.Session, targetPolicy, subscriptionID strin
 }
 
 func shouldRestore(foundExisting bool, matched WrappedPolicy, backup WrappedPolicy, i *RestorePoliciesInput, patch GeneratePolicyPatchOutput) (bool, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if foundExisting {
 		if i.CustomRulesOnly && patch.CustomRuleChanges == 0 {
@@ -259,7 +260,7 @@ func shouldRestore(foundExisting bool, matched WrappedPolicy, backup WrappedPoli
 }
 
 func CompilePoliciesToRestore(s *session.Session, policyBackups []WrappedPolicy, i *RestorePoliciesInput) ([]restorePair, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	existingPolicies, err := loadExistingPolicies(s, i.TargetPolicy, i.SubscriptionID)
 	if err != nil {
@@ -337,7 +338,7 @@ func backupManagedRules(p *armfrontdoor.WebApplicationFirewallPolicy) *armfrontd
 // without options, the Original will have both Custom and Managed rules parts replaced
 // options allow for Custom or Managed rules in Original to replaced with those in backup
 func BuildRestoredPolicy(existing, backup *WrappedPolicy, i *RestorePoliciesInput) (WrappedPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	// take a backup of the existing that we'll apply the updates to
 	// otherwise we're updating the original that we want to later use in a comparison
 	copyOfOriginalPolicy, err := CopyWrappedPolicy(existing)

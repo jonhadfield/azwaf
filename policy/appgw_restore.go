@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v7"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
 )
@@ -31,7 +32,7 @@ type ProcessAppGWPolicyChangesInput struct {
 // ProcessAppGWPolicyChanges fetches the existing AppGW policy, optionally
 // shows a diff and creates a pre-change backup, then pushes the new policy.
 func ProcessAppGWPolicyChanges(input *ProcessAppGWPolicyChangesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	preChange, err := GetRawAppGWPolicy(input.Session, input.SubscriptionID, input.ResourceGroup, input.PolicyName)
 	if err != nil {
@@ -140,7 +141,7 @@ func loadExistingAppGWPolicy(s *session.Session, targetPolicy string) (*WrappedA
 
 // CompileAppGWPoliciesToRestore mirrors CompilePoliciesToRestore for AppGW.
 func CompileAppGWPoliciesToRestore(s *session.Session, backups []WrappedAppGWPolicy, i *RestorePoliciesInput) ([]appgwRestorePair, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var results []appgwRestorePair
 
@@ -174,7 +175,7 @@ func CompileAppGWPoliciesToRestore(s *session.Session, backups []WrappedAppGWPol
 			matched = *existing
 		}
 
-		ok, err := shouldRestore(existing != nil, dummyWrappedFromAppGW(matched), backup.toFDLikeBackup(), i, patch)
+		ok, err := shouldRestore(existing != nil, matched.asWrappedPolicy(), backup.asWrappedPolicy(), i, patch)
 		if err != nil {
 			return nil, err
 		}
@@ -195,10 +196,11 @@ func CompileAppGWPoliciesToRestore(s *session.Session, backups []WrappedAppGWPol
 	return results, nil
 }
 
-// dummyWrappedFromAppGW provides a minimal FD-shaped WrappedPolicy so we can
-// reuse the existing shouldRestore confirmation logic. Only PolicyID and Date
-// are read from it, which both types share.
-func dummyWrappedFromAppGW(w WrappedAppGWPolicy) WrappedPolicy {
+// asWrappedPolicy copies the identifying fields the two wrapper types share
+// into a Front Door shaped WrappedPolicy, so shouldRestore can be reused for
+// Application Gateway policies. It carries no policy body: shouldRestore reads
+// only PolicyID and Date from either argument.
+func (w WrappedAppGWPolicy) asWrappedPolicy() WrappedPolicy {
 	return WrappedPolicy{
 		Date:           w.Date,
 		SubscriptionID: w.SubscriptionID,
@@ -206,12 +208,6 @@ func dummyWrappedFromAppGW(w WrappedAppGWPolicy) WrappedPolicy {
 		Name:           w.Name,
 		PolicyID:       w.PolicyID,
 	}
-}
-
-// toFDLikeBackup is the same conversion for the backup side. shouldRestore
-// reads only PolicyID and Date from the second argument.
-func (w WrappedAppGWPolicy) toFDLikeBackup() WrappedPolicy {
-	return dummyWrappedFromAppGW(w)
 }
 
 // BuildRestoredAppGWPolicy is the AppGW analogue of BuildRestoredPolicy. It
@@ -275,7 +271,7 @@ func BuildRestoredAppGWPolicy(existing, backup *WrappedAppGWPolicy, i *RestorePo
 
 // restoreAppGWBackups walks compiled AppGW restore pairs and applies each.
 func restoreAppGWBackups(s *session.Session, i *RestorePoliciesInput, backups []WrappedAppGWPolicy) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if i.TargetPolicy != "" {
 		// ensure only one backup file when targeting a single policy. The
