@@ -1,9 +1,10 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -12,16 +13,16 @@ func CmdList() *cli.Command {
 	return &cli.Command{
 		Name:  "list",
 		Usage: "list front doors and policies",
-		Action: func(c *cli.Context) error {
-			return cli.ShowSubcommandHelp(c)
+		Action: func(_ context.Context, c *cli.Command) error {
+			return cli.DefaultShowSubcommandHelp(c)
 		},
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:      "frontdoors",
 				Usage:     "list front doors and associated policies in subscription",
 				UsageText: "azwaf list frontdoors [--subscription=<AZURE_SUBSCRIPTION_ID>]",
 				Aliases:   []string{"f"},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					if c.String(FlagSubscriptionID) == "" {
 						return fmt.Errorf("subscription-id required")
 					}
@@ -37,7 +38,7 @@ func CmdList() *cli.Command {
 					&cli.BoolFlag{Name: "full", Aliases: []string{"f"}, Usage: "include resource id in output"},
 					&cli.IntFlag{Name: "top", Aliases: []string{"max"}, Usage: "number of policies to list", Value: policy.MaxPoliciesToFetch},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					input := policy.ListPoliciesInput{
 						SubscriptionID: c.String(FlagSubscriptionID),
 						Full:           c.Bool("full"),
@@ -46,7 +47,7 @@ func CmdList() *cli.Command {
 
 					if err := input.Validate(); err != nil {
 						// nolint:errcheck
-						_ = cli.ShowSubcommandHelp(c)
+						_ = cli.DefaultShowSubcommandHelp(c)
 
 						return err
 					}

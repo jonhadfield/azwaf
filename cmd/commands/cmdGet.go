@@ -1,7 +1,9 @@
 package commands
 
 import (
-	"github.com/urfave/cli/v2"
+	"context"
+
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -10,15 +12,15 @@ func CmdGet() *cli.Command {
 	return &cli.Command{
 		Name:  "get",
 		Usage: "get policy data",
-		Action: func(c *cli.Context) error {
-			return cli.ShowAppHelp(c)
+		Action: func(_ context.Context, c *cli.Command) error {
+			return cli.DefaultShowRootCommandHelp(c)
 		},
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:    "policy",
 				Usage:   "get policy using resource id",
 				Aliases: []string{"p"},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					// get custom rule match-value field using format "<policy id>|<rule-name>"
 					input := c.Args().First()
 
@@ -32,7 +34,7 @@ func CmdGet() *cli.Command {
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "output", Usage: "save custom-rule to path"},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					// get custom rule match-value field using format "<policy id>|<rule-name>"
 					input := c.Args().First()
 

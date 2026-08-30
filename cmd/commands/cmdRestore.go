@@ -1,9 +1,10 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/jonhadfield/azwaf/helpers"
 	policy "github.com/jonhadfield/azwaf/policy"
@@ -23,11 +24,11 @@ func CmdRestore(versionOutput string) *cli.Command {
 			&cli.BoolFlag{Name: "force", Usage: "make changes without first prompting"},
 			&cli.BoolFlag{Name: "fail-fast", Usage: "exit if any error encountered", Aliases: []string{"f"}},
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			backupPaths := c.Args().Slice()
 			if len(backupPaths) == 0 {
 				// nolint:errcheck
-				_ = cli.ShowSubcommandHelp(c)
+				_ = cli.DefaultShowSubcommandHelp(c)
 
 				return fmt.Errorf("%s - backup paths are required", helpers.GetFunctionName())
 			}

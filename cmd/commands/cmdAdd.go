@@ -1,10 +1,11 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	policy "github.com/jonhadfield/azwaf/policy"
 )
@@ -13,10 +14,10 @@ func CmdAdd(appVersion string) *cli.Command {
 	return &cli.Command{
 		Name:  "add",
 		Usage: "add managed rule exclusions",
-		Action: func(c *cli.Context) error {
-			return cli.ShowAppHelp(c)
+		Action: func(_ context.Context, c *cli.Command) error {
+			return cli.DefaultShowRootCommandHelp(c)
 		},
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:        "exclusion",
 				UsageText:   "azwaf add exclusion [ --rule-set | --rule-group | --rule-id ] --variable=x --operator=x --selector=x [ <policy id> | <policy hash> ]",
@@ -60,12 +61,12 @@ func CmdAdd(appVersion string) *cli.Command {
 						Aliases: []string{"s", "selector"}, Required: true,
 					},
 				},
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					input := c.Args().First()
 
 					if input == "" {
 						// nolint:errcheck
-						_ = cli.ShowSubcommandHelp(c)
+						_ = cli.DefaultShowSubcommandHelp(c)
 
 						return fmt.Errorf("missing policy id / hash")
 					}
