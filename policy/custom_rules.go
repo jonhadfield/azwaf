@@ -2,6 +2,7 @@ package policy
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -187,6 +188,338 @@ func getNonIPMatchConditions(cr *armfrontdoor.CustomRule) []*armfrontdoor.MatchC
 	}
 
 	return result
+}
+
+// RemoveNetsInput is the input to RemoveNets.
+type RemoveNetsInput struct {
+	BaseCLIInput
+	Session       *session.Session
+	RawResourceID string
+	MatchPrefix   RuleNamePrefix
+	RuleType      *armfrontdoor.RuleType
+	ResourceID    config.ResourceID
+	Action        *armfrontdoor.ActionType
+	Filepath      string
+	Nets          []netip.Prefix
+	MaxRules      int
+	// can be called from external so allow override
+	LogLevel *slog.Level
+}
+
+// ApplyRemoveNetsInput is the input to ApplyRemoveAddrs, for callers that
+// already hold a session and a resolved resource id.
+type ApplyRemoveNetsInput struct {
+	BaseCLIInput
+	RID         config.ResourceID
+	MatchPrefix RuleNamePrefix
+	Action      *armfrontdoor.ActionType
+	RuleType    *armfrontdoor.RuleType
+	DryRun      bool
+	Filepath    string
+	Addrs       IPNets
+	MaxRules    int
+	// can be called from external so allow override
+	LogLevel *slog.Level
+}
+
+// ApplyRemoveNetsResult reports what happened to one requested address.
+// Removed is false when the address was not present in the policy to begin
+// with, which lets a caller distinguish "unblocked" from "was never blocked".
+type ApplyRemoveNetsResult struct {
+	Addr     netip.Prefix
+	PolicyID string
+	Removed  bool
+}
+
+type ApplyRemoveNetsResults []ApplyRemoveNetsResult
+
+// RemoveNets removes selected networks from custom rules.
+//
+// It trims the given prefixes out of the rules carrying MatchPrefix, leaving
+// every other rule untouched, and reports per address whether it was actually
+// present. This is the inverse of the add path, not a rule deletion: the rules
+// survive with a smaller match set.
+func RemoveNets(input *RemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
+	if input == nil {
+		return nil, errors.New("input cannot be nil")
+	}
+
+	if input.LogLevel != nil {
+		logging.SetLevel(*input.LogLevel)
+	}
+
+	if input.RuleType == nil {
+		return nil, errors.New("rule type cannot be nil")
+	}
+
+	if input.Session == nil {
+		var serr error
+
+		input.Session, serr = session.New()
+		if serr != nil {
+			return nil, serr
+		}
+	}
+
+	policyID := input.ResourceID
+
+	var err error
+
+	if policyID.Raw == "" {
+		if IsRIDHash(input.RawResourceID) {
+			policyID, err = GetPolicyResourceIDByHash(input.Session, input.SubscriptionID, input.RawResourceID)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return ApplyRemoveAddrs(input.Session, &ApplyRemoveNetsInput{
+		BaseCLIInput: input.BaseCLIInput,
+		MatchPrefix:  input.MatchPrefix,
+		RID:          policyID,
+		DryRun:       input.DryRun,
+		Filepath:     input.Filepath,
+		RuleType:     input.RuleType,
+		Action:       input.Action,
+		Addrs:        input.Nets,
+		MaxRules:     0,
+		LogLevel:     input.LogLevel,
+	})
+}
+
+// getNetsToRemove combines the addresses given directly with any loaded from
+// the optional file path.
+func getNetsToRemove(path string, inNets IPNets) (IPNets, error) {
+	var (
+		err     error
+		outNets IPNets
+	)
+
+	if path != "" {
+		var fipns IPNets
+
+		fipns, err = loadIPsFromPath(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load IPs from path: %s", err)
+		}
+
+		outNets = fipns
+	}
+
+	outNets = append(outNets, inNets...)
+
+	if len(outNets) == 0 {
+		return nil, errors.New("no ips to unblock provided")
+	}
+
+	return outNets, nil
+}
+
+// getLowestPriority returns the lowest priority assigned to a rule starting
+// with the specified prefix.
+func getLowestPriority(rules []*armfrontdoor.CustomRule, prefix RuleNamePrefix) int32 {
+	var hadPrefixMatch bool
+
+	var lowest int32
+
+	for x := range rules {
+		if rules[x] == nil || rules[x].Name == nil || rules[x].Priority == nil {
+			continue
+		}
+
+		if strings.HasPrefix(*rules[x].Name, string(prefix)) {
+			// if it's zero then we have our lowest
+			if *rules[x].Priority == 0 {
+				break
+			}
+
+			if !hadPrefixMatch {
+				hadPrefixMatch = true
+
+				lowest = *rules[x].Priority
+			}
+
+			if *rules[x].Priority < lowest {
+				lowest = *rules[x].Priority
+			}
+		}
+	}
+
+	return lowest
+}
+
+// ApplyRemoveAddrs removes selected networks from custom rules, for callers
+// that already hold a session.
+func ApplyRemoveAddrs(s *session.Session, input *ApplyRemoveNetsInput) ([]ApplyRemoveNetsResult, error) {
+	if input == nil {
+		return nil, errors.New("input cannot be nil")
+	}
+
+	lowercaseAction := strings.ToLower(string(armfrontdoor.ActionTypeBlock))
+
+	inNets, err := getNetsToRemove(input.Filepath, input.Addrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get networks to remove: %s", err)
+	}
+
+	p, originalPolicy, existingPositiveNets, _, err := loadPolicyNets(s, input.RID, input.MatchPrefix, input.Action, input.RuleType)
+	if err != nil {
+		return nil, err
+	}
+
+	trimmed, results := buildTrimmedNetworks(inNets, existingPositiveNets, input.RID.Raw)
+
+	if err = updatePolicyRules(s, p, originalPolicy, trimmed, input, lowercaseAction); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func loadPolicyNets(s *session.Session, rid config.ResourceID, prefix RuleNamePrefix, action *armfrontdoor.ActionType, ruleType *armfrontdoor.RuleType) (*armfrontdoor.WebApplicationFirewallPolicy, armfrontdoor.WebApplicationFirewallPolicy, []netip.Prefix, []netip.Prefix, error) {
+	p, err := GetRawPolicy(s, rid.SubscriptionID, rid.ResourceGroup, rid.Name)
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("failed to get policy: %w", err)
+	}
+
+	if p.Name == nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, errors.New("specified policy not found")
+	}
+
+	original, err := CopyPolicy(*p)
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, fmt.Errorf("failed to copy policy: %w", err)
+	}
+
+	filtered, err := filterCustomRules(filterCustomRulesInput{
+		namePrefix:  prefix,
+		customRules: policyCustomRules(p),
+		ruleType:    ruleType,
+		action:      action,
+	})
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
+	}
+
+	pos, neg, err := getIPNetsForPrefix(filtered, action)
+	if err != nil {
+		return nil, armfrontdoor.WebApplicationFirewallPolicy{}, nil, nil, err
+	}
+
+	logging.Tracef("existing %s positive nets: %d negative nets: %d", prefix, len(pos), len(neg))
+
+	return p, original, pos, neg, nil
+}
+
+// buildTrimmedNetworks returns the existing prefixes minus those requested for
+// removal, alongside a per-address report of which were actually present.
+func buildTrimmedNetworks(inNets, existing []netip.Prefix, policyID string) ([]netip.Prefix, []ApplyRemoveNetsResult) {
+	var trimmed []netip.Prefix
+
+	var results []ApplyRemoveNetsResult
+
+	for _, inNet := range inNets {
+		results = append(results, ApplyRemoveNetsResult{
+			Addr:     inNet,
+			PolicyID: policyID,
+			Removed:  slices.Contains(existing, inNet),
+		})
+	}
+
+	for _, n := range existing {
+		if !slices.Contains(inNets, n) {
+			trimmed = append(trimmed, n)
+		}
+	}
+
+	return trimmed, results
+}
+
+func mergeCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, in *ApplyRemoveNetsInput) ([]*armfrontdoor.CustomRule, error) {
+	proposedRules, err := GenCustomRulesFromIPNets(GenCustomRulesFromIPNetsInput{
+		PositiveMatchNets:   trimmed,
+		RuleType:            in.RuleType,
+		Action:              in.Action,
+		MaxRules:            in.MaxRules,
+		CustomNamePrefix:    in.MatchPrefix,
+		CustomPriorityStart: int(getLowestPriority(policyCustomRules(p), in.MatchPrefix)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate custom rules: %w", err)
+	}
+
+	var rules []*armfrontdoor.CustomRule
+
+	for _, cr := range policyCustomRules(p) {
+		if cr == nil || cr.Name == nil {
+			continue
+		}
+
+		if !strings.HasPrefix(*cr.Name, string(in.MatchPrefix)) {
+			rules = append(rules, cr)
+		}
+	}
+
+	rules = append(rules, proposedRules...)
+	sort.Slice(rules, func(i, j int) bool { return *rules[i].Priority < *rules[j].Priority })
+
+	if len(rules) > MaxCustomRules {
+		return nil, fmt.Errorf("operation exceeds custom rules limit of %d", MaxCustomRules)
+	}
+
+	return rules, nil
+}
+
+func updatePolicyRules(s *session.Session, p *armfrontdoor.WebApplicationFirewallPolicy, original armfrontdoor.WebApplicationFirewallPolicy, trimmed []netip.Prefix, input *ApplyRemoveNetsInput, action string) error {
+	merged, err := mergeCustomRules(p, trimmed, input)
+	if err != nil {
+		return err
+	}
+
+	crl := policyCustomRuleList(p)
+	if crl == nil {
+		return errors.New("policy has no custom rules to update")
+	}
+
+	crl.Rules = merged
+
+	patch, err := GeneratePolicyPatch(&GeneratePolicyPatchInput{Original: original, New: *p})
+	if err != nil {
+		return fmt.Errorf("failed to generate policy patch: %w", err)
+	}
+
+	if patch.CustomRuleChanges == 0 {
+		logging.Debug("nothing to do")
+
+		return nil
+	}
+
+	if input.DryRun {
+		logging.Infof("%s | %d changes to %s list would be applied\n", helpers.GetFunctionName(), patch.CustomRuleChanges, action)
+
+		return nil
+	}
+
+	np, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("failed to marshal policy: %w", err)
+	}
+
+	diffsFound, err := compare(&original, np)
+	if err != nil {
+		return fmt.Errorf("failed to compare policies: %w", err)
+	}
+
+	logging.Debugf("diffsFound: %t", diffsFound)
+	logging.Infof("updating policy %s", *p.Name)
+
+	return PushPolicy(s, &PushPolicyInput{
+		Name:          *p.Name,
+		Subscription:  input.RID.SubscriptionID,
+		ResourceGroup: input.RID.ResourceGroup,
+		Policy:        *p,
+	})
 }
 
 type DecorateExistingCustomRuleInput struct {

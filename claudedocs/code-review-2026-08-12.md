@@ -531,6 +531,28 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   decision; the module is v0.x, so semver permits it, and this matches the earlier call on the
   exported constants.*
 
+  ***Correction, and the reason this section is now wrong in an instructive way.*** *The
+  `RemoveNets` deletion was a mistake. It was reinstated in v0.13.0 after the maintainers of a
+  downstream application reported that their unblock endpoint depended on it.*
+
+  *The analysis established that `RemoveNets` was unreachable **within this repository** and
+  treated that as sufficient grounds for deleting an exported API from a `v0.x` module.
+  Repo-internal reachability says nothing about external consumers, and `deadcode` cannot see
+  them. Worse, there was a signal in the code itself: both `RemoveNetsInput` and
+  `ApplyRemoveNetsInput` carry a `LogLevel` field commented "can be called from external so
+  allow override". That is the codebase stating the API has outside callers, and it was read
+  past during the pass.*
+
+  *The lesson is narrow and worth keeping: for an exported symbol, "no caller in this tree" is
+  evidence about this tree only. The alternative that was on the table at the time — keep it and
+  write the missing test — was the right one, and is what the reinstatement does. `RemoveNets`
+  now has eight tests including an end-to-end run against the fake Azure endpoints, so it is
+  reachable to `deadcode` and cannot be mistaken for dead again.*
+
+  *The rest of this section stands: nothing else removed in the pass has surfaced a consumer,
+  and the `internal/azfakes` removals below are in an `internal/` package where no external
+  consumer is possible.*
+
   *`Store.SetFrontDoors` and `Store.SetManagedRuleSetDefinitions` in `internal/azfakes`: seeders
   for fields only the fake's two list endpoints read. With no caller those endpoints could only
   ever answer empty, so the fields and the now-pointless locking around them went with the
