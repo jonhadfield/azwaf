@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -70,7 +71,7 @@ const (
 var ErrInvalidRuleType = errors.New("invalid rule type")
 
 func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Debugf("%s | attempting to read waf resource id hash map from cache", funcName)
 
@@ -91,7 +92,7 @@ func GetWAFResourceIDHashMap(s *session.Session) (hashMap WAFResourceIDHashMap, 
 }
 
 func SaveWAFResourceIDHashMap(s *session.Session, res []armfrontdoor.WebApplicationFirewallPolicy) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	logging.Debugf("attempting to save waf resource id hash map from cache")
 
@@ -120,7 +121,7 @@ func SaveWAFResourceIDHashMap(s *session.Session, res []armfrontdoor.WebApplicat
 }
 
 func GetWAFResourceIDFromCacheByHash(s *session.Session, hash string) (string, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if s == nil {
 		var serr error
@@ -259,7 +260,7 @@ func GetWAFPolicyResourceID(s *session.Session, in GetWAFPolicyResourceIDInput) 
 }
 
 func GetRawPolicy(s *session.Session, subscription, resourceGroup, name string) (*armfrontdoor.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	startTime := time.Now()
 
 	logging.Debugf("%s | Starting GetRawPolicy for %s/%s/%s", funcName, subscription, resourceGroup, name)
@@ -368,7 +369,7 @@ type DeleteManagedRuleExclusionInput struct {
 }
 
 func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdoor.WebApplicationFirewallPolicy, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	err := s.GetFrontDoorPoliciesClient(i.SubscriptionID)
 	if err != nil {
@@ -423,7 +424,7 @@ func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdo
 }
 
 func GetWrappedPoliciesFromRawIDs(s *session.Session, i GetWrappedPoliciesInput) (GetWrappedPoliciesOutput, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var rids []config.ResourceID
 
@@ -608,7 +609,7 @@ func calculatePatchStats(patch jsondiff.Patch) GeneratePolicyPatchOutput {
 }
 
 func GeneratePolicyPatch(i *GeneratePolicyPatchInput) (GeneratePolicyPatchOutput, error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var output GeneratePolicyPatchOutput
 
@@ -655,7 +656,7 @@ func validatePolicyLimits(p *armfrontdoor.WebApplicationFirewallPolicy) error {
 }
 
 func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	// reject before spending a fetch, a diff and a backup on a policy the API
 	// will refuse. This runs ahead of the dry-run return so a dry run reports

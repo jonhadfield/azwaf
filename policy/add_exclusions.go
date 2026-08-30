@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -115,7 +116,7 @@ func (input *GetPolicyInput) GetPolicy() (output GetPolicyOutput, err error) {
 }
 
 func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s, err := session.New()
 	if err != nil {
@@ -200,7 +201,7 @@ func AddManagedRuleExclusion(cliInput *AddManagedRuleExclusionCLIInput) (err err
 }
 
 func addManagedRuleExclusion(input *AddManagedRuleExclusionInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var err error
 
@@ -241,10 +242,10 @@ func addManagedRuleExclusion(input *AddManagedRuleExclusionInput) error {
 
 func addToManagedRuleSet(input *AddManagedRuleExclusionInput, mrs *armfrontdoor.ManagedRuleSet) (err error) {
 	if mrs == nil {
-		return fmt.Errorf("%s - managed rule set is missing", GetFunctionName())
+		return fmt.Errorf("%s - managed rule set is missing", helpers.GetFunctionName())
 	}
 
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	// required when running tests without init
 	checkDebug(input.Debug)
 	logging.Tracef("%s | scope: %s", funcName, input.Scope)
@@ -332,7 +333,7 @@ type addManagedRuleGroupOverrideRuleExclusionsInput struct {
 // note: if the rule does not already exist, then retrieve the default definition and add that,
 // modified with the given input
 func addManagedRuleGroupOverrideRuleExclusions(input *addManagedRuleGroupOverrideRuleExclusionsInput) (err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	// looping through the rules in a single Managed rule override
 	// add to result if no match
 	for _, groupOverride := range input.ruleSet.RuleGroupOverrides {
@@ -442,12 +443,12 @@ type getRuleDefinitionInput struct {
 }
 
 func getRuleDefinition(in *getRuleDefinitionInput) (ruleDef *armfrontdoor.ManagedRuleDefinition, groupName string, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if in.ruleSetType == nil || in.ruleSetVersion == nil {
 		err = fmt.Errorf(
 			"%s - rule set type and version are required to get a rule definition",
-			GetFunctionName())
+			helpers.GetFunctionName())
 
 		return
 	}
@@ -489,7 +490,7 @@ func getRuleDefinition(in *getRuleDefinitionInput) (ruleDef *armfrontdoor.Manage
 
 	// if it's not found in the definitions then fail
 	if !match {
-		err = fmt.Errorf("%s - rule %s not found in rule set %s_%s", GetFunctionName(), in.ruleID, *in.ruleSetType, *in.ruleSetVersion)
+		err = fmt.Errorf("%s - rule %s not found in rule set %s_%s", helpers.GetFunctionName(), in.ruleID, *in.ruleSetType, *in.ruleSetVersion)
 
 		return
 	}
@@ -507,7 +508,7 @@ type appendExclusionInput struct {
 
 // appendExclusion updates a slice of exclusions in-place
 func appendExclusion(input appendExclusionInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	var newExclusions []*armfrontdoor.ManagedRuleExclusion
 

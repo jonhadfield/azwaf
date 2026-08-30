@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 )
 
 const ridHashLength = 8
@@ -22,7 +23,7 @@ func IsRIDHash(s string) bool {
 // ConvertToResourceIDs accepts a slice of strings representing resource ids and/or hashes
 // and returns a slice of matching resource ids
 func ConvertToResourceIDs(ids []string, subID string) (rids []config.ResourceID, err error) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	for _, id := range ids {
 		if IsRIDHash(id) {
