@@ -123,7 +123,7 @@ func writeMixedBackups(t *testing.T, st *azfakes.Store) string {
 		PolicyID:       fdID,
 		WAFType:        WAFTypeFrontDoor,
 	}
-	require.NoError(t, BackupPolicy(&fdBackup, nil, "", true, true, dir))
+	require.NoError(t, BackupPolicy(&fdBackup, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 	agwPolicy := newAppGWPolicyForTest()
 	v31 := "3.1"
@@ -136,7 +136,7 @@ func writeMixedBackups(t *testing.T, st *azfakes.Store) string {
 		PolicyID:       agwID,
 		WAFType:        WAFTypeAppGW,
 	}
-	require.NoError(t, BackupAppGWPolicy(&agwBackup, nil, "", true, true, dir))
+	require.NoError(t, BackupAppGWPolicy(&agwBackup, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 	return dir
 }
@@ -204,7 +204,7 @@ func TestRestorePoliciesExplicitFrontDoorTarget(t *testing.T) {
 		PolicyID:       azfakes.FrontDoorPolicyID(azfakesSubID, "rg-src", "fd-src"),
 		WAFType:        WAFTypeFrontDoor,
 	}
-	require.NoError(t, BackupPolicy(&backup, nil, "", true, true, dir))
+	require.NoError(t, BackupPolicy(&backup, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 	require.NoError(t, RestorePolicies(&RestorePoliciesInput{
 		BaseCLIInput: BaseCLIInput{SubscriptionID: azfakesSubID},
