@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
