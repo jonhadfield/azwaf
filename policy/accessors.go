@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor/v2"
 )
 
 // Accessors for the Front Door policy structure.
