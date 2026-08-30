@@ -16,12 +16,12 @@ func TestIPValueHandlersTrackPrevTypeCorrectly(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		val      string
-		wantType string
+		wantType ipFamily
 	}{
-		{"ipv4", "10.0.0.1/32", ipTypeV4},
-		{"ipv6", "2001:db8::/32", ipTypeV6},
+		{"ipv4", "10.0.0.1/32", ipFamilyV4},
+		{"ipv6", "2001:db8::/32", ipFamilyV6},
 	} {
-		for _, prev := range []string{"", ipTypeV4, ipTypeV6} {
+		for _, prev := range []ipFamily{ipFamilyNone, ipFamilyV4, ipFamilyV6} {
 			t.Run(tc.name+"/after "+prevLabel(prev), func(t *testing.T) {
 				var (
 					builder     strings.Builder
@@ -46,14 +46,14 @@ func TestIPValueHandlersTrackPrevTypeCorrectly(t *testing.T) {
 func TestIPValueHandlersResetPrevTypeOnLineBreak(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		valType string
+		valType ipFamily
 		val     string
-		prev    string
+		prev    ipFamily
 	}{
-		{"ipv4", ipTypeV4, "10.0.0.1/32", ipTypeV4},
-		{"ipv4 after ipv6", ipTypeV4, "10.0.0.1/32", ipTypeV6},
-		{"ipv6", ipTypeV6, "2001:db8::/32", ipTypeV6},
-		{"ipv6 after ipv4", ipTypeV6, "2001:db8::/32", ipTypeV4},
+		{"ipv4", ipFamilyV4, "10.0.0.1/32", ipFamilyV4},
+		{"ipv4 after ipv6", ipFamilyV4, "10.0.0.1/32", ipFamilyV6},
+		{"ipv6", ipFamilyV6, "2001:db8::/32", ipFamilyV6},
+		{"ipv6 after ipv4", ipFamilyV6, "2001:db8::/32", ipFamilyV4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
@@ -71,10 +71,10 @@ func TestIPValueHandlersResetPrevTypeOnLineBreak(t *testing.T) {
 	}
 }
 
-func prevLabel(s string) string {
-	if s == "" {
+func prevLabel(s ipFamily) string {
+	if s == ipFamilyNone {
 		return "nothing"
 	}
 
-	return s
+	return string(s)
 }

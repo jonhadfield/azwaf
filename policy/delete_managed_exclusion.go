@@ -78,8 +78,8 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 	newMRS.RuleSetType = existingManagedRuleSet.RuleSetType
 	newMRS.RuleSetVersion = existingManagedRuleSet.RuleSetVersion
 
-	switch {
-	case dcri.Scope == ScopeRuleSet:
+	switch dcri.Scope {
+	case ScopeRuleSet:
 		if !exclusionParamsDefined(dcri) {
 			return nil, fmt.Errorf("%s - refusing to delete all exclusions", funcName)
 		}
@@ -101,7 +101,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 			}
 		}
 
-	case strings.EqualFold(dcri.Scope, ScopeRuleGroup):
+	case ScopeRuleGroup:
 		for _, existingManagedRuleGroupOverride := range existingManagedRuleSet.RuleGroupOverrides {
 			logging.Tracef("%s | checking rule group %s against %s",
 				funcName, dcri.RuleGroup, *existingManagedRuleGroupOverride.RuleGroupName)
@@ -137,7 +137,7 @@ func stripFromManagedRuleSet(dcri *DeleteManagedRuleExclusionInput, existingMana
 				valueOrDash(existingManagedRuleSet.RuleSetType),
 				valueOrDash(existingManagedRuleSet.RuleSetVersion))
 		}
-	case strings.EqualFold(dcri.Scope, ScopeRule):
+	case ScopeRule:
 		for _, existingManagedRuleGroupOverride := range existingManagedRuleSet.RuleGroupOverrides {
 			logging.Tracef("%s | RuleGroupOverride: %s", funcName, valueOrDash(existingManagedRuleGroupOverride.RuleGroupName))
 

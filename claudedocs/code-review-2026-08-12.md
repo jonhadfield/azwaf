@@ -48,7 +48,7 @@ than defects.
 | — | D. Accessor layer for optional policy fields | Standards | code | fixed |
 | P4 | A-B duplicated code (11 clusters) | Standards | code | **all collapsed** |
 | P4 | A-B dead code / speculative generality | Standards | code | **fixed** |
-| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | open |
+| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | primitive obsession fixed, rest open |
 
 Three findings turned out to be wrong on inspection and are corrected in place
 rather than acted on: **S2** (described as silent data loss; it was a hard
@@ -544,11 +544,36 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   *`deadcode -test ./...` now reports nothing across the module. `it/` was checked with
   `-tags integration` again, since build-tagged callers are invisible to both tools.*
 
-- [ ] **Primitive obsession / repeated switches** — `scope` is a bare `string`
+- [x] **Primitive obsession / repeated switches** — `scope` is a bare `string`
   (`ScopeRule`/`RuleGroup`/`RuleSet`) switched on in `policy/policy_managed.go:356`,
   `policy/add_exclusions.go:248`, `policy/delete_managed_exclusion.go:98`, `:392`,
   `policy/output.go:663`. Likewise `prevType string` carrying `"ipv4"`/`"ipv6"`/`""` through
   `policy/output.go`. Both want small named types.
+
+  *Both now have one. `ExclusionScope` in the new `policy/scope.go` carries the three constants
+  with `Title` and `Lower` methods; `ipFamily` in `policy/output.go` replaces `prevType`,
+  naming its empty state `ipFamilyNone` — which is load-bearing rather than merely absent, since
+  it is what tells `handleIPValue` to skip the wrapping checks and start a fresh line.*
+
+  *The bare string was hiding an inconsistency. Of the six scope comparisons, two used `==` and
+  four used `strings.EqualFold`, so the same value was matched case-sensitively in one branch
+  and case-insensitively in the next. The case-insensitive form was unreachable either way:
+  `Scope` is documented as a helper attribute and both flows overwrite it from
+  `GetAddManagedRuleExclusionProcessScope` / `GetDeleteManagedRuleExclusionProcessScope`
+  immediately before reading it, so it always holds one of the constants exactly. Whatever a
+  caller sets is discarded. All six are now `==`, and `TestScopeIsDerivedNotAccepted` pins the
+  overwrite that makes it safe.*
+
+  *There were also two vocabularies for the same concept: the wire values `"ruleSet"` /
+  `"ruleGroup"` / `"rule"`, and a second set of display strings `"rule set"` / `"rule group"` /
+  `"rule"` hardcoded into `exclusionScope` in `accessors.go`, with `printScope` producing a
+  third, title-cased form. All three now come off the one type. Rendered output is unchanged,
+  verified by running the limit-warning and validation messages against unmodified `HEAD` in a
+  scratch worktree and diffing — identical.*
+
+  *With every comparison exact, `staticcheck` then flagged both `switch { case x == a: }` blocks
+  as convertible to tagged switches, which is the shape the finding was asking for. Both
+  converted.*
 
 - [ ] **Middle man** — `WrappedAppGWPolicy.toFDLikeBackup` (`policy/appgw_restore.go:213`)
   purely delegates to `dummyWrappedFromAppGW`; `policy.GetFunctionName` (`policy/utils.go:112`)
@@ -982,7 +1007,9 @@ been reverted now the code is fixed (S15), so the README's original claim holds 
 Every finding on both axes has now been addressed in code or documentation. All eleven
 duplicated-code clusters are collapsed, and the dead code / speculative generality group is
 closed with `deadcode` reporting nothing across the module. What remains open under P4 is the
-primitive obsession / middle man / data clumps group, which is a refactor rather than a defect.
+middle man / mysterious names / data clumps group, which is a refactor rather than a defect.
+Primitive obsession is closed: it turned out to be hiding an inconsistent set of scope
+comparisons, six sites split between `==` and `strings.EqualFold`.
 
 The duplication pass was framed as tidying and did not stay that way. Six of the eleven clusters
 were concealing a real difference between their two halves: two nil panics in the ProcessScope

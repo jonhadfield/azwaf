@@ -129,8 +129,8 @@ func ruleSetListSets(l *armfrontdoor.ManagedRuleSetList) []*armfrontdoor.Managed
 // comparing the total against the per-scope limit both cries wolf (three scopes
 // of 40 is not a breach) and misses real breaches.
 type exclusionScope struct {
-	// scope is "rule set", "rule group" or "rule".
-	scope string
+	// scope is the level the exclusions hang off.
+	scope ExclusionScope
 	// name identifies the individual rule set, group or rule.
 	name  string
 	count int
@@ -146,13 +146,13 @@ func policyExclusionScopes(p *armfrontdoor.WebApplicationFirewallPolicy) []exclu
 		ruleSetName := ruleSetDisplayName(rs)
 
 		if c := len(ruleSetExclusions(rs)); c > 0 {
-			scopes = append(scopes, exclusionScope{scope: "rule set", name: ruleSetName, count: c})
+			scopes = append(scopes, exclusionScope{scope: ScopeRuleSet, name: ruleSetName, count: c})
 		}
 
 		for _, rgo := range ruleSetGroupOverrides(rs) {
 			if c := len(groupOverrideExclusions(rgo)); c > 0 {
 				scopes = append(scopes, exclusionScope{
-					scope: "rule group",
+					scope: ScopeRuleGroup,
 					name:  ruleSetName + "/" + derefOrEmpty(rgo.RuleGroupName),
 					count: c,
 				})
@@ -161,7 +161,7 @@ func policyExclusionScopes(p *armfrontdoor.WebApplicationFirewallPolicy) []exclu
 			for _, ro := range groupOverrideRules(rgo) {
 				if c := len(ruleOverrideExclusions(ro)); c > 0 {
 					scopes = append(scopes, exclusionScope{
-						scope: "rule",
+						scope: ScopeRule,
 						name:  ruleSetName + "/" + derefOrEmpty(rgo.RuleGroupName) + "/" + derefOrEmpty(ro.RuleID),
 						count: c,
 					})

@@ -141,7 +141,7 @@ func getMatchingDefaultDefinitions(input *getMatchingDefaultDefinitionsInput) (o
 }
 
 type getDefinitionsMatchingExistingRuleSetInput struct {
-	scope          string
+	scope          ExclusionScope
 	mrsd           *armfrontdoor.ManagedRuleSetDefinition
 	ruleID         string
 	groupName      string
@@ -552,9 +552,9 @@ func ShowManagedRuleGroupExclusions(ruleGroup string, policyID config.ResourceID
 }
 
 type shadow struct {
-	shadowType  string
+	shadowType  ExclusionScope
 	shadowName  string
-	shadowsType string
+	shadowsType ExclusionScope
 	shadowsName string
 	exclusion   *armfrontdoor.ManagedRuleExclusion
 }
@@ -763,7 +763,7 @@ func getRuleSetDefinitions(s *session.Session, subID string) (rsds []*armfrontdo
 // their own error.
 //
 // Both exported wrappers below ran this cascade themselves.
-func scopeFromSelectors(ruleSetType, ruleGroup, ruleID string) (string, bool) {
+func scopeFromSelectors(ruleSetType, ruleGroup, ruleID string) (ExclusionScope, bool) {
 	switch {
 	case ruleID != "":
 		// a rule id is the narrowest selector and wins outright
@@ -779,7 +779,7 @@ func scopeFromSelectors(ruleSetType, ruleGroup, ruleID string) (string, bool) {
 }
 
 // GetDeleteManagedRuleExclusionProcessScope returns the scope a deletion applies to.
-func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusionInput) (scope string, err error) {
+func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusionInput) (scope ExclusionScope, err error) {
 	funcName := GetFunctionName()
 
 	// RuleSetType is optional, and was previously dereferenced after the nil
@@ -802,7 +802,7 @@ func GetDeleteManagedRuleExclusionProcessScope(input *DeleteManagedRuleExclusion
 }
 
 // GetAddManagedRuleExclusionProcessScope returns the scope an addition applies to.
-func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) (scope string, err error) {
+func GetAddManagedRuleExclusionProcessScope(amrei AddManagedRuleExclusionInput) (scope ExclusionScope, err error) {
 	funcName := GetFunctionName()
 
 	// both pointers were dereferenced before anything checked them

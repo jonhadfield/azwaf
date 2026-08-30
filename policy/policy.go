@@ -57,9 +57,6 @@ const (
 const (
 	maxExclusionLimit                 = 100
 	maxExclusionLimitWarningThreshold = 95
-	ScopeRuleSet                      = "ruleSet"
-	ScopeRuleGroup                    = "ruleGroup"
-	ScopeRule                         = "rule"
 	// Errors
 	errScopeUndefined         = "scope undefined"
 	errScopeInvalid           = "scope invalid"
@@ -367,7 +364,7 @@ type DeleteManagedRuleExclusionInput struct {
 	ExclusionRuleSelector string
 	Debug                 bool
 	// helper attribute: used to assess scope of change
-	Scope string
+	Scope ExclusionScope
 }
 
 func GetAllPolicies(s *session.Session, i GetWrappedPoliciesInput) ([]armfrontdoor.WebApplicationFirewallPolicy, error) {
@@ -650,7 +647,7 @@ func validatePolicyLimits(p *armfrontdoor.WebApplicationFirewallPolicy) error {
 	for _, scope := range policyExclusionScopes(p) {
 		if scope.count > maxExclusionLimit {
 			return fmt.Errorf("%s %s has %d exclusions, exceeding Azure's limit of %d per scope",
-				scope.scope, scope.name, scope.count, maxExclusionLimit)
+				scope.scope.Lower(), scope.name, scope.count, maxExclusionLimit)
 		}
 	}
 
