@@ -71,7 +71,10 @@ func ProcessAppGWPolicyChanges(input *ProcessAppGWPolicyChangesInput) error {
 			PolicyID:       policyID,
 			AppVersion:     input.Session.AppVersion,
 			WAFType:        WAFTypeAppGW,
-		}, nil, "", true, false, input.Session.BackupsDir)
+		}, BackupDestination{
+			FailFast: true,
+			Path:     input.Session.BackupsDir,
+		})
 		if err != nil {
 			return err
 		}

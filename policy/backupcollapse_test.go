@@ -27,7 +27,7 @@ func TestBackupPolicyFileNameAndWAFType(t *testing.T) {
 			Policy: armfrontdoor.WebApplicationFirewallPolicy{Name: toPtr("pol")},
 		}
 
-		require.NoError(t, BackupPolicy(&p, nil, "", true, true, dir))
+		require.NoError(t, BackupPolicy(&p, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 		files, err := os.ReadDir(dir)
 		require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestBackupPolicyFileNameAndWAFType(t *testing.T) {
 			Policy: armnetwork.WebApplicationFirewallPolicy{Name: toPtr("pol")},
 		}
 
-		require.NoError(t, BackupAppGWPolicy(&p, nil, "", true, true, dir))
+		require.NoError(t, BackupAppGWPolicy(&p, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 
 		files, err := os.ReadDir(dir)
 		require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestBackupPolicyKeepsExistingWAFType(t *testing.T) {
 	dir := t.TempDir()
 	p := WrappedPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "n", WAFType: WAFTypeAppGW}
 
-	require.NoError(t, BackupPolicy(&p, nil, "", true, true, dir))
+	require.NoError(t, BackupPolicy(&p, BackupDestination{Path: dir, FailFast: true, Quiet: true}))
 	require.Equal(t, WAFTypeAppGW, p.WAFType, "an already-set type is left alone")
 }
 
@@ -91,10 +91,10 @@ func TestBackupPolicyKeepsExistingWAFType(t *testing.T) {
 // error — backupPolicies relies on it when only uploading.
 func TestBackupPolicyWithNoDestination(t *testing.T) {
 	p := WrappedPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "n"}
-	require.NoError(t, BackupPolicy(&p, nil, "", true, true, ""))
+	require.NoError(t, BackupPolicy(&p, BackupDestination{FailFast: true, Quiet: true}))
 
 	a := WrappedAppGWPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "n"}
-	require.NoError(t, BackupAppGWPolicy(&a, nil, "", true, true, ""))
+	require.NoError(t, BackupAppGWPolicy(&a, BackupDestination{FailFast: true, Quiet: true}))
 }
 
 // The status line is printed unless quiet, and names the policy type.
@@ -102,14 +102,40 @@ func TestBackupPolicyStatusLine(t *testing.T) {
 	dir := t.TempDir()
 	p := WrappedPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "fd-one"}
 	out := captureStdout(t, func() {
-		require.NoError(t, BackupPolicy(&p, nil, "", true, false, dir))
+		require.NoError(t, BackupPolicy(&p, BackupDestination{Path: dir, FailFast: true}))
 	})
 	require.Contains(t, out, "backing up Policy: fd-one")
 
 	a := WrappedAppGWPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "agw-one"}
 	out = captureStdout(t, func() {
-		require.NoError(t, BackupAppGWPolicy(&a, nil, "", true, false, t.TempDir()))
+		require.NoError(t, BackupAppGWPolicy(&a, BackupDestination{Path: t.TempDir(), FailFast: true}))
 	})
 	require.Contains(t, out, "backing up AppGW Policy: agw-one")
 	require.True(t, strings.Contains(out, "agw-one"))
+}
+
+// BackupPoliciesInput already carried three of the five values that travelled
+// together; destination pairs them with the storage client so the set moves as
+// one from BackupPolicies downwards.
+func TestBackupPoliciesInputDestination(t *testing.T) {
+	in := &BackupPoliciesInput{Path: "/tmp/backups", FailFast: true, Quiet: true}
+
+	got := in.destination(nil, "container-name")
+
+	require.Equal(t, BackupDestination{
+		BlobClient:    nil,
+		ContainerName: "container-name",
+		Path:          "/tmp/backups",
+		FailFast:      true,
+		Quiet:         true,
+	}, got)
+}
+
+// A zero destination writes nowhere: no local path and no blob client. It must
+// still succeed rather than erroring, which is what the empty-path and
+// nil-client branches inside backupWrapped rely on.
+func TestZeroBackupDestinationWritesNowhere(t *testing.T) {
+	p := WrappedPolicy{SubscriptionID: "s", ResourceGroup: "r", Name: "fd-one"}
+
+	require.NoError(t, BackupPolicy(&p, BackupDestination{Quiet: true}))
 }

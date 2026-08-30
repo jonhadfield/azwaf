@@ -691,7 +691,10 @@ func ProcessPolicyChanges(input *ProcessPolicyChangesInput) error {
 			Policy:         *preChange,
 			PolicyID:       *preChange.ID,
 			AppVersion:     input.Session.AppVersion,
-		}, nil, "", true, false, input.Session.BackupsDir)
+		}, BackupDestination{
+			FailFast: true,
+			Path:     input.Session.BackupsDir,
+		})
 		if err != nil {
 			return err
 		}

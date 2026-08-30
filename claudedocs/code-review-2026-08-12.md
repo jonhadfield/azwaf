@@ -48,7 +48,7 @@ than defects.
 | — | D. Accessor layer for optional policy fields | Standards | code | fixed |
 | P4 | A-B duplicated code (11 clusters) | Standards | code | **all collapsed** |
 | P4 | A-B dead code / speculative generality | Standards | code | **fixed** |
-| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | data clumps open, rest fixed |
+| P4 | A-B primitive obsession, middle man, data clumps | Standards | code | **fixed** |
 
 Three findings turned out to be wrong on inspection and are corrected in place
 rather than acted on: **S2** (described as silent data loss; it was a hard
@@ -608,8 +608,28 @@ given for the **S15** fix. Each carries a note and a test demonstrating why.
   prefix; ~~`ProcessCLIInput` vs `ParseConfig` naming the same operation~~ *— `ProcessCLIInput`
   deleted*.
 
-- [ ] **Data clumps** — `(blobClient, containerName, failFast, quiet, path)` threaded
+- [x] **Data clumps** — `(blobClient, containerName, failFast, quiet, path)` threaded
   positionally through five backup functions despite `BackupPoliciesInput` already existing.
+
+  *The type to hold them already existed too. `backupDestination` was introduced when
+  `BackupPolicy` and `BackupAppGWPolicy` were collapsed onto `backupWrapped`, but it stopped at
+  that boundary: the five arguments were still threaded in positionally and repacked into the
+  struct on arrival. It is now `BackupDestination`, exported because `BackupPolicy` and
+  `BackupAppGWPolicy` are, and it runs the whole way down — through both loops and both writers.
+  `BackupPolicies` builds one with a new `destination` method on the input that already carried
+  three of the five values.*
+
+  *The clearest argument for the change is the call site. `ProcessPolicyChanges` and the AppGW
+  restore path both read `}, nil, "", true, false, input.Session.BackupsDir)` — six values whose
+  meaning could only be recovered by counting arguments against the signature. They now name
+  what they set and omit what they do not.*
+
+  *Seventeen call sites in tests converted with it. Omitted fields mean `false` and `""`, which
+  matches what the positional `false` and `""` arguments meant, and each conversion was read
+  back individually rather than trusted to the rewrite — the `quiet: false` cases in particular
+  are the stdout-capturing tests, which depend on output still being produced. Two tests added
+  for the new seam: one pinning `destination`, one confirming a zero `BackupDestination` writes
+  nowhere and still succeeds, which is the branch both writers rely on.*
 
 ---
 
@@ -1028,12 +1048,10 @@ been reverted now the code is fixed (S15), so the README's original claim holds 
 
 ### Deliberately not "fixed" in the docs
 
-Every finding on both axes has now been addressed in code or documentation. All eleven
-duplicated-code clusters are collapsed, and the dead code / speculative generality group is
-closed with `deadcode` reporting nothing across the module. What remains open under P4 is the
-data clumps group, which is a refactor rather than a defect.
-Primitive obsession is closed: it turned out to be hiding an inconsistent set of scope
-comparisons, six sites split between `==` and `strings.EqualFold`.
+Every finding on both axes has now been addressed in code or documentation, and nothing in the
+review remains open. All eleven duplicated-code clusters are collapsed; the dead code /
+speculative generality group is closed with `deadcode` reporting nothing across the module; and
+the primitive obsession, middle man, mysterious names and data clumps groups are closed too.
 
 The duplication pass was framed as tidying and did not stay that way. Six of the eleven clusters
 were concealing a real difference between their two halves: two nil panics in the ProcessScope
@@ -1045,3 +1063,16 @@ times Azure's per-condition limit without complaint. None of these were visible 
 they were visible only once the two halves had to be written as one. Roughly 850 lines of tests
 were added to code that had none, and every behaviour change above was confirmed against the old
 code before it was made.
+
+The same held for the remaining smell groups, which were expected to be pure tidying. Primitive
+obsession was hiding six scope comparisons split between `==` and `strings.EqualFold`, matching
+the same value case-sensitively in one branch and case-insensitively in the next. The middle man
+in `policy.GetFunctionName` was hiding a chain whose correctness *was* its indirection: it
+existed so that skipping three stack frames landed on the right caller. Dead code turned out to
+be tracking test coverage rather than usefulness — `RemoveNets` was unreachable only because
+nobody had written a test for it, while its two siblings in the same unused API survived on
+theirs.
+
+Three findings in the original review were wrong and were corrected in place rather than acted
+on. Where a change altered observable behaviour — error text, rendered output, wire values — the
+old behaviour was captured first and diffed against the new, rather than reasoned about.
