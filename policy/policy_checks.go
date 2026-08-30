@@ -3,6 +3,7 @@ package policy
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 )
 
@@ -11,7 +12,7 @@ import (
 // rather than left commented out; it read the enabled state inverted.
 
 func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleSets int) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	switch {
 	case p == nil:
@@ -32,7 +33,7 @@ func HasRuleSets(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleS
 }
 
 func HaveEqualRuleSets(one, two *armfrontdoor.WebApplicationFirewallPolicy) bool {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 	oneOK, oneNumRuleSets := HasRuleSets(one)
 	twoOK, twoNumRuleSets := HasRuleSets(two)
 
@@ -65,7 +66,7 @@ func HaveEqualRuleSets(one, two *armfrontdoor.WebApplicationFirewallPolicy) bool
 }
 
 func HasCustomRules(p *armfrontdoor.WebApplicationFirewallPolicy) (ok bool, noRuleSets int) {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	switch {
 	case p == nil:

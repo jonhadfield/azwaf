@@ -5,6 +5,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/jonhadfield/azwaf/helpers"
 	policy "github.com/jonhadfield/azwaf/policy"
 )
 
@@ -28,7 +29,7 @@ func CmdRestore(versionOutput string) *cli.Command {
 				// nolint:errcheck
 				_ = cli.ShowSubcommandHelp(c)
 
-				return fmt.Errorf("%s - backup paths are required", policy.GetFunctionName())
+				return fmt.Errorf("%s - backup paths are required", helpers.GetFunctionName())
 			}
 
 			input := &policy.RestorePoliciesInput{

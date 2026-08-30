@@ -17,6 +17,7 @@ import (
 	"go4.org/netipx"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 	"github.com/jonhadfield/azwaf/session"
 )
@@ -325,7 +326,7 @@ func (r RuleNamePrefix) Check() error {
 }
 
 func ValidateUpdatePolicyInput(in UpdatePolicyCustomRulesIPMatchPrefixesInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if len(in.Addrs) == 0 && len(in.ExcludedAddrs) == 0 {
 		return fmt.Errorf("no networks provided")
@@ -504,7 +505,7 @@ func getRateLimitConfig(rules []*armfrontdoor.CustomRule) (*int32, *int32, error
 }
 
 func ValidateDecorateExistingCustomRuleInput(in DecorateExistingCustomRuleInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	if len(in.AdditionalAddrs) == 0 && len(in.AdditionalExcludedAddrs) == 0 {
 		return fmt.Errorf("no networks provided")

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/jonhadfield/azwaf/config"
+	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
@@ -88,7 +89,7 @@ type PrintPolicyCustomRuleInput struct {
 // OutputPath when one is set and to stdout otherwise. The id is an extended
 // resource id: <Policy>|<Custom rule name>.
 func PrintPolicyCustomRule(in PrintPolicyCustomRuleInput) error {
-	funcName := GetFunctionName()
+	funcName := helpers.GetFunctionName()
 
 	s := in.Session
 	if s == nil {
@@ -164,7 +165,7 @@ func PrintPolicy(policyID, subscriptionID, configPath string) error {
 
 	b, jerr := json.MarshalIndent(p, "", "    ")
 	if jerr != nil {
-		return fmt.Errorf("%s - failed to marshal custom rule: %w", GetFunctionName(), jerr)
+		return fmt.Errorf("%s - failed to marshal custom rule: %w", helpers.GetFunctionName(), jerr)
 	}
 
 	fmt.Println(string(b))
