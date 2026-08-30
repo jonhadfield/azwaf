@@ -16,7 +16,7 @@ import (
 	"github.com/jonhadfield/azwaf/helpers"
 	"github.com/jonhadfield/azwaf/logging"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor/v2"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v8"
 
 	"github.com/jonhadfield/azwaf/cache"

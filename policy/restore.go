@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/frontdoor/armfrontdoor/v2"
 
 	"github.com/jonhadfield/azwaf/config"
 	"github.com/jonhadfield/azwaf/helpers"
