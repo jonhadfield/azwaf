@@ -41,6 +41,7 @@ Built on the modern Azure SDK for Go, with cached lookups via [BuntDB](https://g
   - [`restore`](#restore)
   - [`copy`](#copy)
 - [Policy Aliases & Hashes](#policy-aliases--hashes)
+- [Using azwaf as a library](#using-azwaf-as-a-library)
 - [Architecture](#architecture)
 - [Limits](#limits)
 - [Development](#development)
@@ -451,6 +452,35 @@ You can refer to a policy in three ways:
 
 ---
 
+## Using azwaf as a library
+
+The `policy` and `session` packages are importable, and some projects use them directly rather than shelling out to the binary.
+
+```go
+import (
+    "github.com/jonhadfield/azwaf/policy"
+    "github.com/jonhadfield/azwaf/session"
+)
+
+s, err := session.New()
+```
+
+The entry points most likely to be useful:
+
+| Function | Purpose |
+| --- | --- |
+| `GetRawPolicy` / `PushPolicy` | fetch and push a policy directly |
+| `GenCustomRulesFromIPNets` | build custom rules from a set of IP prefixes |
+| `UpdatePolicyCustomRulesIPMatchPrefixes` | add prefixes to a policy's existing rules |
+| `RemoveNets` / `ApplyRemoveAddrs` | remove prefixes from a policy's rules, reporting per address whether it was present — the inverse of the add path, and the shape an "unblock" endpoint wants |
+| `BackupPolicies` / `RestorePolicies` | the backup and restore flows the CLI uses |
+
+Most of these take Azure SDK types, so you will import `armfrontdoor/v2` (and `armnetwork/v8` for Application Gateway) alongside.
+
+> **The exported surface is not frozen.** azwaf is `v0.x`, and minor releases have changed exported signatures — see the release notes, which call out every break and how to migrate. Pin a version, and read the notes before upgrading. If you depend on something here, saying so in an issue is genuinely useful: it is the difference between a symbol looking unused and being known to have consumers.
+
+---
+
 ## Architecture
 
 ```
@@ -460,7 +490,7 @@ azwaf/
 │   └── commands/          # urfave/cli subcommands (add, backup, copy, …)
 ├── policy/                # core WAF logic
 │   ├── policy.go          # types, fetch helpers, hashmap (Front Door)
-│   ├── custom_rules.go    # custom-rule manipulation
+│   ├── custom_rules.go    # custom-rule and IP-network manipulation
 │   ├── policy_managed.go  # managed-ruleset & exclusion handling
 │   ├── add_exclusions.go  # add managed-rule exclusion flow
 │   ├── delete_*.go        # delete custom rule / managed exclusion
@@ -470,17 +500,22 @@ azwaf/
 │   ├── appgw_restore.go   # AppGW restore pipeline
 │   ├── copy.go            # cross-policy copy
 │   ├── compare.go         # diff helper used by --show-diff
+│   ├── accessors.go       # guarded reads of optional SDK property chains
+│   ├── scope.go           # ExclusionScope (rule set / rule group / rule)
 │   ├── show.go / output.go / stats.go  # CLI rendering
 │   └── frontdoor.go       # Front Door listing
 ├── session/               # azidentity + Azure SDK clients + cache wiring
 ├── config/                # config.yaml parsing, resource-ID parsing
 ├── cache/                 # BuntDB-backed caching (resource-id hash map, etc.)
+├── logging/               # isolated slog logger
+├── internal/azfakes/      # in-memory Azure endpoints for tests
+├── it/                    # integration tests (build-tagged)
 └── helpers/               # shared utilities
 ```
 
 ### Design notes
 
-- **Session is the seam.** Every Azure-touching code path runs through a `*session.Session` that owns credentials, the SDK clients, and the cache. Tests mock at this boundary.
+- **Session is the seam.** Every Azure-touching code path runs through a `*session.Session` that owns credentials, the SDK clients, and the cache. Tests inject at this boundary — `internal/azfakes` serves the Azure APIs in memory, so the SDK's own serialisation, paging and poller code runs for real without credentials or network access.
 - **Wrapped policies.** `WrappedPolicy` (Front Door) and `WrappedAppGWPolicy` (Application Gateway) decorate the SDK types with metadata (subscription, resource group, name, hashes, `WAFType`) so backup/restore/copy stay unambiguous about *which* policy a payload belongs to.
 - **WAF type discrimination.** `BackupPolicies` partitions inbound resource IDs into Front Door and Application Gateway lists by inspecting the resource type segment of each ID. `RestorePolicies` peeks at every backup file's `WAFType` field and routes it to the matching restore pipeline.
 - **Hash-based shorthand.** A subscription-scoped hash map (`WAFResourceIDHashMap`) lets the CLI accept short hashes in place of full resource IDs.
@@ -525,9 +560,13 @@ make coverage         # opens HTML coverage report
 make ci               # lint + test (run before pushing)
 make gosec            # security scanner
 make critic           # gocritic
+make build            # build to .local_dist/
+make build-all        # cross-compile every supported platform
+make install          # build and install (see Installation)
+make find-updates     # list dependencies with newer versions
 ```
 
-Unit tests mock the Azure SDK clients. Integration tests sit behind build tags and need a real subscription. Test fixtures (sample policies, IP lists) live in `policy/testdata/`.
+Unit tests run against `internal/azfakes`, which serves the Azure APIs in memory: no credentials, no network, but the real SDK code path. Integration tests sit behind the `integration` build tag and need a live subscription — note that build-tagged code is invisible to `go build ./...` and `go vet ./...`, so run `go vet -tags integration ./it/` when changing anything they touch. Fixtures live in `policy/testdata/` (sample policies, IP lists) and `testfiles/` (wrapped policy backups).
 
 ---
 
